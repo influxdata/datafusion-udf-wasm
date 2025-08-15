@@ -1,0 +1,11 @@
+[workspace.package]
+version = "0.1.0"
+authors = ["IOx Project Developers"]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace]
+members = [
+    "guests/rust",
+]
+resolver = "3"

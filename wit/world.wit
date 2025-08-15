@@ -1,0 +1,13 @@
+package datafusion-udf-wasm:udf@0.1.0;
+
+interface types {
+    resource udf {
+        name: func() -> string;
+    }
+
+    udfs: func() -> list<udf>;
+}
+
+world datafusion {
+    export types;
+}

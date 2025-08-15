@@ -1,0 +1,19 @@
+[package]
+name = "datafusion-udf-wasm-guest"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+datafusion = "49.0.0"
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "datafusion-udf-wasm:udf"
+
+[package.metadata.component.target]
+path = "../../wit"
