@@ -7,7 +7,6 @@ license = "MIT OR Apache-2.0"
 [workspace]
 members = [
     "guests/rust",
-    "wit-bindings",
 ]
 resolver = "3"
 

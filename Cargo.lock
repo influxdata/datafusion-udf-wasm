@@ -1030,13 +1030,6 @@ name = "datafusion-udf-wasm-guest"
 version = "0.1.0"
 dependencies = [
  "datafusion",
- "datafusion-udf-wasm-wit-bindings",
-]
-
-[[package]]
-name = "datafusion-udf-wasm-wit-bindings"
-version = "0.1.0"
-dependencies = [
  "wit-bindgen",
 ]
 

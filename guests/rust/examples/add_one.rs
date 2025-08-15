@@ -6,6 +6,7 @@ use datafusion::{
     error::Result as DataFusionResult,
     logical_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility},
 };
+use datafusion_udf_wasm_guest::export;
 
 #[derive(Debug)]
 struct AddOne {
@@ -72,3 +73,5 @@ impl ScalarUDFImpl for AddOne {
 pub(crate) fn udfs() -> Vec<Arc<dyn ScalarUDFImpl>> {
     vec![Arc::new(AddOne::new())]
 }
+
+export!(udfs);

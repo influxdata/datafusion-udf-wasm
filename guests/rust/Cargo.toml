@@ -7,7 +7,8 @@ license.workspace = true
 
 [dependencies]
 datafusion.workspace = true
-datafusion-udf-wasm-wit-bindings = { path = "../../wit-bindings" }
+wit-bindgen.workspace = true
 
-[lib]
+[[example]]
+name = "add_one"
 crate-type = ["cdylib"]
