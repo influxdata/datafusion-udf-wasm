@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
 use datafusion::logical_expr::ScalarUDFImpl;
-
-use crate::bindings::exports::datafusion_udf_wasm::udf::types::{Guest, GuestUdf, Udf};
+use datafusion_udf_wasm_wit_bindings::{
+    export,
+    exports::datafusion_udf_wasm::udf::types::{Guest, GuestUdf, Udf},
+};
 
 #[derive(Debug)]
 pub(crate) struct UdfWrapper(Arc<dyn ScalarUDFImpl>);
@@ -33,4 +35,4 @@ impl Guest for Implementation {
     }
 }
 
-crate::bindings::export!(Implementation with_types_in crate::bindings);
+export!(Implementation with_types_in ::datafusion_udf_wasm_wit_bindings);
