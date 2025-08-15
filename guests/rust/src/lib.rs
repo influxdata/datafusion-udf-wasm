@@ -9,12 +9,14 @@ macro_rules! export {
         struct Implementation;
 
         impl $crate::bindings::exports::datafusion_udf_wasm::udf::types::Guest for Implementation {
-            type Udf = $crate::wrapper::UdfWrapper;
+            type ScalarUdf = $crate::wrapper::ScalarUdfWrapper;
 
-            fn udfs() -> Vec<$crate::bindings::exports::datafusion_udf_wasm::udf::types::Udf> {
+            fn scalar_udfs() -> Vec<$crate::bindings::exports::datafusion_udf_wasm::udf::types::ScalarUdf> {
                 $fn()
                     .into_iter()
-                    .map(|udf| $crate::bindings::exports::datafusion_udf_wasm::udf::types::Udf::new($crate::wrapper::UdfWrapper::new(udf)))
+                    .map(|udf| $crate::bindings::exports::datafusion_udf_wasm::udf::types::ScalarUdf::new(
+                        $crate::wrapper::ScalarUdfWrapper::new(udf)
+                    ))
                     .collect()
             }
         }

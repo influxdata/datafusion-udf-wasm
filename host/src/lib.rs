@@ -63,14 +63,14 @@ impl WasmScalarUdf {
 
         let udfs = bindings
             .datafusion_udf_wasm_udf_types()
-            .call_udfs(&mut store)
+            .call_scalar_udfs(&mut store)
             .context("call udfs() method")?;
 
         udfs.into_iter()
             .map(|resource| {
                 let name = bindings
                     .datafusion_udf_wasm_udf_types()
-                    .udf()
+                    .scalar_udf()
                     .call_name(&mut store, resource.clone())
                     .context("call UDF::name")?;
 

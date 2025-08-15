@@ -1,11 +1,11 @@
 package datafusion-udf-wasm:udf@0.1.0;
 
 interface types {
-    resource udf {
+    resource scalar-udf {
         name: func() -> string;
     }
 
-    udfs: func() -> list<udf>;
+    scalar-udfs: func() -> list<scalar-udf>;
 }
 
 world datafusion {
