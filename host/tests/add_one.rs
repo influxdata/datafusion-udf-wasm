@@ -1,4 +1,7 @@
-use datafusion::logical_expr::ScalarUDFImpl;
+use datafusion::{
+    arrow::datatypes::DataType,
+    logical_expr::{ScalarUDFImpl, Signature, Volatility},
+};
 use datafusion_udf_wasm_host::WasmScalarUdf;
 
 #[tokio::test]
@@ -13,5 +16,10 @@ async fn test_add_one() {
     let mut udfs = WasmScalarUdf::new(&data).unwrap();
     assert_eq!(udfs.len(), 1);
     let udf = udfs.pop().unwrap();
+
     assert_eq!(udf.name(), "add_one");
+    assert_eq!(
+        udf.signature(),
+        &Signature::uniform(1, vec![DataType::Int32], Volatility::Immutable)
+    );
 }

@@ -17,6 +17,7 @@ use wasmtime_wasi::{
 use crate::error::WasmToDataFusionResultExt;
 
 mod bindings;
+mod conversion;
 mod error;
 
 struct WasmStateImpl {
@@ -38,8 +39,10 @@ impl WasiView for WasmStateImpl {
 
 #[derive(Debug)]
 pub struct WasmScalarUdf {
+    #[expect(dead_code)]
     resource: ResourceAny,
     name: String,
+    signature: Signature,
 }
 
 impl WasmScalarUdf {
@@ -72,9 +75,20 @@ impl WasmScalarUdf {
                     .datafusion_udf_wasm_udf_types()
                     .scalar_udf()
                     .call_name(&mut store, resource.clone())
-                    .context("call UDF::name")?;
+                    .context("call ScalarUdf::name")?;
 
-                Ok(Self { resource, name })
+                let signature = bindings
+                    .datafusion_udf_wasm_udf_types()
+                    .scalar_udf()
+                    .call_signature(&mut store, resource.clone())
+                    .context("call ScalarUdf::signature")?
+                    .into();
+
+                Ok(Self {
+                    resource,
+                    name,
+                    signature,
+                })
             })
             .collect()
     }
@@ -90,7 +104,7 @@ impl ScalarUDFImpl for WasmScalarUdf {
     }
 
     fn signature(&self) -> &Signature {
-        todo!()
+        &self.signature
     }
 
     fn return_type(&self, _arg_types: &[DataType]) -> DataFusionResult<DataType> {

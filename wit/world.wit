@@ -1,8 +1,60 @@
 package datafusion-udf-wasm:udf@0.1.0;
 
 interface types {
+    // TODO: complete data types
+    variant data-type {
+        null,
+        boolean,
+        int8,
+        int16,
+        int32,
+        int64,
+        uint8,
+        uint16,
+        uint32,
+        uint64,
+        float16,
+        float32,
+        float64,
+    }
+
+    // TODO: `array`
+    variant array-function-signature {
+        recursive-array,
+        map-array,
+    }
+
+    // TODO: get `one-of` to work
+    //       sadly recursive types don't work yet, see <https://github.com/WebAssembly/component-model/issues/56>.
+    // TODO: `coercible`
+    variant type-signature {
+        variadic(list<data-type>),
+        user-defined,
+        variadic-any,
+        uniform(tuple<u64, list<data-type>>),
+        exact(list<data-type>),
+        comparable(u64),
+        any(u64),
+        array-signature(array-function-signature),
+        numeric(u64),
+        %string(u64),
+        nullary,
+    }
+
+    enum volatility {
+        immutable,
+        stable,
+        volatile,
+    }
+
+    record signature {
+        type-signature: type-signature,
+        volatility: volatility,
+    }
+
     resource scalar-udf {
         name: func() -> string;
+        signature: func() -> signature;
     }
 
     scalar-udfs: func() -> list<scalar-udf>;
