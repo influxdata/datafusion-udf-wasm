@@ -1305,10 +1305,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "datafusion-udf-wasm-arrow2bytes"
+version = "0.1.0"
+dependencies = [
+ "datafusion",
+]
+
+[[package]]
 name = "datafusion-udf-wasm-guest"
 version = "0.1.0"
 dependencies = [
  "datafusion",
+ "datafusion-udf-wasm-arrow2bytes",
  "wit-bindgen",
 ]
 
@@ -1317,6 +1325,7 @@ name = "datafusion-udf-wasm-host"
 version = "0.1.0"
 dependencies = [
  "datafusion",
+ "datafusion-udf-wasm-arrow2bytes",
  "tokio",
  "wasmtime",
  "wasmtime-wasi",

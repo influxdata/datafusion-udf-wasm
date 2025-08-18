@@ -134,7 +134,7 @@ impl WasmScalarUdf {
                 .call_signature(store2, resource)
                 .await
                 .context("call ScalarUdf::signature")?
-                .into();
+                .try_into()?;
 
             udfs.push(Self {
                 store: Arc::clone(&store),
@@ -186,8 +186,8 @@ impl ScalarUDFImpl for WasmScalarUdf {
         async_in_sync_context(async {
             let arg_types = arg_types
                 .iter()
-                .map(|t| wit_types::DataType::try_from(t.clone()))
-                .collect::<Result<Vec<_>, _>>()?;
+                .map(|t| wit_types::DataType::from(t.clone()))
+                .collect::<Vec<_>>();
             let mut store_guard = self.store.lock().await;
             let return_type = self
                 .bindings
@@ -196,7 +196,7 @@ impl ScalarUDFImpl for WasmScalarUdf {
                 .call_return_type(store_guard.deref_mut(), self.resource, &arg_types)
                 .await
                 .context("call ScalarUdf::return_type")??;
-            Ok(return_type.into())
+            return_type.try_into()
         })
     }
 

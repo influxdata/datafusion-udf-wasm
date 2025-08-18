@@ -1,4 +1,5 @@
 use datafusion::{arrow::datatypes::DataType, error::DataFusionError, logical_expr as df_expr};
+use datafusion_udf_wasm_arrow2bytes::{bytes2datatype, datatype2bytes};
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
 
@@ -16,52 +17,19 @@ impl From<wit_types::DataFusionError> for DataFusionError {
     }
 }
 
-impl From<wit_types::DataType> for DataType {
-    fn from(value: wit_types::DataType) -> Self {
-        use wit_types::DataType;
+impl TryFrom<wit_types::DataType> for DataType {
+    type Error = DataFusionError;
 
-        match value {
-            DataType::Null => Self::Null,
-            DataType::Boolean => Self::Boolean,
-            DataType::Int8 => Self::Int8,
-            DataType::Int16 => Self::Int16,
-            DataType::Int32 => Self::Int32,
-            DataType::Int64 => Self::Int64,
-            DataType::Uint8 => Self::UInt8,
-            DataType::Uint16 => Self::UInt16,
-            DataType::Uint32 => Self::UInt32,
-            DataType::Uint64 => Self::UInt64,
-            DataType::Float16 => Self::Float16,
-            DataType::Float32 => Self::Float32,
-            DataType::Float64 => Self::Float64,
-        }
+    fn try_from(value: wit_types::DataType) -> Result<Self, Self::Error> {
+        bytes2datatype(&value.arrow_ipc_schema)
     }
 }
 
-impl TryFrom<DataType> for wit_types::DataType {
-    type Error = DataFusionError;
-
-    fn try_from(value: DataType) -> Result<Self, Self::Error> {
-        Ok(match value {
-            DataType::Null => Self::Null,
-            DataType::Boolean => Self::Boolean,
-            DataType::Int8 => Self::Int8,
-            DataType::Int16 => Self::Int16,
-            DataType::Int32 => Self::Int32,
-            DataType::Int64 => Self::Int64,
-            DataType::UInt8 => Self::Uint8,
-            DataType::UInt16 => Self::Uint16,
-            DataType::UInt32 => Self::Uint32,
-            DataType::UInt64 => Self::Uint64,
-            DataType::Float16 => Self::Float16,
-            DataType::Float32 => Self::Float32,
-            DataType::Float64 => Self::Float64,
-            _ => {
-                return Err(DataFusionError::NotImplemented(format!(
-                    "serialize {value:?}"
-                )));
-            }
-        })
+impl From<DataType> for wit_types::DataType {
+    fn from(value: DataType) -> Self {
+        Self {
+            arrow_ipc_schema: datatype2bytes(value),
+        }
     }
 }
 
@@ -76,22 +44,34 @@ impl From<wit_types::ArrayFunctionSignature> for df_expr::ArrayFunctionSignature
     }
 }
 
-impl From<wit_types::TypeSignature> for df_expr::TypeSignature {
-    fn from(value: wit_types::TypeSignature) -> Self {
+impl TryFrom<wit_types::TypeSignature> for df_expr::TypeSignature {
+    type Error = DataFusionError;
+
+    fn try_from(value: wit_types::TypeSignature) -> Result<Self, DataFusionError> {
         use wit_types::TypeSignature;
 
-        match value {
-            TypeSignature::Variadic(data_types) => {
-                Self::Variadic(data_types.into_iter().map(From::from).collect())
-            }
+        Ok(match value {
+            TypeSignature::Variadic(data_types) => Self::Variadic(
+                data_types
+                    .into_iter()
+                    .map(TryFrom::try_from)
+                    .collect::<Result<_, _>>()?,
+            ),
             TypeSignature::UserDefined => Self::UserDefined,
             TypeSignature::VariadicAny => Self::VariadicAny,
-            TypeSignature::Uniform((n, data_types)) => {
-                Self::Uniform(n as usize, data_types.into_iter().map(From::from).collect())
-            }
-            TypeSignature::Exact(data_types) => {
-                Self::Exact(data_types.into_iter().map(From::from).collect())
-            }
+            TypeSignature::Uniform((n, data_types)) => Self::Uniform(
+                n as usize,
+                data_types
+                    .into_iter()
+                    .map(TryFrom::try_from)
+                    .collect::<Result<_, _>>()?,
+            ),
+            TypeSignature::Exact(data_types) => Self::Exact(
+                data_types
+                    .into_iter()
+                    .map(TryFrom::try_from)
+                    .collect::<Result<_, _>>()?,
+            ),
             TypeSignature::Comparable(n) => Self::Comparable(n as usize),
             TypeSignature::Any(n) => Self::Any(n as usize),
             TypeSignature::ArraySignature(array_function_signature) => {
@@ -100,7 +80,7 @@ impl From<wit_types::TypeSignature> for df_expr::TypeSignature {
             TypeSignature::Numeric(n) => Self::Numeric(n as usize),
             TypeSignature::String(n) => Self::String(n as usize),
             TypeSignature::Nullary => Self::Nullary,
-        }
+        })
     }
 }
 
@@ -116,11 +96,13 @@ impl From<wit_types::Volatility> for df_expr::Volatility {
     }
 }
 
-impl From<wit_types::Signature> for df_expr::Signature {
-    fn from(value: wit_types::Signature) -> Self {
-        Self {
-            type_signature: value.type_signature.into(),
+impl TryFrom<wit_types::Signature> for df_expr::Signature {
+    type Error = DataFusionError;
+
+    fn try_from(value: wit_types::Signature) -> Result<Self, Self::Error> {
+        Ok(Self {
+            type_signature: value.type_signature.try_into()?,
             volatility: value.volatility.into(),
-        }
+        })
     }
 }

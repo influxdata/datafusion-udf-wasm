@@ -31,10 +31,9 @@ impl wit_types::GuestScalarUdf for ScalarUdfWrapper {
     ) -> Result<wit_types::DataType, wit_types::DataFusionError> {
         let arg_types = arg_types
             .into_iter()
-            .map(DataType::from)
-            .collect::<Vec<_>>();
+            .map(DataType::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
         let data_type = self.0.return_type(&arg_types)?;
-        let data_type: wit_types::DataType = data_type.try_into()?;
-        Ok(data_type)
+        Ok(data_type.into())
     }
 }

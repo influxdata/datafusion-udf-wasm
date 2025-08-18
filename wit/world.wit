@@ -10,21 +10,9 @@ interface types {
         execution(string),
     }
 
-    // TODO: complete data types
-    variant data-type {
-        null,
-        boolean,
-        int8,
-        int16,
-        int32,
-        int64,
-        uint8,
-        uint16,
-        uint32,
-        uint64,
-        float16,
-        float32,
-        float64,
+    record data-type {
+        // arrow IPC schema with a single field that contains the datatype
+        arrow-ipc-schema: list<u8>,
     }
 
     // TODO: `array`

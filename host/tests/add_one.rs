@@ -28,6 +28,6 @@ async fn test_add_one() {
     );
     assert_eq!(
         udf.return_type(&[]).unwrap_err().to_string(),
-        "Error during planning: add_one only accepts Int32 arguments",
+        "Error during planning: add_one expects exactly one argument",
     );
 }
