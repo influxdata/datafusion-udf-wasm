@@ -15,6 +15,24 @@ interface types {
         arrow-ipc-schema: list<u8>,
     }
 
+    record field {
+        name: string,
+        data-type: data-type,
+        nullable: bool,
+        dict-is-ordered: bool,
+        metadata: list<tuple<string, string>>,
+    }
+
+    record array {
+        // arrow IPC record batch with one column
+        arrow-ipc-batch: list<u8>,
+    }
+
+    record scalar-value {
+        // array with one value
+        array: array,
+    }
+
     // TODO: `array`
     variant array-function-signature {
         recursive-array,
@@ -49,10 +67,23 @@ interface types {
         volatility: volatility,
     }
 
+    variant columnar-value {
+        array(array),
+        scalar(scalar-value),
+    }
+
+    record scalar-function-args {
+        args: list<columnar-value>,
+        arg-fields: list<field>,
+        number-rows: u64,
+        return-field: field,
+    }
+
     resource scalar-udf {
         name: func() -> string;
         signature: func() -> signature;
         return-type: func(arg-types: list<data-type>) -> result<data-type, data-fusion-error>;
+        invoke-with-args: func(args: scalar-function-args) -> result<columnar-value, data-fusion-error>;
     }
 
     scalar-udfs: func() -> list<scalar-udf>;

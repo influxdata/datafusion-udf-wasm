@@ -1,5 +1,15 @@
-use datafusion::{arrow::datatypes::DataType, error::DataFusionError, logical_expr as df_expr};
-use datafusion_udf_wasm_arrow2bytes::{bytes2datatype, datatype2bytes};
+use std::sync::Arc;
+
+use datafusion::{
+    arrow::{
+        array::ArrayRef,
+        datatypes::{DataType, Field, FieldRef},
+    },
+    error::DataFusionError,
+    logical_expr::{self as df_expr, ColumnarValue, ScalarFunctionArgs},
+    scalar::ScalarValue,
+};
+use datafusion_udf_wasm_arrow2bytes::{array2bytes, bytes2array, bytes2datatype, datatype2bytes};
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
 
@@ -29,6 +39,26 @@ impl From<DataType> for wit_types::DataType {
         Self {
             arrow_ipc_schema: datatype2bytes(value),
         }
+    }
+}
+
+impl TryFrom<wit_types::Field> for FieldRef {
+    type Error = DataFusionError;
+
+    fn try_from(value: wit_types::Field) -> Result<Self, Self::Error> {
+        let wit_types::Field {
+            name,
+            data_type,
+            nullable,
+            dict_is_ordered,
+            metadata,
+        } = value;
+
+        Ok(Arc::new(
+            Field::new(name, data_type.try_into()?, nullable)
+                .with_dict_is_ordered(dict_is_ordered)
+                .with_metadata(metadata.into_iter().collect()),
+        ))
     }
 }
 
@@ -109,6 +139,93 @@ impl TryFrom<df_expr::Signature> for wit_types::Signature {
         Ok(Self {
             type_signature: value.type_signature.try_into()?,
             volatility: value.volatility.into(),
+        })
+    }
+}
+
+impl From<ArrayRef> for wit_types::Array {
+    fn from(value: ArrayRef) -> Self {
+        Self {
+            arrow_ipc_batch: array2bytes(value),
+        }
+    }
+}
+
+impl TryFrom<wit_types::Array> for ArrayRef {
+    type Error = DataFusionError;
+
+    fn try_from(value: wit_types::Array) -> Result<Self, Self::Error> {
+        bytes2array(&value.arrow_ipc_batch)
+    }
+}
+
+impl TryFrom<ScalarValue> for wit_types::ScalarValue {
+    type Error = DataFusionError;
+
+    fn try_from(value: ScalarValue) -> Result<Self, Self::Error> {
+        let array = value.to_array_of_size(1)?;
+
+        Ok(Self {
+            array: array.into(),
+        })
+    }
+}
+
+impl TryFrom<wit_types::ScalarValue> for ScalarValue {
+    type Error = DataFusionError;
+
+    fn try_from(value: wit_types::ScalarValue) -> Result<Self, Self::Error> {
+        let array = ArrayRef::try_from(value.array)?;
+        if array.len() != 1 {
+            return Err(DataFusionError::Internal(
+                "scalar value must be array of len 1".to_owned(),
+            ));
+        }
+        ScalarValue::try_from_array(&array, 0)
+    }
+}
+
+impl TryFrom<wit_types::ColumnarValue> for ColumnarValue {
+    type Error = DataFusionError;
+
+    fn try_from(value: wit_types::ColumnarValue) -> Result<Self, Self::Error> {
+        use wit_types::ColumnarValue;
+
+        Ok(match value {
+            ColumnarValue::Array(array) => Self::Array(array.try_into()?),
+            ColumnarValue::Scalar(scalar) => Self::Scalar(scalar.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<ColumnarValue> for wit_types::ColumnarValue {
+    type Error = DataFusionError;
+
+    fn try_from(value: ColumnarValue) -> Result<Self, Self::Error> {
+        Ok(match value {
+            ColumnarValue::Array(array) => wit_types::ColumnarValue::Array(array.into()),
+            ColumnarValue::Scalar(scalar) => wit_types::ColumnarValue::Scalar(scalar.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<wit_types::ScalarFunctionArgs> for ScalarFunctionArgs {
+    type Error = DataFusionError;
+
+    fn try_from(value: wit_types::ScalarFunctionArgs) -> Result<Self, Self::Error> {
+        Ok(Self {
+            args: value
+                .args
+                .into_iter()
+                .map(TryFrom::try_from)
+                .collect::<Result<_, _>>()?,
+            arg_fields: value
+                .arg_fields
+                .into_iter()
+                .map(TryFrom::try_from)
+                .collect::<Result<_, _>>()?,
+            number_rows: value.number_rows as usize,
+            return_field: value.return_field.try_into()?,
         })
     }
 }

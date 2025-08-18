@@ -36,4 +36,14 @@ impl wit_types::GuestScalarUdf for ScalarUdfWrapper {
         let data_type = self.0.return_type(&arg_types)?;
         Ok(data_type.into())
     }
+
+    fn invoke_with_args(
+        &self,
+        args: wit_types::ScalarFunctionArgs,
+    ) -> Result<wit_types::ColumnarValue, wit_types::DataFusionError> {
+        let args = args.try_into()?;
+        let cval = self.0.invoke_with_args(args)?;
+        let cval = cval.try_into()?;
+        Ok(cval)
+    }
 }

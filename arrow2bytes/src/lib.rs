@@ -1,13 +1,54 @@
+use std::{io::Cursor, sync::Arc};
+
 use datafusion::{
     arrow::{
+        array::{Array, ArrayRef, RecordBatch},
         datatypes::{DataType, Field, Schema},
         ipc::{
             convert::{IpcSchemaEncoder, fb_to_schema},
+            reader::StreamReader,
             root_as_schema,
+            writer::StreamWriter,
         },
     },
     error::DataFusionError,
 };
+
+pub fn array2bytes(array: ArrayRef) -> Vec<u8> {
+    let buffer = Vec::new();
+
+    let schema = Arc::new(Schema::new(vec![Field::new(
+        "a",
+        array.data_type().clone(),
+        array.null_count() > 0,
+    )]));
+    let mut writer = StreamWriter::try_new(buffer, &schema).expect("writing to buffer never fails");
+
+    let batch = RecordBatch::try_new(schema, vec![array]).expect("batch always valid");
+    writer.write(&batch).expect("writing to buffer never fails");
+
+    writer.into_inner().expect("writing to buffer never fails")
+}
+
+pub fn bytes2array(bytes: &[u8]) -> Result<ArrayRef, DataFusionError> {
+    let bytes = Cursor::new(bytes);
+    let mut reader = StreamReader::try_new(bytes, None)?;
+    let Some(res) = reader.next() else {
+        return Err(DataFusionError::Internal(
+            "no record batch found".to_owned(),
+        ));
+    };
+    let batch = res?;
+    let columns = batch.columns();
+    if columns.len() != 1 {
+        return Err(DataFusionError::Internal("invalid batch".to_owned()));
+    }
+    let array = Arc::clone(&columns[0]);
+    if reader.next().is_some() || !reader.is_finished() {
+        return Err(DataFusionError::Internal("trailing data".to_owned()));
+    }
+    Ok(array)
+}
 
 pub fn datatype2bytes(dt: DataType) -> Vec<u8> {
     let schema = Schema::new(vec![Field::new("a", dt, false)]);

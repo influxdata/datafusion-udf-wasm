@@ -5,6 +5,7 @@ use datafusion::{
     common::{exec_datafusion_err, exec_err, plan_err},
     error::Result as DataFusionResult,
     logical_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility},
+    scalar::ScalarValue,
 };
 use datafusion_udf_wasm_guest::export;
 
@@ -56,20 +57,31 @@ impl ScalarUDFImpl for AddOne {
         if args.len() != 1 {
             return exec_err!("add_one expects exactly one argument");
         }
-        let args = ColumnarValue::values_to_arrays(&args)?;
-        let array = args[0]
-            .as_any()
-            .downcast_ref::<Int32Array>()
-            .ok_or_else(|| exec_datafusion_err!("invalid array type"))?;
+        match &args[0] {
+            ColumnarValue::Array(array) => {
+                let array = array
+                    .as_any()
+                    .downcast_ref::<Int32Array>()
+                    .ok_or_else(|| exec_datafusion_err!("invalid array type"))?;
 
-        // perform calculation
-        let array = array
-            .iter()
-            .map(|x| x.and_then(|x| x.checked_add(1)))
-            .collect::<Int32Array>();
+                // perform calculation
+                let array = array
+                    .iter()
+                    .map(|x| x.and_then(|x| x.checked_add(1)))
+                    .collect::<Int32Array>();
 
-        // create output
-        Ok(ColumnarValue::Array(Arc::new(array)))
+                // create output
+                Ok(ColumnarValue::Array(Arc::new(array)))
+            }
+            ColumnarValue::Scalar(scalar) => {
+                let ScalarValue::Int32(x) = scalar else {
+                    return exec_err!("add_one only accepts Int32 arguments");
+                };
+                Ok(ColumnarValue::Scalar(ScalarValue::Int32(
+                    x.and_then(|x| x.checked_add(1)),
+                )))
+            }
+        }
     }
 }
 

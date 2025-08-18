@@ -1,5 +1,13 @@
-use datafusion::{arrow::datatypes::DataType, error::DataFusionError, logical_expr as df_expr};
-use datafusion_udf_wasm_arrow2bytes::{bytes2datatype, datatype2bytes};
+use datafusion::{
+    arrow::{
+        array::ArrayRef,
+        datatypes::{DataType, Field},
+    },
+    error::DataFusionError,
+    logical_expr::{self as df_expr, ColumnarValue, ScalarFunctionArgs},
+    scalar::ScalarValue,
+};
+use datafusion_udf_wasm_arrow2bytes::{array2bytes, bytes2array, bytes2datatype, datatype2bytes};
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
 
@@ -29,6 +37,22 @@ impl From<DataType> for wit_types::DataType {
     fn from(value: DataType) -> Self {
         Self {
             arrow_ipc_schema: datatype2bytes(value),
+        }
+    }
+}
+
+impl From<Field> for wit_types::Field {
+    fn from(value: Field) -> Self {
+        Self {
+            name: value.name().clone(),
+            data_type: value.data_type().clone().into(),
+            nullable: value.is_nullable(),
+            dict_is_ordered: value.dict_is_ordered().unwrap_or_default(),
+            metadata: value
+                .metadata()
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
         }
     }
 }
@@ -103,6 +127,93 @@ impl TryFrom<wit_types::Signature> for df_expr::Signature {
         Ok(Self {
             type_signature: value.type_signature.try_into()?,
             volatility: value.volatility.into(),
+        })
+    }
+}
+
+impl From<ArrayRef> for wit_types::Array {
+    fn from(value: ArrayRef) -> Self {
+        Self {
+            arrow_ipc_batch: array2bytes(value),
+        }
+    }
+}
+
+impl TryFrom<wit_types::Array> for ArrayRef {
+    type Error = DataFusionError;
+
+    fn try_from(value: wit_types::Array) -> Result<Self, Self::Error> {
+        bytes2array(&value.arrow_ipc_batch)
+    }
+}
+
+impl TryFrom<ScalarValue> for wit_types::ScalarValue {
+    type Error = DataFusionError;
+
+    fn try_from(value: ScalarValue) -> Result<Self, Self::Error> {
+        let array = value.to_array_of_size(1)?;
+
+        Ok(Self {
+            array: array.into(),
+        })
+    }
+}
+
+impl TryFrom<wit_types::ScalarValue> for ScalarValue {
+    type Error = DataFusionError;
+
+    fn try_from(value: wit_types::ScalarValue) -> Result<Self, Self::Error> {
+        let array = ArrayRef::try_from(value.array)?;
+        if array.len() != 1 {
+            return Err(DataFusionError::Internal(
+                "scalar value must be array of len 1".to_owned(),
+            ));
+        }
+        ScalarValue::try_from_array(&array, 0)
+    }
+}
+
+impl TryFrom<wit_types::ColumnarValue> for ColumnarValue {
+    type Error = DataFusionError;
+
+    fn try_from(value: wit_types::ColumnarValue) -> Result<Self, Self::Error> {
+        use wit_types::ColumnarValue;
+
+        Ok(match value {
+            ColumnarValue::Array(array) => Self::Array(array.try_into()?),
+            ColumnarValue::Scalar(scalar) => Self::Scalar(scalar.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<ColumnarValue> for wit_types::ColumnarValue {
+    type Error = DataFusionError;
+
+    fn try_from(value: ColumnarValue) -> Result<Self, Self::Error> {
+        Ok(match value {
+            ColumnarValue::Array(array) => wit_types::ColumnarValue::Array(array.into()),
+            ColumnarValue::Scalar(scalar) => wit_types::ColumnarValue::Scalar(scalar.try_into()?),
+        })
+    }
+}
+
+impl TryFrom<ScalarFunctionArgs> for wit_types::ScalarFunctionArgs {
+    type Error = DataFusionError;
+
+    fn try_from(value: ScalarFunctionArgs) -> Result<Self, Self::Error> {
+        Ok(Self {
+            args: value
+                .args
+                .into_iter()
+                .map(TryFrom::try_from)
+                .collect::<Result<_, _>>()?,
+            arg_fields: value
+                .arg_fields
+                .into_iter()
+                .map(|f| f.as_ref().clone().into())
+                .collect(),
+            number_rows: value.number_rows as u64,
+            return_field: value.return_field.as_ref().clone().into(),
         })
     }
 }

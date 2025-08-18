@@ -200,8 +200,19 @@ impl ScalarUDFImpl for WasmScalarUdf {
         })
     }
 
-    fn invoke_with_args(&self, _args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
-        todo!()
+    fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
+        async_in_sync_context(async {
+            let args = args.try_into()?;
+            let mut store_guard = self.store.lock().await;
+            let return_type = self
+                .bindings
+                .datafusion_udf_wasm_udf_types()
+                .scalar_udf()
+                .call_invoke_with_args(store_guard.deref_mut(), self.resource, &args)
+                .await
+                .context("call ScalarUdf::return_type")??;
+            return_type.try_into()
+        })
     }
 }
 
