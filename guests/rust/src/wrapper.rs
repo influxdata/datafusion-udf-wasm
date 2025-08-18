@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
-use datafusion::logical_expr::ScalarUDFImpl;
+use datafusion::{arrow::datatypes::DataType, logical_expr::ScalarUDFImpl};
 
 #[derive(Debug)]
 pub struct ScalarUdfWrapper(Arc<dyn ScalarUDFImpl>);
@@ -23,5 +23,18 @@ impl wit_types::GuestScalarUdf for ScalarUdfWrapper {
             .clone()
             .try_into()
             .expect("signature conversion")
+    }
+
+    fn return_type(
+        &self,
+        arg_types: Vec<wit_types::DataType>,
+    ) -> Result<wit_types::DataType, wit_types::DataFusionError> {
+        let arg_types = arg_types
+            .into_iter()
+            .map(DataType::from)
+            .collect::<Vec<_>>();
+        let data_type = self.0.return_type(&arg_types)?;
+        let data_type: wit_types::DataType = data_type.try_into()?;
+        Ok(data_type)
     }
 }

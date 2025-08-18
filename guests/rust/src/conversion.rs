@@ -2,6 +2,41 @@ use datafusion::{arrow::datatypes::DataType, error::DataFusionError, logical_exp
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
 
+impl From<DataFusionError> for wit_types::DataFusionError {
+    fn from(value: DataFusionError) -> Self {
+        match value {
+            DataFusionError::NotImplemented(msg) => Self::NotImplemented(msg),
+            DataFusionError::Internal(msg) => Self::Internal(msg),
+            DataFusionError::Plan(msg) => Self::Plan(msg),
+            DataFusionError::Configuration(msg) => Self::Configuration(msg),
+            DataFusionError::Execution(msg) => Self::Execution(msg),
+            _ => Self::NotImplemented(format!("serialize error: {value}")),
+        }
+    }
+}
+
+impl From<wit_types::DataType> for DataType {
+    fn from(value: wit_types::DataType) -> Self {
+        use wit_types::DataType;
+
+        match value {
+            DataType::Null => Self::Null,
+            DataType::Boolean => Self::Boolean,
+            DataType::Int8 => Self::Int8,
+            DataType::Int16 => Self::Int16,
+            DataType::Int32 => Self::Int32,
+            DataType::Int64 => Self::Int64,
+            DataType::Uint8 => Self::UInt8,
+            DataType::Uint16 => Self::UInt16,
+            DataType::Uint32 => Self::UInt32,
+            DataType::Uint64 => Self::UInt64,
+            DataType::Float16 => Self::Float16,
+            DataType::Float32 => Self::Float32,
+            DataType::Float64 => Self::Float64,
+        }
+    }
+}
+
 impl TryFrom<DataType> for wit_types::DataType {
     type Error = DataFusionError;
 

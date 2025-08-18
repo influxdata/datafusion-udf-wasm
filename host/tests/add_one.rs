@@ -4,7 +4,7 @@ use datafusion::{
 };
 use datafusion_udf_wasm_host::WasmScalarUdf;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_add_one() {
     let data = tokio::fs::read(format!(
         "{}/../target/wasm32-wasip2/debug/examples/add_one.wasm",
@@ -13,13 +13,21 @@ async fn test_add_one() {
     .await
     .unwrap();
 
-    let mut udfs = WasmScalarUdf::new(&data).unwrap();
+    let mut udfs = WasmScalarUdf::new(&data).await.unwrap();
     assert_eq!(udfs.len(), 1);
     let udf = udfs.pop().unwrap();
 
     assert_eq!(udf.name(), "add_one");
     assert_eq!(
         udf.signature(),
-        &Signature::uniform(1, vec![DataType::Int32], Volatility::Immutable)
+        &Signature::uniform(1, vec![DataType::Int32], Volatility::Immutable),
+    );
+    assert_eq!(
+        udf.return_type(&[DataType::Int32]).unwrap(),
+        DataType::Int32,
+    );
+    assert_eq!(
+        udf.return_type(&[]).unwrap_err().to_string(),
+        "Error during planning: add_one only accepts Int32 arguments",
     );
 }

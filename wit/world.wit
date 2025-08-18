@@ -1,6 +1,15 @@
 package datafusion-udf-wasm:udf@0.1.0;
 
 interface types {
+    // TODO: add more variants
+    variant data-fusion-error {
+        not-implemented(string),
+        internal(string),
+        plan(string),
+        configuration(string),
+        execution(string),
+    }
+
     // TODO: complete data types
     variant data-type {
         null,
@@ -55,6 +64,7 @@ interface types {
     resource scalar-udf {
         name: func() -> string;
         signature: func() -> signature;
+        return-type: func(arg-types: list<data-type>) -> result<data-type, data-fusion-error>;
     }
 
     scalar-udfs: func() -> list<scalar-udf>;
