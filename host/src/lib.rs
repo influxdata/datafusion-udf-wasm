@@ -1,4 +1,4 @@
-use std::{any::Any, ops::DerefMut, sync::Arc};
+use std::{any::Any, borrow::Cow, collections::HashMap, ops::DerefMut, sync::Arc};
 
 use datafusion::{
     arrow::datatypes::DataType,
@@ -7,7 +7,7 @@ use datafusion::{
 };
 use tokio::sync::Mutex;
 use wasmtime::{
-    Engine, Store,
+    CacheStore, Engine, Store,
     component::{Component, Linker, ResourceAny},
 };
 use wasmtime_wasi::{
@@ -52,6 +52,26 @@ impl WasiView for WasmStateImpl {
     }
 }
 
+#[derive(Debug, Default)]
+struct CompilationCache {
+    data: std::sync::RwLock<HashMap<Vec<u8>, Vec<u8>>>,
+}
+
+impl CacheStore for CompilationCache {
+    fn get(&self, key: &[u8]) -> Option<Cow<'_, [u8]>> {
+        let guard = self.data.read().expect("not poisoned");
+        guard.get(key).map(|data| Cow::Owned(data.clone()))
+    }
+
+    fn insert(&self, key: &[u8], value: Vec<u8>) -> bool {
+        let mut guard = self.data.write().expect("not poisoned");
+        guard.insert(key.to_owned(), value.to_owned());
+
+        // always succeeds
+        true
+    }
+}
+
 pub struct WasmScalarUdf {
     store: Arc<Mutex<Store<WasmStateImpl>>>,
     bindings: Arc<bindings::Datafusion>,
@@ -62,7 +82,13 @@ pub struct WasmScalarUdf {
 
 impl WasmScalarUdf {
     pub async fn new(wasm_binary: &[u8]) -> DataFusionResult<Vec<Self>> {
-        let engine = Engine::default();
+        let engine = Engine::new(
+            wasmtime::Config::new()
+                .async_support(true)
+                .enable_incremental_compilation(Arc::new(CompilationCache::default()))
+                .context("enable incremental compilation")?,
+        )
+        .context("create WASM engine")?;
 
         let state = WasmStateImpl {
             wasi_ctx: WasiCtx::builder().build(),
@@ -74,16 +100,18 @@ impl WasmScalarUdf {
             Component::from_binary(&engine, wasm_binary).context("create WASM component")?;
 
         let mut linker = Linker::new(&engine);
-        wasmtime_wasi::p2::add_to_linker_sync(&mut linker).context("link WASI p2")?;
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker).context("link WASI p2")?;
 
         let bindings = Arc::new(
-            bindings::Datafusion::instantiate(&mut store, &component, &linker)
+            bindings::Datafusion::instantiate_async(&mut store, &component, &linker)
+                .await
                 .context("initialize bindings")?,
         );
 
         let udf_resources = bindings
             .datafusion_udf_wasm_udf_types()
             .call_scalar_udfs(&mut store)
+            .await
             .context("call scalar_udfs() method")?;
 
         let store = Arc::new(Mutex::new(store));
@@ -96,6 +124,7 @@ impl WasmScalarUdf {
                 .datafusion_udf_wasm_udf_types()
                 .scalar_udf()
                 .call_name(store2, resource)
+                .await
                 .context("call ScalarUdf::name")?;
 
             let store2: &mut Store<WasmStateImpl> = &mut store_guard;
@@ -103,6 +132,7 @@ impl WasmScalarUdf {
                 .datafusion_udf_wasm_udf_types()
                 .scalar_udf()
                 .call_signature(store2, resource)
+                .await
                 .context("call ScalarUdf::signature")?
                 .into();
 
@@ -164,6 +194,7 @@ impl ScalarUDFImpl for WasmScalarUdf {
                 .datafusion_udf_wasm_udf_types()
                 .scalar_udf()
                 .call_return_type(store_guard.deref_mut(), self.resource, &arg_types)
+                .await
                 .context("call ScalarUdf::return_type")??;
             Ok(return_type.into())
         })

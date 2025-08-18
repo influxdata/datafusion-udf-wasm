@@ -14,7 +14,7 @@ resolver = "3"
 [workspace.dependencies]
 datafusion = { version = "49.0.0", default-features = false }
 tokio = { version = "1.47.1", default-features = false }
-wasmtime = "35"
+wasmtime = { version = "35", default-features = false, features = ["async", "cranelift", "incremental-cache"] }
 wasmtime-wasi = { version = "35", default-features = false }
 wit-bindgen = "0.44"
 
