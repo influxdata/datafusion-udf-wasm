@@ -77,7 +77,7 @@ impl WasmScalarUdf {
         wasmtime_wasi::p2::add_to_linker_sync(&mut linker).context("link WASI p2")?;
 
         let bindings = Arc::new(
-            bindings::Datafusion::instantiate(&mut store, &component, &mut linker)
+            bindings::Datafusion::instantiate(&mut store, &component, &linker)
                 .context("initialize bindings")?,
         );
 
@@ -95,14 +95,14 @@ impl WasmScalarUdf {
             let name = bindings
                 .datafusion_udf_wasm_udf_types()
                 .scalar_udf()
-                .call_name(store2, resource.clone())
+                .call_name(store2, resource)
                 .context("call ScalarUdf::name")?;
 
             let store2: &mut Store<WasmStateImpl> = &mut store_guard;
             let signature = bindings
                 .datafusion_udf_wasm_udf_types()
                 .scalar_udf()
-                .call_signature(store2, resource.clone())
+                .call_signature(store2, resource)
                 .context("call ScalarUdf::signature")?
                 .into();
 
@@ -163,7 +163,7 @@ impl ScalarUDFImpl for WasmScalarUdf {
                 .bindings
                 .datafusion_udf_wasm_udf_types()
                 .scalar_udf()
-                .call_return_type(store_guard.deref_mut(), self.resource.clone(), &arg_types)
+                .call_return_type(store_guard.deref_mut(), self.resource, &arg_types)
                 .context("call ScalarUdf::return_type")??;
             Ok(return_type.into())
         })

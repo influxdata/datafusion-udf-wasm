@@ -35,7 +35,10 @@ impl ScalarUDFImpl for AddOne {
     }
 
     fn return_type(&self, arg_types: &[DataType]) -> DataFusionResult<DataType> {
-        if !matches!(arg_types.get(0), Some(&DataType::Int32)) {
+        if arg_types.len() != 1 {
+            return plan_err!("add_one expects exactly one argument");
+        }
+        if !matches!(arg_types.first(), Some(&DataType::Int32)) {
             return plan_err!("add_one only accepts Int32 arguments");
         }
         Ok(DataType::Int32)
