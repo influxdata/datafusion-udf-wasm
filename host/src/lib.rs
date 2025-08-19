@@ -12,7 +12,7 @@ use wasmtime::{
 };
 use wasmtime_wasi::{
     ResourceTable,
-    p2::{IoView, WasiCtx, WasiView},
+    p2::{IoView, WasiCtx, WasiView, pipe::MemoryOutputPipe},
 };
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
@@ -23,6 +23,7 @@ mod conversion;
 mod error;
 
 struct WasmStateImpl {
+    stderr: MemoryOutputPipe,
     wasi_ctx: WasiCtx,
     resource_table: ResourceTable,
 }
@@ -30,10 +31,12 @@ struct WasmStateImpl {
 impl std::fmt::Debug for WasmStateImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self {
+            stderr,
             wasi_ctx: _,
             resource_table,
         } = self;
         f.debug_struct("WasmStateImpl")
+            .field("stderr", stderr)
             .field("wasi_ctx", &"<WASI_CTX>")
             .field("resource_table", resource_table)
             .finish()
@@ -82,37 +85,43 @@ pub struct WasmScalarUdf {
 
 impl WasmScalarUdf {
     pub async fn new(wasm_binary: &[u8]) -> DataFusionResult<Vec<Self>> {
+        let stderr = MemoryOutputPipe::new(1024);
+        let wasi_ctx = WasiCtx::builder().stderr(stderr.clone()).build();
+        let state = WasmStateImpl {
+            stderr,
+            wasi_ctx,
+            resource_table: ResourceTable::new(),
+        };
+
         let engine = Engine::new(
             wasmtime::Config::new()
                 .async_support(true)
                 .enable_incremental_compilation(Arc::new(CompilationCache::default()))
-                .context("enable incremental compilation")?,
+                .context("enable incremental compilation", None)?,
         )
-        .context("create WASM engine")?;
-
-        let state = WasmStateImpl {
-            wasi_ctx: WasiCtx::builder().build(),
-            resource_table: ResourceTable::new(),
-        };
+        .context("create WASM engine", None)?;
         let mut store = Store::new(&engine, state);
 
         let component =
-            Component::from_binary(&engine, wasm_binary).context("create WASM component")?;
+            Component::from_binary(&engine, wasm_binary).context("create WASM component", None)?;
 
         let mut linker = Linker::new(&engine);
-        wasmtime_wasi::p2::add_to_linker_async(&mut linker).context("link WASI p2")?;
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker).context("link WASI p2", None)?;
 
         let bindings = Arc::new(
             bindings::Datafusion::instantiate_async(&mut store, &component, &linker)
                 .await
-                .context("initialize bindings")?,
+                .context("initialize bindings", Some(&store.data().stderr.contents()))?,
         );
 
         let udf_resources = bindings
             .datafusion_udf_wasm_udf_types()
             .call_scalar_udfs(&mut store)
             .await
-            .context("call scalar_udfs() method")?;
+            .context(
+                "call scalar_udfs() method",
+                Some(&store.data().stderr.contents()),
+            )?;
 
         let store = Arc::new(Mutex::new(store));
 
@@ -125,7 +134,10 @@ impl WasmScalarUdf {
                 .scalar_udf()
                 .call_name(store2, resource)
                 .await
-                .context("call ScalarUdf::name")?;
+                .context(
+                    "call ScalarUdf::name",
+                    Some(&store_guard.data().stderr.contents()),
+                )?;
 
             let store2: &mut Store<WasmStateImpl> = &mut store_guard;
             let signature = bindings
@@ -133,7 +145,10 @@ impl WasmScalarUdf {
                 .scalar_udf()
                 .call_signature(store2, resource)
                 .await
-                .context("call ScalarUdf::signature")?
+                .context(
+                    "call ScalarUdf::signature",
+                    Some(&store_guard.data().stderr.contents()),
+                )?
                 .try_into()?;
 
             udfs.push(Self {
@@ -195,7 +210,10 @@ impl ScalarUDFImpl for WasmScalarUdf {
                 .scalar_udf()
                 .call_return_type(store_guard.deref_mut(), self.resource, &arg_types)
                 .await
-                .context("call ScalarUdf::return_type")??;
+                .context(
+                    "call ScalarUdf::return_type",
+                    Some(&store_guard.data().stderr.contents()),
+                )??;
             return_type.try_into()
         })
     }
@@ -210,7 +228,10 @@ impl ScalarUDFImpl for WasmScalarUdf {
                 .scalar_udf()
                 .call_invoke_with_args(store_guard.deref_mut(), self.resource, &args)
                 .await
-                .context("call ScalarUdf::return_type")??;
+                .context(
+                    "call ScalarUdf::return_type",
+                    Some(&store_guard.data().stderr.contents()),
+                )??;
             return_type.try_into()
         })
     }
