@@ -10,7 +10,7 @@ rustup toolchain install nightly --target=wasm32-wasip2
 Then build with:
 
 ```console
-cargo +nightly build --target wasm32-wasip2 --example add_one
+just build-add-one-debug
 ```
 
 Optionally you can check that symbols are exported correctly (requires [`wasm-tools`]):
