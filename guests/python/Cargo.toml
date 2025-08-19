@@ -1,0 +1,14 @@
+[package]
+name = "datafusion-udf-wasm-python"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+datafusion-udf-wasm-guest = { path = "../rust" }
+datafusion.workspace = true
+pyo3.workspace = true

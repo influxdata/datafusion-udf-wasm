@@ -1,0 +1,145 @@
+PYTHON_VERSION_MAJOR := "3"
+PYTHON_VERSION_MINOR := "14"
+PYTHON_VERSION_MICRO := "0rc2"
+
+WASI_SDK_VERSION_MAJOR := "24"
+WASI_SDK_VERSION_MINOR := "0"
+
+PYTHON_VERSION_FULL := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR + "." + PYTHON_VERSION_MICRO
+
+TARGET_DIR := justfile_directory() / ".." / ".." / "target"
+BINARY_NAME := "datafusion_udf_wasm_python.wasm"
+
+TARGET_DIR_WASIP1 := TARGET_DIR / "wasm32-wasip1"
+TARGET_DIR_WASIP2 := TARGET_DIR / "wasm32-wasip2"
+
+DOWNLOADS_DIR := justfile_directory() / "downloads"
+
+export PYO3_CROSS_PYTHON_VERSION := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR
+export PYO3_CROSS_LIB_DIR := DOWNLOADS_DIR / "python-sdk"
+
+ADAPTER_PATH := DOWNLOADS_DIR / "wasmtime" / "target" / "wasm32-unknown-unknown" / "release" / "wasi_snapshot_preview1.wasm"
+
+export WASI_SDK_LINK_PATH := DOWNLOADS_DIR / "wasi-sysroot" / "lib" / "wasm32-wasip1"
+
+# download pre-built Python WASM SDK
+[private]
+download-python-sdk:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    mkdir -p downloads
+    pushd downloads >/dev/null
+
+    # skip if already downloaded
+    if [ -d python-sdk ]; then
+        echo "python sdk already present"
+        exit 0
+    fi
+
+    curl \
+        --fail \
+        --show-error \
+        --silent \
+        --proto '=https' \
+        --tlsv1.2 \
+        --location \
+        --output "python-sdk.zip" \
+        "https://github.com/crepererum/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
+
+    curl \
+        --fail \
+        --show-error \
+        --silent \
+        --proto '=https' \
+        --tlsv1.2 \
+        --location \
+        --output "build-python-sdk.zip" \
+        "https://github.com/crepererum/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/_build-python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
+
+    unzip -d python-sdk python-sdk.zip
+    unzip -d build-python-sdk build-python-sdk.zip
+
+    mv build-python-sdk/libpython{{PYTHON_VERSION_MAJOR}}.{{PYTHON_VERSION_MINOR}}.a python-sdk/
+    mv build-python-sdk/Modules/_decimal/libmpdec/libmpdec.a python-sdk/
+    mv build-python-sdk/Modules/_hacl/libHacl_HMAC.a python-sdk/
+    mv build-python-sdk/Modules/_hacl/libHacl_Hash_BLAKE2.a python-sdk/
+    mv build-python-sdk/Modules/_hacl/libHacl_Hash_MD5.a python-sdk/
+    mv build-python-sdk/Modules/_hacl/libHacl_Hash_SHA1.a python-sdk/
+    mv build-python-sdk/Modules/_hacl/libHacl_Hash_SHA2.a python-sdk/
+    mv build-python-sdk/Modules/_hacl/libHacl_Hash_SHA3.a python-sdk/
+    mv build-python-sdk/Modules/expat/libexpat.a python-sdk/
+
+# download WASI SDK because we need some libraries during the static linking phase
+[private]
+download-wasi-sdk:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    mkdir -p downloads
+    pushd downloads >/dev/null
+
+    # skip if already downloaded
+    if [ -d wasi-sysroot ]; then
+        echo "wasi sdk already present"
+        exit 0
+    fi
+
+    curl \
+        --fail \
+        --show-error \
+        --silent \
+        --proto '=https' \
+        --tlsv1.2 \
+        --location \
+        --output "wasi-sysroot.tar.gz" \
+        "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{{WASI_SDK_VERSION_MAJOR}}/wasi-sysroot-{{WASI_SDK_VERSION_MAJOR}}.{{WASI_SDK_VERSION_MINOR}}.tar.gz"
+
+    tar xf wasi-sysroot.tar.gz
+    mv wasi-sysroot-{{WASI_SDK_VERSION_MAJOR}}.{{WASI_SDK_VERSION_MINOR}} wasi-sysroot
+
+# build the WASIp1 to WASIp2 adapter
+[private]
+build-adapter:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    mkdir -p downloads
+    pushd downloads >/dev/null
+
+    # skip if already downloaded
+    if [ -f "{{ADAPTER_PATH}}" ]; then
+        echo "adapter already present"
+        exit 0
+    fi
+
+    if [ ! -d wasmtime ]; then
+        git clone \
+            --depth=1 \
+            --revision=aa91737e68b982911019f735ae3923a9543d0fca \
+            "https://github.com/bytecodealliance/wasmtime.git"
+    fi
+    pushd wasmtime >/dev/null
+
+    cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown --release
+
+# we build using the wasip1 target because the python builds are only available as p1 for now
+[private]
+build-lib profile: download-python-sdk download-wasi-sdk
+    cargo +nightly build --target=wasm32-wasip1 --profile={{replace(profile, "debug", "dev")}}
+
+# convert the WASIp1 binary to WASIp2
+[private]
+convert profile: (build-lib profile) build-adapter
+    mkdir -p {{TARGET_DIR_WASIP2}}/{{profile}}
+    wasm-tools component new {{TARGET_DIR_WASIP1}}/{{profile}}/{{BINARY_NAME}} --adapt {{ADAPTER_PATH}} -o {{TARGET_DIR_WASIP2}}/{{profile}}/{{BINARY_NAME}}
+
+# top-level entry point
+[private]
+do profile: (convert profile)
+
+# create dev/debug build
+debug: (do "debug")
+
+# create release build
+release: (do "release")

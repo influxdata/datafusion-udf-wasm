@@ -1,0 +1,45 @@
+use std::sync::Arc;
+
+use datafusion::{
+    arrow::datatypes::{DataType, Field},
+    logical_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility},
+    scalar::ScalarValue,
+};
+use datafusion_udf_wasm_host::WasmScalarUdf;
+
+#[tokio::test(flavor = "multi_thread")]
+#[should_panic] // we need to bundle the Python stdlib
+async fn test() {
+    let data = tokio::fs::read(format!(
+        "{}/../target/wasm32-wasip2/debug/datafusion_udf_wasm_python.wasm",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .await
+    .unwrap();
+
+    let mut udfs = WasmScalarUdf::new(&data).await.unwrap();
+    assert_eq!(udfs.len(), 1);
+    let udf = udfs.pop().unwrap();
+
+    assert_eq!(udf.name(), "test");
+
+    assert_eq!(
+        udf.signature(),
+        &Signature::uniform(0, vec![], Volatility::Immutable),
+    );
+
+    assert_eq!(udf.return_type(&[]).unwrap(), DataType::Utf8,);
+
+    let ColumnarValue::Scalar(scalar) = udf
+        .invoke_with_args(ScalarFunctionArgs {
+            args: vec![],
+            arg_fields: vec![],
+            number_rows: 3,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+        })
+        .unwrap()
+    else {
+        panic!("should be a scalar")
+    };
+    assert_eq!(scalar, ScalarValue::Utf8(Some("foo".to_owned())));
+}

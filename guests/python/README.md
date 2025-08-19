@@ -1,5 +1,18 @@
 # Python Guest
 
+## Build
+Use:
+
+```console
+just debug
+```
+
+or
+
+```console
+just release
+```
+
 ## Execution Models
 ### Embedded VM
 #### Pyodide
@@ -28,6 +41,12 @@ Cons:
 
 #### pyo3 + Official CPython WASM Builds
 Instead of using stdio to drive a Python interpreter, we use [pyo3].
+
+Pros:
+- We can interact w/ Python more efficiently.
+
+Cons:
+- Needs pre-released Python 3.14, because 3.13 seems to rely on "thread parking", which is implemented as WASM exceptions, which are not supported by wasmtime yet. Relevant code is <https://github.com/PyO3/pyo3/blob/52554ce0a33321893af17577a3ea0d179ad1b563/pyo3-ffi/src/pystate.rs#L87-L94>.
 
 #### webassembly-language-runtimes
 Website: <https://github.com/webassemblylabs/webassembly-language-runtimes>

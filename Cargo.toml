@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 [workspace]
 members = [
     "arrow2bytes",
+    "guests/python",
     "guests/rust",
     "host",
 ]
@@ -15,10 +16,11 @@ resolver = "3"
 [workspace.dependencies]
 datafusion = { version = "49.0.0", default-features = false }
 tokio = { version = "1.47.1", default-features = false }
+pyo3 = { version = "0.25.1", default-features = false }
 wasmtime = { version = "35", default-features = false, features = ["async", "cranelift", "incremental-cache"] }
 wasmtime-wasi = { version = "35", default-features = false }
 wit-bindgen = "0.44"
 
-# we need a nightly tempfiles features
+# patches to get wasi p2 to run without extra feature flags
 [patch.crates-io]
 tempfile = { git = "https://github.com/crepererum/tempfile.git", rev = "bdfa162a052d5239c4d42e6b706f9d2e9e040f02" }
