@@ -24,6 +24,10 @@ Pros:
 
 Cons:
 - Can only run as a WASI CLI-like app (so we would need to interact with it via stdio or a fake network)
+- Currently only offered as wasip1
+
+#### pyo3 + Official CPython WASM Builds
+Instead of using stdio to drive a Python interpreter, we use [pyo3].
 
 #### webassembly-language-runtimes
 Website: <https://github.com/webassemblylabs/webassembly-language-runtimes>
@@ -47,3 +51,6 @@ Website: <https://github.com/wasmerio/py2wasm>
 
 ### Other Notes
 - <https://wasmlabs.dev/articles/python-wasm-rust/>
+
+
+[pyo3]: https://pyo3.rs/
