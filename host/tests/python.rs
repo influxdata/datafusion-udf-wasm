@@ -1,11 +1,8 @@
 use std::sync::Arc;
 
-use datafusion::{
-    arrow::datatypes::{DataType, Field},
-    common::assert_contains,
-    logical_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility},
-    scalar::ScalarValue,
-};
+use arrow::datatypes::{DataType, Field};
+use datafusion_common::{ScalarValue, assert_contains};
+use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 use datafusion_udf_wasm_host::WasmScalarUdf;
 
 #[tokio::test(flavor = "multi_thread")]

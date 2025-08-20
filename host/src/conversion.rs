@@ -1,12 +1,9 @@
-use datafusion::{
-    arrow::{
-        array::ArrayRef,
-        datatypes::{DataType, Field},
-    },
-    error::DataFusionError,
-    logical_expr::{self as df_expr, ColumnarValue, ScalarFunctionArgs},
-    scalar::ScalarValue,
+use arrow::{
+    array::ArrayRef,
+    datatypes::{DataType, Field},
 };
+use datafusion_common::{DataFusionError, ScalarValue};
+use datafusion_expr::{ColumnarValue, ScalarFunctionArgs};
 use datafusion_udf_wasm_arrow2bytes::{array2bytes, bytes2array, bytes2datatype, datatype2bytes};
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
@@ -58,7 +55,7 @@ impl From<Field> for wit_types::Field {
     }
 }
 
-impl From<wit_types::ArrayFunctionSignature> for df_expr::ArrayFunctionSignature {
+impl From<wit_types::ArrayFunctionSignature> for datafusion_expr::ArrayFunctionSignature {
     fn from(value: wit_types::ArrayFunctionSignature) -> Self {
         use wit_types::ArrayFunctionSignature;
 
@@ -69,7 +66,7 @@ impl From<wit_types::ArrayFunctionSignature> for df_expr::ArrayFunctionSignature
     }
 }
 
-impl TryFrom<wit_types::TypeSignature> for df_expr::TypeSignature {
+impl TryFrom<wit_types::TypeSignature> for datafusion_expr::TypeSignature {
     type Error = DataFusionError;
 
     fn try_from(value: wit_types::TypeSignature) -> Result<Self, DataFusionError> {
@@ -109,7 +106,7 @@ impl TryFrom<wit_types::TypeSignature> for df_expr::TypeSignature {
     }
 }
 
-impl From<wit_types::Volatility> for df_expr::Volatility {
+impl From<wit_types::Volatility> for datafusion_expr::Volatility {
     fn from(value: wit_types::Volatility) -> Self {
         use wit_types::Volatility;
 
@@ -121,7 +118,7 @@ impl From<wit_types::Volatility> for df_expr::Volatility {
     }
 }
 
-impl TryFrom<wit_types::Signature> for df_expr::Signature {
+impl TryFrom<wit_types::Signature> for datafusion_expr::Signature {
     type Error = DataFusionError;
 
     fn try_from(value: wit_types::Signature) -> Result<Self, Self::Error> {

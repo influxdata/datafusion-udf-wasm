@@ -1,10 +1,8 @@
 use std::{any::Any, io::Cursor, ops::DerefMut, sync::Arc};
 
-use datafusion::{
-    arrow::datatypes::DataType,
-    error::{DataFusionError, Result as DataFusionResult},
-    logical_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature},
-};
+use arrow::datatypes::DataType;
+use datafusion_common::{DataFusionError, Result as DataFusionResult};
+use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature};
 use tempfile::TempDir;
 use tokio::sync::Mutex;
 use wasmtime::{

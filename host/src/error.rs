@@ -1,4 +1,4 @@
-use datafusion::error::DataFusionError;
+use datafusion_common::DataFusionError;
 
 pub(crate) trait WasmToDataFusionErrorExt {
     fn context(self, msg: &str, stderr: Option<&[u8]>) -> DataFusionError;
