@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
-use datafusion::{
-    arrow::datatypes::DataType,
-    common::{exec_err, plan_err},
-    error::{DataFusionError, Result as DataFusionResult},
-    logical_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility},
-    scalar::ScalarValue,
+use arrow::datatypes::DataType;
+use datafusion_common::{
+    DataFusionError, Result as DataFusionResult, ScalarValue, exec_err, plan_err,
 };
+use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 use datafusion_udf_wasm_guest::export;
 use pyo3::ffi::c_str;
 use pyo3::prelude::*;

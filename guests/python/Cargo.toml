@@ -9,8 +9,10 @@ license.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+arrow.workspace = true
+datafusion-common.workspace = true
+datafusion-expr.workspace = true
 datafusion-udf-wasm-guest = { path = "../rust" }
-datafusion.workspace = true
 pyo3.workspace = true
 
 [build-dependencies]
