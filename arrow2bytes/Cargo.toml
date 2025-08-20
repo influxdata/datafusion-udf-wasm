@@ -6,4 +6,4 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-datafusion.workspace = true
+arrow.workspace = true

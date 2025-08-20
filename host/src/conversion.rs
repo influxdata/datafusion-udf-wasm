@@ -29,7 +29,8 @@ impl TryFrom<wit_types::DataType> for DataType {
     type Error = DataFusionError;
 
     fn try_from(value: wit_types::DataType) -> Result<Self, Self::Error> {
-        bytes2datatype(&value.arrow_ipc_schema)
+        let dt = bytes2datatype(&value.arrow_ipc_schema)?;
+        Ok(dt)
     }
 }
 
@@ -143,7 +144,8 @@ impl TryFrom<wit_types::Array> for ArrayRef {
     type Error = DataFusionError;
 
     fn try_from(value: wit_types::Array) -> Result<Self, Self::Error> {
-        bytes2array(&value.arrow_ipc_batch)
+        let array = bytes2array(&value.arrow_ipc_batch)?;
+        Ok(array)
     }
 }
 

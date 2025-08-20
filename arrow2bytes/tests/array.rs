@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use datafusion::arrow::{
+use arrow::{
     array::{ArrayRef, Int64Array, StringDictionaryBuilder},
     datatypes::Int32Type,
 };

@@ -1308,7 +1308,7 @@ dependencies = [
 name = "datafusion-udf-wasm-arrow2bytes"
 version = "0.1.0"
 dependencies = [
- "datafusion",
+ "arrow",
 ]
 
 [[package]]

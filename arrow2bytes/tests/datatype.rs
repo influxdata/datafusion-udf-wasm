@@ -1,11 +1,8 @@
 use std::sync::Arc;
 
-use datafusion::{
-    arrow::{
-        datatypes::{DataType, Field, Schema},
-        ipc::convert::IpcSchemaEncoder,
-    },
-    common::assert_contains,
+use arrow::{
+    datatypes::{DataType, Field, Schema},
+    ipc::convert::IpcSchemaEncoder,
 };
 use datafusion_udf_wasm_arrow2bytes::{bytes2datatype, datatype2bytes};
 
@@ -22,7 +19,10 @@ fn test_roundtrip() {
 #[test]
 fn test_err_invalid_bytes() {
     let err = bytes2datatype(b"").unwrap_err();
-    assert_contains!(err.to_string(), "Internal error: ");
+    assert_eq!(
+        err.to_string(),
+        "Invalid argument error: Range [0, 4) is out of bounds.\n\n"
+    );
 }
 
 #[test]
@@ -31,7 +31,7 @@ fn test_err_no_field() {
     let fb = IpcSchemaEncoder::new().schema_to_fb(&schema);
     let data = fb.finished_data().to_owned();
     let err = bytes2datatype(&data).unwrap_err();
-    assert_contains!(err.to_string(), "Internal error: Invalid schema");
+    assert_eq!(err.to_string(), "Invalid argument error: Invalid schema");
 }
 
 #[test]
@@ -43,7 +43,7 @@ fn test_err_two_fields() {
     let fb = IpcSchemaEncoder::new().schema_to_fb(&schema);
     let data = fb.finished_data().to_owned();
     let err = bytes2datatype(&data).unwrap_err();
-    assert_contains!(err.to_string(), "Internal error: Invalid schema");
+    assert_eq!(err.to_string(), "Invalid argument error: Invalid schema");
 }
 
 #[track_caller]
