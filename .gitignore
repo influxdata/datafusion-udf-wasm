@@ -1,1 +1,5 @@
+# compilation artifacts
 target/
+
+# profiling data
+profile.json
