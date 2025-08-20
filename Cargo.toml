@@ -30,3 +30,12 @@ wit-bindgen = "0.44"
 [patch.crates-io]
 pyo3 = { git = "https://github.com/crepererum/pyo3.git", rev = "92f97bdb0291852e2e0fc59312b69e9f73e47f16" }
 tempfile = { git = "https://github.com/crepererum/tempfile.git", rev = "bdfa162a052d5239c4d42e6b706f9d2e9e040f02" }
+
+# faster tests
+[profile.dev.package]
+cranelift-codegen.opt-level = 3
+cranelift-entity.opt-level = 3
+cranelift-frontend.opt-level = 3
+regalloc2.opt-level = 3
+sha2.opt-level = 3
+wasmparser.opt-level = 3
