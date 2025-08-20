@@ -4,7 +4,10 @@ pub mod wrapper;
 
 #[macro_export]
 macro_rules! export {
-    ($fn:ident) => {
+    {
+        root_fs_tar: $root_fs_tar:ident,
+        scalar_udfs: $scalar_udfs:ident,
+    } => {
 
         #[derive(Debug)]
         struct Implementation;
@@ -12,8 +15,12 @@ macro_rules! export {
         impl $crate::bindings::exports::datafusion_udf_wasm::udf::types::Guest for Implementation {
             type ScalarUdf = $crate::wrapper::ScalarUdfWrapper;
 
+            fn root_fs_tar() -> Option<Vec<u8>> {
+                $root_fs_tar()
+            }
+
             fn scalar_udfs() -> Vec<$crate::bindings::exports::datafusion_udf_wasm::udf::types::ScalarUdf> {
-                $fn()
+                $scalar_udfs()
                     .into_iter()
                     .map(|udf| $crate::bindings::exports::datafusion_udf_wasm::udf::types::ScalarUdf::new(
                         $crate::wrapper::ScalarUdfWrapper::new(udf)
@@ -22,6 +29,6 @@ macro_rules! export {
             }
         }
 
-        $crate::bindings::export!(Implementation with_types_in $crate::bindings);
+        $crate::bindings::_export!(Implementation with_types_in $crate::bindings);
     };
 }

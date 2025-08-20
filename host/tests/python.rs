@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use datafusion::{
     arrow::datatypes::{DataType, Field},
+    common::assert_contains,
     logical_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility},
     scalar::ScalarValue,
 };
 use datafusion_udf_wasm_host::WasmScalarUdf;
 
 #[tokio::test(flavor = "multi_thread")]
-#[should_panic] // we need to bundle the Python stdlib
 async fn test() {
     let data = tokio::fs::read(format!(
         "{}/../target/wasm32-wasip2/debug/datafusion_udf_wasm_python.wasm",
@@ -39,7 +39,10 @@ async fn test() {
         })
         .unwrap()
     else {
-        panic!("should be a scalar")
+        panic!("should be a scalar");
     };
-    assert_eq!(scalar, ScalarValue::Utf8(Some("foo".to_owned())));
+    let ScalarValue::Utf8(s) = scalar else {
+        panic!("scalar should be UTF8");
+    };
+    assert_contains!(s.unwrap(), "Hello Unknown, I'm Python");
 }

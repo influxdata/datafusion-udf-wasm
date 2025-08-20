@@ -86,6 +86,7 @@ interface types {
         invoke-with-args: func(args: scalar-function-args) -> result<columnar-value, data-fusion-error>;
     }
 
+    root-fs-tar: func() -> option<list<u8>>;
     scalar-udfs: func() -> list<scalar-udf>;
 }
 

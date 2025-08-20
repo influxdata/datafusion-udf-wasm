@@ -1,28 +1,35 @@
-use std::{any::Any, borrow::Cow, collections::HashMap, ops::DerefMut, sync::Arc};
+use std::{any::Any, io::Cursor, ops::DerefMut, sync::Arc};
 
 use datafusion::{
     arrow::datatypes::DataType,
-    error::Result as DataFusionResult,
+    error::{DataFusionError, Result as DataFusionResult},
     logical_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature},
 };
+use tempfile::TempDir;
 use tokio::sync::Mutex;
 use wasmtime::{
-    CacheStore, Engine, Store,
+    Engine, Store,
     component::{Component, Linker, ResourceAny},
 };
 use wasmtime_wasi::{
-    ResourceTable,
+    DirPerms, FilePerms, ResourceTable,
     p2::{IoView, WasiCtx, WasiView, pipe::MemoryOutputPipe},
 };
 
-use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
-use crate::error::WasmToDataFusionResultExt;
+use crate::{
+    bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
+    compilation_cache::CompilationCache, tokio_helpers::async_in_sync_context,
+};
+use crate::{error::WasmToDataFusionResultExt, tokio_helpers::blocking_io};
 
 mod bindings;
+mod compilation_cache;
 mod conversion;
 mod error;
+mod tokio_helpers;
 
 struct WasmStateImpl {
+    root: TempDir,
     stderr: MemoryOutputPipe,
     wasi_ctx: WasiCtx,
     resource_table: ResourceTable,
@@ -31,11 +38,13 @@ struct WasmStateImpl {
 impl std::fmt::Debug for WasmStateImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self {
+            root,
             stderr,
             wasi_ctx: _,
             resource_table,
         } = self;
         f.debug_struct("WasmStateImpl")
+            .field("root", root)
             .field("stderr", stderr)
             .field("wasi_ctx", &"<WASI_CTX>")
             .field("resource_table", resource_table)
@@ -55,26 +64,6 @@ impl WasiView for WasmStateImpl {
     }
 }
 
-#[derive(Debug, Default)]
-struct CompilationCache {
-    data: std::sync::RwLock<HashMap<Vec<u8>, Vec<u8>>>,
-}
-
-impl CacheStore for CompilationCache {
-    fn get(&self, key: &[u8]) -> Option<Cow<'_, [u8]>> {
-        let guard = self.data.read().expect("not poisoned");
-        guard.get(key).map(|data| Cow::Owned(data.clone()))
-    }
-
-    fn insert(&self, key: &[u8], value: Vec<u8>) -> bool {
-        let mut guard = self.data.write().expect("not poisoned");
-        guard.insert(key.to_owned(), value.to_owned());
-
-        // always succeeds
-        true
-    }
-}
-
 pub struct WasmScalarUdf {
     store: Arc<Mutex<Store<WasmStateImpl>>>,
     bindings: Arc<bindings::Datafusion>,
@@ -85,9 +74,21 @@ pub struct WasmScalarUdf {
 
 impl WasmScalarUdf {
     pub async fn new(wasm_binary: &[u8]) -> DataFusionResult<Vec<Self>> {
+        // TODO: we need an in-mem file system for this, see
+        //       - https://github.com/bytecodealliance/wasmtime/issues/8963
+        //       - https://github.com/Timmmm/wasmtime_fs_demo
+        let root = blocking_io(|| TempDir::new())
+            .await
+            .map_err(|e| DataFusionError::IoError(e))?;
+
         let stderr = MemoryOutputPipe::new(1024);
-        let wasi_ctx = WasiCtx::builder().stderr(stderr.clone()).build();
+        let wasi_ctx = WasiCtx::builder()
+            .stderr(stderr.clone())
+            .preopened_dir(root.path(), "/", DirPerms::READ, FilePerms::READ)
+            .context("pre-open root dir", None)?
+            .build();
         let state = WasmStateImpl {
+            root,
             stderr,
             wasi_ctx,
             resource_table: ResourceTable::new(),
@@ -113,6 +114,25 @@ impl WasmScalarUdf {
                 .await
                 .context("initialize bindings", Some(&store.data().stderr.contents()))?,
         );
+
+        // fill root FS
+        let root_data = bindings
+            .datafusion_udf_wasm_udf_types()
+            .call_root_fs_tar(&mut store)
+            .await
+            .context(
+                "call root_fs_tar() method",
+                Some(&store.data().stderr.contents()),
+            )?;
+        if let Some(root_data) = root_data {
+            let root_path = store.data().root.path().to_owned();
+            blocking_io(move || {
+                let mut a = tar::Archive::new(Cursor::new(root_data));
+                a.unpack(root_path)
+            })
+            .await
+            .map_err(|e| DataFusionError::IoError(e))?;
+        }
 
         let udf_resources = bindings
             .datafusion_udf_wasm_udf_types()
@@ -229,19 +249,10 @@ impl ScalarUDFImpl for WasmScalarUdf {
                 .call_invoke_with_args(store_guard.deref_mut(), self.resource, &args)
                 .await
                 .context(
-                    "call ScalarUdf::return_type",
+                    "call ScalarUdf::invoke_with_args",
                     Some(&store_guard.data().stderr.contents()),
                 )??;
             return_type.try_into()
         })
     }
-}
-
-// this is a hack that is required because the respective DataFusion interfaces aren't fully async
-// TODO: remove this!
-fn async_in_sync_context<Fut>(fut: Fut) -> Fut::Output
-where
-    Fut: Future,
-{
-    tokio::task::block_in_place(move || tokio::runtime::Handle::current().block_on(fut))
 }

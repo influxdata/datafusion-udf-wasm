@@ -8,6 +8,8 @@ license.workspace = true
 [dependencies]
 datafusion-udf-wasm-arrow2bytes = { path = "../arrow2bytes" }
 datafusion.workspace = true
+tar.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync"] }
 wasmtime.workspace = true
 wasmtime-wasi.workspace = true

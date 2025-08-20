@@ -85,8 +85,15 @@ impl ScalarUDFImpl for AddOne {
     }
 }
 
-pub(crate) fn udfs() -> Vec<Arc<dyn ScalarUDFImpl>> {
+fn root() -> Option<Vec<u8>> {
+    None
+}
+
+fn udfs() -> Vec<Arc<dyn ScalarUDFImpl>> {
     vec![Arc::new(AddOne::new())]
 }
 
-export!(udfs);
+export! {
+    root_fs_tar: root,
+    scalar_udfs: udfs,
+}

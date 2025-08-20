@@ -12,3 +12,7 @@ crate-type = ["cdylib"]
 datafusion-udf-wasm-guest = { path = "../rust" }
 datafusion.workspace = true
 pyo3.workspace = true
+
+[build-dependencies]
+tar.workspace = true
+walkdir = "2.5.0"

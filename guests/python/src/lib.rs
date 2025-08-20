@@ -74,10 +74,17 @@ impl ScalarUDFImpl for Test {
     }
 }
 
-pub(crate) fn udfs() -> Vec<Arc<dyn ScalarUDFImpl>> {
+fn root() -> Option<Vec<u8>> {
+    Some(std::include_bytes!("../python-lib.tar").to_vec())
+}
+
+fn udfs() -> Vec<Arc<dyn ScalarUDFImpl>> {
     pyo3::prepare_freethreaded_python();
 
     vec![Arc::new(Test::new())]
 }
 
-export!(udfs);
+export! {
+    root_fs_tar: root,
+    scalar_udfs: udfs,
+}
