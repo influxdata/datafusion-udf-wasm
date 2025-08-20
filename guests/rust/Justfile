@@ -1,2 +1,6 @@
-build-add-one-debug:
-   cargo +nightly build --target wasm32-wasip2 --example add_one
+build-add-one profile:
+   cargo +nightly build --target=wasm32-wasip2 --example=add_one --profile={{replace(profile, "debug", "dev")}}
+
+build-add-one-debug: (build-add-one "debug")
+
+build-add-one-release: (build-add-one "release")
