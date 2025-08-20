@@ -6,8 +6,10 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+arrow.workspace = true
+datafusion-common.workspace = true
+datafusion-expr.workspace = true
 datafusion-udf-wasm-arrow2bytes = { path = "../../arrow2bytes" }
-datafusion.workspace = true
 wit-bindgen.workspace = true
 
 [[example]]

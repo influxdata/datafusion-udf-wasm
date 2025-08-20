@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
-use datafusion::{arrow::datatypes::DataType, logical_expr::ScalarUDFImpl};
+use arrow::datatypes::DataType;
+use datafusion_expr::ScalarUDFImpl;
 
 #[derive(Debug)]
 pub struct ScalarUdfWrapper(Arc<dyn ScalarUDFImpl>);

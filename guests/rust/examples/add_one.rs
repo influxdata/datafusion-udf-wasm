@@ -1,12 +1,10 @@
 use std::sync::Arc;
 
-use datafusion::{
-    arrow::{array::Int32Array, datatypes::DataType},
-    common::{exec_datafusion_err, exec_err, plan_err},
-    error::Result as DataFusionResult,
-    logical_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility},
-    scalar::ScalarValue,
+use arrow::{array::Int32Array, datatypes::DataType};
+use datafusion_common::{
+    Result as DataFusionResult, ScalarValue, exec_datafusion_err, exec_err, plan_err,
 };
+use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 use datafusion_udf_wasm_guest::export;
 
 #[derive(Debug)]

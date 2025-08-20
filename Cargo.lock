@@ -1315,7 +1315,9 @@ dependencies = [
 name = "datafusion-udf-wasm-guest"
 version = "0.1.0"
 dependencies = [
- "datafusion",
+ "arrow",
+ "datafusion-common",
+ "datafusion-expr",
  "datafusion-udf-wasm-arrow2bytes",
  "wit-bindgen",
 ]

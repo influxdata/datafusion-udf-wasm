@@ -1,14 +1,11 @@
 use std::sync::Arc;
 
-use datafusion::{
-    arrow::{
-        array::ArrayRef,
-        datatypes::{DataType, Field, FieldRef},
-    },
-    error::DataFusionError,
-    logical_expr::{self as df_expr, ColumnarValue, ScalarFunctionArgs},
-    scalar::ScalarValue,
+use arrow::{
+    array::ArrayRef,
+    datatypes::{DataType, Field, FieldRef},
 };
+use datafusion_common::{error::DataFusionError, scalar::ScalarValue};
+use datafusion_expr::{ColumnarValue, ScalarFunctionArgs};
 use datafusion_udf_wasm_arrow2bytes::{array2bytes, bytes2array, bytes2datatype, datatype2bytes};
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
@@ -63,11 +60,11 @@ impl TryFrom<wit_types::Field> for FieldRef {
     }
 }
 
-impl TryFrom<df_expr::ArrayFunctionSignature> for wit_types::ArrayFunctionSignature {
+impl TryFrom<datafusion_expr::ArrayFunctionSignature> for wit_types::ArrayFunctionSignature {
     type Error = DataFusionError;
 
-    fn try_from(value: df_expr::ArrayFunctionSignature) -> Result<Self, Self::Error> {
-        use df_expr::ArrayFunctionSignature;
+    fn try_from(value: datafusion_expr::ArrayFunctionSignature) -> Result<Self, Self::Error> {
+        use datafusion_expr::ArrayFunctionSignature;
 
         Ok(match value {
             ArrayFunctionSignature::Array { .. } => {
@@ -81,11 +78,11 @@ impl TryFrom<df_expr::ArrayFunctionSignature> for wit_types::ArrayFunctionSignat
     }
 }
 
-impl TryFrom<df_expr::TypeSignature> for wit_types::TypeSignature {
+impl TryFrom<datafusion_expr::TypeSignature> for wit_types::TypeSignature {
     type Error = DataFusionError;
 
-    fn try_from(value: df_expr::TypeSignature) -> Result<Self, Self::Error> {
-        use df_expr::TypeSignature;
+    fn try_from(value: datafusion_expr::TypeSignature) -> Result<Self, Self::Error> {
+        use datafusion_expr::TypeSignature;
 
         Ok(match value {
             TypeSignature::Variadic(data_types) => {
@@ -121,9 +118,9 @@ impl TryFrom<df_expr::TypeSignature> for wit_types::TypeSignature {
     }
 }
 
-impl From<df_expr::Volatility> for wit_types::Volatility {
-    fn from(value: df_expr::Volatility) -> Self {
-        use df_expr::Volatility;
+impl From<datafusion_expr::Volatility> for wit_types::Volatility {
+    fn from(value: datafusion_expr::Volatility) -> Self {
+        use datafusion_expr::Volatility;
 
         match value {
             Volatility::Immutable => Self::Immutable,
@@ -133,10 +130,10 @@ impl From<df_expr::Volatility> for wit_types::Volatility {
     }
 }
 
-impl TryFrom<df_expr::Signature> for wit_types::Signature {
+impl TryFrom<datafusion_expr::Signature> for wit_types::Signature {
     type Error = DataFusionError;
 
-    fn try_from(value: df_expr::Signature) -> Result<Self, Self::Error> {
+    fn try_from(value: datafusion_expr::Signature) -> Result<Self, Self::Error> {
         Ok(Self {
             type_signature: value.type_signature.try_into()?,
             volatility: value.volatility.into(),

@@ -16,6 +16,8 @@ resolver = "3"
 [workspace.dependencies]
 arrow = { version = "55.2.0", default-features = false, features = ["ipc"] }
 datafusion = { version = "49.0.0", default-features = false }
+datafusion-common = { version = "49.0.0", default-features = false }
+datafusion-expr = { version = "49.0.0", default-features = false }
 tokio = { version = "1.47.1", default-features = false }
 pyo3 = { version = "0.25.1", default-features = false }
 tar = "0.4.44"
