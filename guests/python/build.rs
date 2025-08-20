@@ -35,14 +35,14 @@ fn configure_linker() {
 
 fn bundle_python_lib() {
     println!("cargo:rerun-if-env-changed=PYO3_CROSS_LIB_DIR");
+    let tar_path = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("python-lib.tar");
     let Ok(lib_dir) = std::env::var("PYO3_CROSS_LIB_DIR") else {
-        std::fs::write("python-lib.tar", b"").unwrap();
+        std::fs::write(&tar_path, b"").unwrap();
         return;
     };
     let lib_dir = PathBuf::from(lib_dir);
 
-    // TODO: use build-dir once it is stable, see https://github.com/rust-lang/cargo/issues/14125
-    let file = File::create("python-lib.tar").unwrap();
+    let file = File::create(&tar_path).unwrap();
     let mut archive = tar::Builder::new(file);
     for entry in walkdir::WalkDir::new(&lib_dir) {
         let entry = entry.unwrap();

@@ -73,7 +73,8 @@ impl ScalarUDFImpl for Test {
 }
 
 fn root() -> Option<Vec<u8>> {
-    Some(std::include_bytes!("../python-lib.tar").to_vec())
+    const ROOT_TAR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/python-lib.tar"));
+    Some(ROOT_TAR.to_vec())
 }
 
 fn udfs() -> Vec<Arc<dyn ScalarUDFImpl>> {
