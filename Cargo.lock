@@ -2383,8 +2383,7 @@ dependencies = [
 [[package]]
 name = "pyo3"
 version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8970a78afe0628a3e3430376fc5fd76b6b45c4d43360ffd6cdd40bdde72b682a"
+source = "git+https://github.com/crepererum/pyo3.git?rev=92f97bdb0291852e2e0fc59312b69e9f73e47f16#92f97bdb0291852e2e0fc59312b69e9f73e47f16"
 dependencies = [
  "libc",
  "memoffset",
@@ -2397,8 +2396,7 @@ dependencies = [
 [[package]]
 name = "pyo3-build-config"
 version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "458eb0c55e7ece017adeba38f2248ff3ac615e53660d7c71a238d7d2a01c7598"
+source = "git+https://github.com/crepererum/pyo3.git?rev=92f97bdb0291852e2e0fc59312b69e9f73e47f16#92f97bdb0291852e2e0fc59312b69e9f73e47f16"
 dependencies = [
  "once_cell",
  "target-lexicon",
@@ -2407,8 +2405,7 @@ dependencies = [
 [[package]]
 name = "pyo3-ffi"
 version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7114fe5457c61b276ab77c5055f206295b812608083644a5c5b2640c3102565c"
+source = "git+https://github.com/crepererum/pyo3.git?rev=92f97bdb0291852e2e0fc59312b69e9f73e47f16#92f97bdb0291852e2e0fc59312b69e9f73e47f16"
 dependencies = [
  "libc",
  "pyo3-build-config",
