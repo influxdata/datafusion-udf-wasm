@@ -6,7 +6,7 @@ use arrow::{
 };
 use datafusion_common::ScalarValue;
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
-use datafusion_udf_wasm_host::WasmScalarUdf;
+use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmScalarUdf};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_add_one() {
@@ -17,7 +17,8 @@ async fn test_add_one() {
     .await
     .unwrap();
 
-    let mut udfs = WasmScalarUdf::new(&data, "".to_owned()).await.unwrap();
+    let component = WasmComponentPrecompiled::new(data.into()).await.unwrap();
+    let mut udfs = WasmScalarUdf::new(&component, "".to_owned()).await.unwrap();
     assert_eq!(udfs.len(), 1);
     let udf = udfs.pop().unwrap();
 
