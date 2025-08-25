@@ -67,7 +67,7 @@ pub struct WasmScalarUdf {
 }
 
 impl WasmScalarUdf {
-    pub async fn new(wasm_binary: &[u8]) -> DataFusionResult<Vec<Self>> {
+    pub async fn new(wasm_binary: &[u8], source: String) -> DataFusionResult<Vec<Self>> {
         // TODO: we need an in-mem file system for this, see
         //       - https://github.com/bytecodealliance/wasmtime/issues/8963
         //       - https://github.com/Timmmm/wasmtime_fs_demo
@@ -130,12 +130,12 @@ impl WasmScalarUdf {
 
         let udf_resources = bindings
             .datafusion_udf_wasm_udf_types()
-            .call_scalar_udfs(&mut store)
+            .call_scalar_udfs(&mut store, &source)
             .await
             .context(
                 "call scalar_udfs() method",
                 Some(&store.data().stderr.contents()),
-            )?;
+            )??;
 
         let store = Arc::new(Mutex::new(store));
 

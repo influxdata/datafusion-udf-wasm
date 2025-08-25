@@ -14,7 +14,7 @@ async fn test() {
     .await
     .unwrap();
 
-    let mut udfs = WasmScalarUdf::new(&data).await.unwrap();
+    let mut udfs = WasmScalarUdf::new(&data, "".to_owned()).await.unwrap();
     assert_eq!(udfs.len(), 1);
     let udf = udfs.pop().unwrap();
 
