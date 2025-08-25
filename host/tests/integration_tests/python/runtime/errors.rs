@@ -1,0 +1,235 @@
+use std::sync::Arc;
+
+use arrow::{
+    array::{Float64Array, Int64Array},
+    datatypes::{DataType, Field},
+};
+use datafusion_common::DataFusionError;
+use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
+
+use crate::integration_tests::python::test_utils::python_scalar_udf;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_return_type_param_mismatch() {
+    const CODE: &str = "
+def foo(x: int) -> int:
+    return x
+";
+
+    let udf = python_scalar_udf(CODE).await.unwrap();
+
+    insta::assert_snapshot!(
+        udf.return_type(&[]).unwrap_err(),
+        @"Error during planning: `foo` expects 1 parameters but got 0",
+    );
+
+    insta::assert_snapshot!(
+        udf.return_type(&[DataType::Int64, DataType::Int64]).unwrap_err(),
+        @"Error during planning: `foo` expects 1 parameters but got 2",
+    );
+
+    insta::assert_snapshot!(
+        udf.return_type(&[DataType::Float64]).unwrap_err(),
+        @"Error during planning: argument 1 of `foo` should be Int64, got Float64",
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_invoke_args_mismatch() {
+    const CODE: &str = "
+def foo(x: int) -> int:
+    return x
+";
+
+    let udf = python_scalar_udf(CODE).await.unwrap();
+
+    insta::assert_snapshot!(
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![],
+            arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        })
+        .unwrap_err(),
+        @"Execution error: `foo` expects 1 parameters (passed as args) but got 0",
+    );
+
+    insta::assert_snapshot!(
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![
+                ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                    Some(1),
+                ]))),
+                ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                    Some(1),
+                ]))),
+            ],
+            arg_fields: vec![
+                Arc::new(Field::new("x", DataType::Int64, true)),
+            ],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        })
+        .unwrap_err(),
+        @"Execution error: `foo` expects 1 parameters (passed as args) but got 2",
+    );
+
+    insta::assert_snapshot!(
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Float64Array::from_iter([
+                Some(1.0),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        })
+        .unwrap_err(),
+        @"Execution error: expected int64 array but got Float64",
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_invoke_arg_fields_mismatch() {
+    const CODE: &str = "
+def foo(x: int) -> int:
+    return x
+";
+
+    let udf = python_scalar_udf(CODE).await.unwrap();
+
+    insta::assert_snapshot!(
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                Some(1),
+            ])))],
+            arg_fields: vec![],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        })
+        .unwrap_err(),
+        @"Execution error: `foo` expects 1 parameters (passed as fields) but got 0",
+    );
+
+    insta::assert_snapshot!(
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                Some(1),
+            ])))],
+            arg_fields: vec![
+                Arc::new(Field::new("x", DataType::Int64, true)),
+                Arc::new(Field::new("y", DataType::Int64, true)),
+            ],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        })
+        .unwrap_err(),
+        @"Execution error: `foo` expects 1 parameters (passed as fields) but got 2",
+    );
+
+    insta::assert_snapshot!(
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                Some(1),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("x", DataType::Float64, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        })
+        .unwrap_err(),
+        @"Execution error: argument field 1 of `foo` should be Int64 but got Float64",
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_invoke_return_field_mismatch() {
+    const CODE: &str = "
+def foo(x: int) -> int:
+    return x
+";
+
+    let udf = python_scalar_udf(CODE).await.unwrap();
+
+    insta::assert_snapshot!(
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                Some(1),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Float64, true)),
+        })
+        .unwrap_err(),
+        @"Execution error: `foo` returns Int64 but was asked to produce Float64",
+    );
+
+    insta::assert_snapshot!(
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                Some(1),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, false)),
+        })
+        .unwrap_err(),
+        @"Execution error: `foo` returns nullable data but was asked not to do so",
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_should_not_return_none() {
+    const CODE: &str = "
+def foo(x: int) -> int:
+    return None
+";
+
+    insta::assert_snapshot!(
+        err(CODE).await,
+        @"Execution error: method was not supposed to return None but did",
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_exception() {
+    const CODE: &str = "
+def foo(x: int) -> int:
+    raise Exception('bar')
+";
+
+    insta::assert_snapshot!(
+        err(CODE).await,
+        @"Execution error: cannot call function: Exception: bar",
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_stack_overflow() {
+    // borrowed from https://wiki.python.org/moin/CrashingPython
+    const CODE: &str = "
+def foo(x: int) -> int:
+    f = lambda: None
+    for i in range(1_000_000):
+        f = f.__call__
+    del f
+
+    return x
+";
+    insta::assert_snapshot!(
+        // the error is long because it contains the backtrace, so only assert the first line
+        err(CODE).await.to_string().split("\n").next().unwrap(),
+        @"call ScalarUdf::invoke_with_args",
+    );
+}
+
+async fn err(code: &str) -> DataFusionError {
+    let udf = python_scalar_udf(code).await.unwrap();
+    udf.invoke_with_args(ScalarFunctionArgs {
+        args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+            Some(1),
+        ])))],
+        arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
+        number_rows: 1,
+        return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+    })
+    .unwrap_err()
+}
