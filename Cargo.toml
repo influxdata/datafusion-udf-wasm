@@ -15,8 +15,10 @@ resolver = "3"
 
 [workspace.dependencies]
 arrow = { version = "55.2.0", default-features = false, features = ["ipc"] }
-datafusion-common = { version = "49.0.0", default-features = false }
-datafusion-expr = { version = "49.0.0", default-features = false }
+datafusion-common = { version = "49.0.1", default-features = false }
+datafusion-expr = { version = "49.0.1", default-features = false }
+datafusion-udf-wasm-arrow2bytes = { path = "arrow2bytes", version = "0.1.0" }
+datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0" }
 tokio = { version = "1.47.1", default-features = false }
 pyo3 = { version = "0.25.1", default-features = false }
 tar = "0.4.44"
@@ -25,9 +27,36 @@ wasmtime = { version = "35", default-features = false, features = ["async", "cra
 wasmtime-wasi = { version = "35", default-features = false }
 wit-bindgen = "0.44"
 
+[workspace.lints.rust]
+missing_copy_implementations = "deny"
+missing_debug_implementations = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+unexpected_cfgs = { level = "deny", check-cfg = ['cfg(tokio_unstable)'] }
+unreachable_pub = "deny"
+unused_crate_dependencies = "deny"
+
+[workspace.lints.clippy]
+clone_on_ref_ptr = "deny"
+dbg_macro = "deny"
+explicit_iter_loop = "deny"
+future_not_send = "deny"
+todo = "deny"
+use_self = "deny"
+allow_attributes = "warn"
+
+[workspace.lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+private_intra_doc_links = "allow"
+
+[patch.crates-io]
+# use same DataFusion fork as InfluxDB
+# See https://github.com/influxdata/arrow-datafusion/pull/72
+datafusion-common = { git = "https://github.com/influxdata/arrow-datafusion.git", rev = "8347a71f62d4fef8d37548f22b93877170039357" }
+datafusion-expr = { git = "https://github.com/influxdata/arrow-datafusion.git", rev = "8347a71f62d4fef8d37548f22b93877170039357" }
+
 # patches to get wasi p2 to run without extra feature flags
 # See <https://github.com/rust-lang/rust/issues/130323>.
-[patch.crates-io]
 pyo3 = { git = "https://github.com/crepererum/pyo3.git", rev = "92f97bdb0291852e2e0fc59312b69e9f73e47f16" }
 tempfile = { git = "https://github.com/crepererum/tempfile.git", rev = "bdfa162a052d5239c4d42e6b706f9d2e9e040f02" }
 
