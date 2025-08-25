@@ -5,6 +5,9 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [lib]
 crate-type = ["cdylib"]
 
@@ -12,7 +15,7 @@ crate-type = ["cdylib"]
 arrow.workspace = true
 datafusion-common.workspace = true
 datafusion-expr.workspace = true
-datafusion-udf-wasm-guest = { path = "../rust" }
+datafusion-udf-wasm-guest.workspace = true
 pyo3.workspace = true
 
 [build-dependencies]

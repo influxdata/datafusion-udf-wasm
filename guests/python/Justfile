@@ -7,7 +7,7 @@ WASI_SDK_VERSION_MINOR := "0"
 
 PYTHON_VERSION_FULL := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR + "." + PYTHON_VERSION_MICRO
 
-DOWNLOADS_DIR := justfile_directory() / "downloads"
+DOWNLOADS_DIR := source_directory() / "downloads"
 
 export PYO3_CROSS_PYTHON_VERSION := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR
 export PYO3_CROSS_LIB_DIR := DOWNLOADS_DIR / "python-sdk"
@@ -19,6 +19,9 @@ export WASI_SDK_LINK_PATH := DOWNLOADS_DIR / "wasi-sysroot" / "lib" / "wasm32-wa
 download-python-sdk:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    echo ::group::guests::python::download-python-sdk
+    set -x
 
     mkdir -p downloads
     pushd downloads >/dev/null
@@ -62,11 +65,17 @@ download-python-sdk:
     mv build-python-sdk/Modules/_hacl/libHacl_Hash_SHA3.a python-sdk/
     mv build-python-sdk/Modules/expat/libexpat.a python-sdk/
 
+    set +x
+    echo ::endgroup::
+
 # download WASI SDK because we need some libraries during the static linking phase
 [private]
 download-wasi-sdk:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    echo ::group::guests::python::download-wasi-sdk
+    set -x
 
     mkdir -p downloads
     pushd downloads >/dev/null
@@ -90,9 +99,14 @@ download-wasi-sdk:
     tar xf wasi-sysroot.tar.gz
     mv wasi-sysroot-{{WASI_SDK_VERSION_MAJOR}}.{{WASI_SDK_VERSION_MINOR}} wasi-sysroot
 
+    set +x
+    echo ::endgroup::
+
 [private]
 build-lib profile: download-python-sdk download-wasi-sdk
+    @echo ::group::guests::python::build-lib {{profile}}
     cargo +nightly build --target=wasm32-wasip2 --profile={{replace(profile, "debug", "dev")}}
+    @echo ::endgroup::
 
 # top-level entry point
 [private]
@@ -103,3 +117,6 @@ debug: (do "debug")
 
 # create release build
 release: (do "release")
+
+# checks build
+check-build: debug

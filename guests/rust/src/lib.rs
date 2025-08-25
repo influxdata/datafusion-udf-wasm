@@ -29,6 +29,14 @@ macro_rules! export {
             }
         }
 
+        // only export on WASI, because otherwise the linker is going to be sad
+        #[cfg(target_os = "wasi")]
         $crate::bindings::_export!(Implementation with_types_in $crate::bindings);
+
+        // create dummy function for other targets to suppress "unused" warnings
+        #[cfg(not(target_os = "wasi"))]
+        pub fn _export_stuff() -> impl $crate::bindings::exports::datafusion_udf_wasm::udf::types::Guest {
+            Implementation
+        }
     };
 }

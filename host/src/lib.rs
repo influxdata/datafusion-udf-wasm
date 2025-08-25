@@ -75,9 +75,9 @@ impl WasmScalarUdf {
         // TODO: we need an in-mem file system for this, see
         //       - https://github.com/bytecodealliance/wasmtime/issues/8963
         //       - https://github.com/Timmmm/wasmtime_fs_demo
-        let root = blocking_io(|| TempDir::new())
+        let root = blocking_io(TempDir::new)
             .await
-            .map_err(|e| DataFusionError::IoError(e))?;
+            .map_err(DataFusionError::IoError)?;
 
         let stderr = MemoryOutputPipe::new(1024);
         let wasi_ctx = WasiCtx::builder()
@@ -129,7 +129,7 @@ impl WasmScalarUdf {
                 a.unpack(root_path)
             })
             .await
-            .map_err(|e| DataFusionError::IoError(e))?;
+            .map_err(DataFusionError::IoError)?;
         }
 
         let udf_resources = bindings

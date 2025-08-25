@@ -1,0 +1,58 @@
+mod guests
+
+# check Rust files via `cargo build`
+check-rust-build: guests::rust::check-build guests::python::check-build
+
+# check Rust files via `cargo check`
+check-rust-check:
+    @echo ::group::check-rust-check
+    cargo check --workspace --all-features
+    @echo ::endgroup::
+
+# check Rust files via `cargo clippy`
+check-rust-clippy:
+    @echo ::group::check-rust-clippy
+    cargo clippy --all-features --all-targets --workspace -- -D warnings
+    @echo ::endgroup::
+
+# check Rust formatting
+check-rust-fmt:
+    @echo ::group::check-rust-fmt
+    cargo fmt --all -- --check
+    @echo ::endgroup::
+
+# test Rust code
+check-rust-test: check-rust-build
+    @echo ::group::check-rust-test
+    cargo test --all-features --workspace
+    @echo ::endgroup::
+
+# build Rust docs
+check-rust-doc:
+    @echo ::group::check-rust-doc
+    cargo doc --document-private-items --no-deps --all-features --workspace
+    @echo ::endgroup::
+
+# dry-run Rust benchmarks
+check-rust-bench: check-rust-build
+    @echo ::group::check-rust-bench
+    cargo bench --profile=dev --all-features --workspace -- --test
+    @echo ::endgroup::
+
+# check Rust dependencies with cargo-deny
+check-rust-deny:
+    @echo ::group::check-rust-deny
+    cargo deny check
+    @echo ::endgroup::
+
+# run ALL Rust checks
+check-rust: check-rust-fmt check-rust-check check-rust-build check-rust-clippy check-rust-test check-rust-doc check-rust-bench check-rust-deny
+
+# lint YAML files
+check-yaml:
+    @echo ::group::check-yaml
+    yamllint -s .
+    @echo ::endgroup::
+
+# run ALL checks
+check: check-rust check-yaml

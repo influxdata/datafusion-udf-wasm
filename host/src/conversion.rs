@@ -168,7 +168,7 @@ impl TryFrom<wit_types::ScalarValue> for ScalarValue {
                 "scalar value must be array of len 1".to_owned(),
             ));
         }
-        ScalarValue::try_from_array(&array, 0)
+        Self::try_from_array(&array, 0)
     }
 }
 
@@ -190,8 +190,8 @@ impl TryFrom<ColumnarValue> for wit_types::ColumnarValue {
 
     fn try_from(value: ColumnarValue) -> Result<Self, Self::Error> {
         Ok(match value {
-            ColumnarValue::Array(array) => wit_types::ColumnarValue::Array(array.into()),
-            ColumnarValue::Scalar(scalar) => wit_types::ColumnarValue::Scalar(scalar.try_into()?),
+            ColumnarValue::Array(array) => Self::Array(array.into()),
+            ColumnarValue::Scalar(scalar) => Self::Scalar(scalar.try_into()?),
         })
     }
 }
