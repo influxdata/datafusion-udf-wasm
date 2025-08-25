@@ -43,6 +43,7 @@ future_not_send = "deny"
 todo = "deny"
 use_self = "deny"
 allow_attributes = "warn"
+undocumented_unsafe_blocks = "deny"
 
 [workspace.lints.rustdoc]
 bare_urls = "deny"
