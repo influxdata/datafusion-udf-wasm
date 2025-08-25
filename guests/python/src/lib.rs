@@ -1,35 +1,55 @@
+use std::any::Any;
+use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use arrow::datatypes::DataType;
-use datafusion_common::{
-    DataFusionError, Result as DataFusionResult, ScalarValue, exec_err, plan_err,
-};
+use datafusion_common::{Result as DataFusionResult, exec_datafusion_err, exec_err, plan_err};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 use datafusion_udf_wasm_guest::export;
-use pyo3::ffi::c_str;
 use pyo3::prelude::*;
-use pyo3::types::IntoPyDict;
+use pyo3::types::PyTuple;
+
+use crate::error::py_err_to_string;
+use crate::inspect::inspect_python_code;
+use crate::signature::PythonFn;
+
+mod conversion;
+mod error;
+mod inspect;
+mod signature;
 
 #[derive(Debug)]
-struct Test {
+struct PythonScalarUDF {
+    python_function: PythonFn,
     signature: Signature,
 }
 
-impl Test {
-    fn new() -> Self {
+impl PythonScalarUDF {
+    fn new(python_function: PythonFn) -> Self {
+        let signature = Signature::exact(
+            python_function
+                .signature
+                .parameters
+                .iter()
+                .map(|t| t.t.data_type())
+                .collect(),
+            Volatility::Volatile,
+        );
+
         Self {
-            signature: Signature::uniform(0, vec![], Volatility::Immutable),
+            python_function,
+            signature,
         }
     }
 }
 
-impl ScalarUDFImpl for Test {
-    fn as_any(&self) -> &dyn std::any::Any {
+impl ScalarUDFImpl for PythonScalarUDF {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 
     fn name(&self) -> &str {
-        "test"
+        &self.python_function.name
     }
 
     fn signature(&self) -> &Signature {
@@ -37,38 +57,118 @@ impl ScalarUDFImpl for Test {
     }
 
     fn return_type(&self, arg_types: &[DataType]) -> DataFusionResult<DataType> {
-        if !arg_types.is_empty() {
-            return plan_err!("test expects no arguments");
+        if arg_types.len() != self.python_function.signature.parameters.len() {
+            return plan_err!(
+                "`{}` expects {} parameters but got {}",
+                self.name(),
+                self.python_function.signature.parameters.len(),
+                arg_types.len()
+            );
         }
-        Ok(DataType::Utf8)
+
+        for (pos, (actual, expected)) in arg_types
+            .iter()
+            .zip(&self.python_function.signature.parameters)
+            .enumerate()
+        {
+            let expected = expected.t.data_type();
+            if actual != &expected {
+                return plan_err!(
+                    "argument {} of `{}` should be {}, got {}",
+                    pos + 1,
+                    self.name(),
+                    expected,
+                    actual
+                );
+            }
+        }
+
+        Ok(self.python_function.signature.return_type.t.data_type())
     }
 
     fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
         let ScalarFunctionArgs {
             args,
             arg_fields: _,
-            number_rows: _,
+            number_rows,
             return_field: _,
         } = args;
 
-        if !args.is_empty() {
-            return exec_err!("test expects no arguments");
+        if args.len() != self.python_function.signature.parameters.len() {
+            return exec_err!(
+                "`{}` expects {} parameters but got {}",
+                self.name(),
+                self.python_function.signature.parameters.len(),
+                args.len()
+            );
         }
 
-        let s = Python::with_gil(|py| {
-            let sys = py.import("sys")?;
-            let version: String = sys.getattr("version")?.extract()?;
+        let arrays = args
+            .into_iter()
+            .map(|column_value| column_value.to_array(number_rows))
+            .collect::<Result<Vec<_>, _>>()?;
 
-            let locals = [("os", py.import("os")?)].into_py_dict(py)?;
-            let code = c_str!("os.getenv('USER') or os.getenv('USERNAME') or 'Unknown'");
-            let user: String = py.eval(code, None, Some(&locals))?.extract()?;
+        Python::with_gil(|py| {
+            let mut parameter_iters = arrays
+                .iter()
+                .zip(&self.python_function.signature.parameters)
+                .map(|(array, t)| t.arrow_to_python(array, py))
+                .collect::<Result<Vec<_>, _>>()?;
 
-            let s = format!("Hello {user}, I'm Python {version}");
-            PyResult::Ok(s)
+            let handle = self.python_function.handle.bind(py);
+            let mut output_row_builder = self
+                .python_function
+                .signature
+                .return_type
+                .python_to_arrow(py, number_rows);
+
+            for _ in 0..number_rows {
+                // poll ALL iterators before evaluating the controlflow
+                let params = parameter_iters
+                    .iter_mut()
+                    .map(|it| it.next().expect("all iterators have n_rows"))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                // determine if we shall call the Python method or not
+                let maybe_params = params.into_iter().try_fold(
+                    Vec::with_capacity(parameter_iters.len()),
+                    |mut accu, next| {
+                        accu.push(next?);
+                        ControlFlow::Continue(accu)
+                    },
+                );
+
+                match maybe_params {
+                    ControlFlow::Continue(params) => {
+                        let params = PyTuple::new(py, params).map_err(|e| {
+                            exec_datafusion_err!(
+                                "cannot create parameter tuple: {}",
+                                py_err_to_string(e, py)
+                            )
+                        })?;
+                        let rval = handle.call1(params).map_err(|e| {
+                            exec_datafusion_err!(
+                                "cannot call function: {}",
+                                py_err_to_string(e, py)
+                            )
+                        })?;
+                        output_row_builder.push(rval)?;
+                    }
+                    ControlFlow::Break(()) => {
+                        output_row_builder.skip();
+                    }
+                }
+            }
+
+            for mut it in parameter_iters {
+                assert!(it.next().is_none(), "iterator should be done");
+            }
+
+            let output_array = output_row_builder.finish();
+            assert_eq!(output_array.len(), number_rows);
+
+            Ok(ColumnarValue::Array(output_array))
         })
-        .map_err(|e| DataFusionError::External(Box::new(e)))?;
-
-        Ok(ColumnarValue::Scalar(ScalarValue::Utf8(Some(s))))
     }
 }
 
@@ -77,10 +177,18 @@ fn root() -> Option<Vec<u8>> {
     Some(ROOT_TAR.to_vec())
 }
 
-fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
+fn init_python() {
     pyo3::prepare_freethreaded_python();
+}
 
-    Ok(vec![Arc::new(Test::new())])
+fn udfs(source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
+    init_python();
+
+    let udfs = inspect_python_code(&source)?;
+    Ok(udfs
+        .into_iter()
+        .map(|f| Arc::new(PythonScalarUDF::new(f)) as _)
+        .collect())
 }
 
 export! {

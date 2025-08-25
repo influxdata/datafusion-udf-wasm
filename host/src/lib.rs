@@ -19,6 +19,10 @@ use crate::{
 };
 use crate::{error::WasmToDataFusionResultExt, tokio_helpers::blocking_io};
 
+// unused-crate-dependencies false positives
+#[cfg(test)]
+use insta as _;
+
 mod bindings;
 mod conversion;
 mod error;
