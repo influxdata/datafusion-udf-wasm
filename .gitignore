@@ -1,5 +1,8 @@
 # compilation artifacts
 target/
 
+# uncommitted snapshots
+*.pending-snap
+
 # profiling data
 profile.json
