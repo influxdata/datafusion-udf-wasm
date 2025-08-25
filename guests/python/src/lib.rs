@@ -77,10 +77,10 @@ fn root() -> Option<Vec<u8>> {
     Some(ROOT_TAR.to_vec())
 }
 
-fn udfs() -> Vec<Arc<dyn ScalarUDFImpl>> {
+fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
     pyo3::prepare_freethreaded_python();
 
-    vec![Arc::new(Test::new())]
+    Ok(vec![Arc::new(Test::new())])
 }
 
 export! {

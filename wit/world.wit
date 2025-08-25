@@ -87,7 +87,7 @@ interface types {
     }
 
     root-fs-tar: func() -> option<list<u8>>;
-    scalar-udfs: func() -> list<scalar-udf>;
+    scalar-udfs: func(source: string) -> result<list<scalar-udf>, data-fusion-error>;
 }
 
 world datafusion {
