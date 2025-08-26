@@ -1,6 +1,8 @@
 # Contributing
 
-**Unless you explicitly state otherwise, any contribution you intentionally submit for inclusion in the work, as defined in the Apache-2.0 license, shall be dual-licensed as above, without any additional terms or conditions.**
+Anyone with a Github account is free to file issues on the project. However, if you want to contribute documentation or
+code then you will need to sign InfluxData's Individual Contributor License Agreement (CLA), which can be found with
+more information [on our website](https://www.influxdata.com/legal/cla/).
 
 ## Required Software
 
