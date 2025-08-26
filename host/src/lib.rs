@@ -10,8 +10,7 @@ use wasmtime::{
     component::{Component, Linker, ResourceAny},
 };
 use wasmtime_wasi::{
-    DirPerms, FilePerms, ResourceTable,
-    p2::{IoView, WasiCtx, WasiView, pipe::MemoryOutputPipe},
+    DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe,
 };
 
 use crate::{
@@ -50,15 +49,12 @@ impl std::fmt::Debug for WasmStateImpl {
     }
 }
 
-impl IoView for WasmStateImpl {
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.resource_table
-    }
-}
-
 impl WasiView for WasmStateImpl {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi_ctx
+    fn ctx(&mut self) -> WasiCtxView<'_> {
+        WasiCtxView {
+            ctx: &mut self.wasi_ctx,
+            table: &mut self.resource_table,
+        }
     }
 }
 
