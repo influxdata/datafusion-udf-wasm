@@ -5,6 +5,10 @@ PYTHON_VERSION_MICRO := "0rc2"
 WASI_SDK_VERSION_MAJOR := "24"
 WASI_SDK_VERSION_MINOR := "0"
 
+SHA256_PYTHON_SDK := "be233d6baf6a770550634fd6f51e12f15c1837455105c7e8b2a45efd3926805d"
+SHA256_PYTHON_SDK_BUILD := "d5240fdf3e2aedd5dcea9f60244060b2b6a7c4365066e2060402fd8f36fce229"
+SHA256_WASI_SDK_SYSROOT := "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99153a50888f08"
+
 PYTHON_VERSION_FULL := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR + "." + PYTHON_VERSION_MICRO
 
 DOWNLOADS_DIR := source_directory() / "downloads"
@@ -52,6 +56,9 @@ download-python-sdk:
         --output "build-python-sdk.zip" \
         "https://github.com/crepererum/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/_build-python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
 
+    echo "{{SHA256_PYTHON_SDK}} python-sdk.zip" | sha256sum -c
+    echo "{{SHA256_PYTHON_SDK_BUILD}} build-python-sdk.zip" | sha256sum -c
+
     unzip -d python-sdk python-sdk.zip
     unzip -d build-python-sdk build-python-sdk.zip
 
@@ -96,6 +103,7 @@ download-wasi-sdk:
         --output "wasi-sysroot.tar.gz" \
         "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{{WASI_SDK_VERSION_MAJOR}}/wasi-sysroot-{{WASI_SDK_VERSION_MAJOR}}.{{WASI_SDK_VERSION_MINOR}}.tar.gz"
 
+    echo "{{SHA256_WASI_SDK_SYSROOT}} wasi-sysroot.tar.gz" | sha256sum -c
     tar xf wasi-sysroot.tar.gz
     mv wasi-sysroot-{{WASI_SDK_VERSION_MAJOR}}.{{WASI_SDK_VERSION_MINOR}} wasi-sysroot
 
