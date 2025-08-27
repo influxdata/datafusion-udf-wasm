@@ -21,11 +21,10 @@ jobs:
       - name: Install `yamllint`
         run: pip install --user yamllint
 
-      - name: Install `cargo-deny`
-        uses: taiki-e/install-action@1ef7d47c9d4f4c11a9cf3918e4d70ff24ded8b46  # cargo-deny
-
-      - name: Install `just`
-        uses: taiki-e/install-action@cb5b4becafd05e587a4905479230698610a190b8  # just
+      - name: Install `cargo-deny` & `just`
+        uses: taiki-e/install-action@c45072658c5d4b46c598b05c54f3d0b541f90bd3  # v2
+        with:
+          tool: cargo-deny,just
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b  # master
