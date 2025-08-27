@@ -20,3 +20,11 @@ updates:
       github-deps:
         patterns:
           - "*"
+  - package-ecosystem: "pip"
+    directory: ".github/workflows"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-deps:
+        patterns:
+          - "*"
