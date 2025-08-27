@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
       - name: Install `yamllint`
         run: pip install --user yamllint
@@ -25,16 +25,16 @@ jobs:
         uses: taiki-e/install-action@1ef7d47c9d4f4c11a9cf3918e4d70ff24ded8b46  # cargo-deny
 
       - name: Install `just`
-        uses: taiki-e/install-action@cb5b4becafd05e587a4905479230698610a190b8  # just
+        uses: taiki-e/install-action@1ef7d47c9d4f4c11a9cf3918e4d70ff24ded8b46  # just
 
       - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b  # master
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9  # master
         with:
           components: clippy, rustfmt
           toolchain: stable
 
       - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@b3b07ba8b418998c39fb20f53e8b695cdcc8de1b  # master
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9  # master
         with:
           toolchain: nightly
           targets: wasm32-wasip2
