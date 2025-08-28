@@ -128,3 +128,9 @@ release: (do "release")
 
 # checks build
 check-build: debug
+
+# clean build artifacts
+clean:
+    @echo ::group::guests::python::clean
+    rm -rf {{DOWNLOADS_DIR}}
+    @echo ::endgroup::

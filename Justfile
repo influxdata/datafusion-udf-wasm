@@ -1,5 +1,9 @@
 mod guests
 
+# default Just target - list recipes
+default:
+    @just --list --list-submodules
+
 # check Rust files via `cargo build`
 check-rust-build: guests::rust::check-build guests::python::check-build
 
@@ -56,3 +60,36 @@ check-yaml:
 
 # run ALL checks
 check: check-rust check-yaml
+
+# clean Rust build artifacts
+clean-rust:
+    @echo ::group::clean-rust
+    cargo clean
+    @echo ::endgroup::
+
+# clean build artifacts
+clean: clean-rust guests::python::clean
+
+# fix Rust check/rustc warnings
+fix-rust-check:
+    @echo ::group::fix-rust-check
+    cargo fix --workspace --allow-dirty --allow-staged
+    @echo ::endgroup::
+
+# fix Rust clippy warnings
+fix-rust-clippy:
+    @echo ::group::fix-rust-clippy
+    cargo clippy --all-targets --all-features --workspace --fix --allow-dirty --allow-staged
+    @echo ::endgroup::
+
+# fix Rust formatting
+fix-rust-fmt:
+    @echo ::group::fix-rust-fmt
+    cargo fmt --all
+    @echo ::endgroup::
+
+# fix common Rust issues automatically
+fix-rust: fix-rust-clippy fix-rust-check fix-rust-fmt
+
+# fix common issues automatically
+fix: fix-rust
