@@ -30,12 +30,18 @@ There is one "run everything" [just] recipe:
 just check
 ```
 
+Some common issues can be auto-fixed by running:
+
+```console
+just fix
+```
+
 If this doesn't work, see ["Troubleshooting"](#troubleshooting).
 
 To list all recipes that are available, run:
 
 ```console
-just --list --list-submodules
+just
 ```
 
 ## CI
