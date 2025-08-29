@@ -24,7 +24,7 @@ pyo3 = { version = "0.25.1", default-features = false }
 tar = "0.4.44"
 tempfile = "3.20.0"
 wasmtime = { version = "36.0.2", default-features = false, features = ["async", "cranelift", "incremental-cache"] }
-wasmtime-wasi = { version = "36.0.1", default-features = false }
+wasmtime-wasi = { version = "36.0.2", default-features = false }
 wit-bindgen = "0.44"
 
 [workspace.lints.rust]
