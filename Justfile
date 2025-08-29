@@ -26,7 +26,7 @@ check-rust-fmt:
     @echo ::endgroup::
 
 # test Rust code
-check-rust-test: check-rust-build
+check-rust-test $RUST_BACKTRACE="1": check-rust-build
     @echo ::group::check-rust-test
     cargo test --all-features --workspace
     @echo ::endgroup::
