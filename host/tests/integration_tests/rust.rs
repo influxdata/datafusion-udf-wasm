@@ -1,6 +1,3 @@
-// unused-crate-dependencies false positives
-#![expect(unused_crate_dependencies)]
-
 use std::sync::Arc;
 
 use arrow::{
