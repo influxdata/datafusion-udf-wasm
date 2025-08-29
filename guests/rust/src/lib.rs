@@ -19,13 +19,21 @@ macro_rules! export {
                 $root_fs_tar()
             }
 
-            fn scalar_udfs() -> Vec<$crate::bindings::exports::datafusion_udf_wasm::udf::types::ScalarUdf> {
-                $scalar_udfs()
-                    .into_iter()
+            fn scalar_udfs(
+                source: String,
+            ) -> Result<
+                Vec<$crate::bindings::exports::datafusion_udf_wasm::udf::types::ScalarUdf>,
+                $crate::bindings::exports::datafusion_udf_wasm::udf::types::DataFusionError,
+            > {
+                let udfs = $scalar_udfs(source)?;
+
+                Ok(
+                    udfs.into_iter()
                     .map(|udf| $crate::bindings::exports::datafusion_udf_wasm::udf::types::ScalarUdf::new(
                         $crate::wrapper::ScalarUdfWrapper::new(udf)
                     ))
                     .collect()
+                )
             }
         }
 

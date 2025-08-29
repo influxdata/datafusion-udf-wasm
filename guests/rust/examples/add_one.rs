@@ -90,8 +90,8 @@ fn root() -> Option<Vec<u8>> {
     None
 }
 
-fn udfs() -> Vec<Arc<dyn ScalarUDFImpl>> {
-    vec![Arc::new(AddOne::new())]
+fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
+    Ok(vec![Arc::new(AddOne::new())])
 }
 
 export! {

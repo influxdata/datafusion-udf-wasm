@@ -43,6 +43,7 @@ future_not_send = "deny"
 todo = "deny"
 use_self = "deny"
 allow_attributes = "warn"
+undocumented_unsafe_blocks = "deny"
 
 [workspace.lints.rustdoc]
 bare_urls = "deny"
@@ -61,9 +62,14 @@ pyo3 = { git = "https://github.com/crepererum/pyo3.git", rev = "92f97bdb0291852e
 
 # faster tests
 [profile.dev.package]
+# improve wasmtime compilation speed
 cranelift-codegen.opt-level = 3
 cranelift-entity.opt-level = 3
 cranelift-frontend.opt-level = 3
 regalloc2.opt-level = 3
 sha2.opt-level = 3
 wasmparser.opt-level = 3
+
+# faster insta snapshots
+insta.opt-level = 3
+similar.opt-level = 3
