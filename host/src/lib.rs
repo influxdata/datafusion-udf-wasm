@@ -15,7 +15,8 @@ use wasmtime_wasi::{
 
 use crate::{
     bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
-    compilation_cache::CompilationCache, tokio_helpers::async_in_sync_context,
+    compilation_cache::CompilationCache, error::DataFusionResultExt,
+    tokio_helpers::async_in_sync_context,
 };
 use crate::{error::WasmToDataFusionResultExt, tokio_helpers::blocking_io};
 
@@ -67,7 +68,7 @@ pub struct WasmScalarUdf {
 }
 
 impl WasmScalarUdf {
-    pub async fn new(wasm_binary: &[u8]) -> DataFusionResult<Vec<Self>> {
+    pub async fn new(wasm_binary: &[u8], source: String) -> DataFusionResult<Vec<Self>> {
         // TODO: we need an in-mem file system for this, see
         //       - https://github.com/bytecodealliance/wasmtime/issues/8963
         //       - https://github.com/Timmmm/wasmtime_fs_demo
@@ -130,12 +131,13 @@ impl WasmScalarUdf {
 
         let udf_resources = bindings
             .datafusion_udf_wasm_udf_types()
-            .call_scalar_udfs(&mut store)
+            .call_scalar_udfs(&mut store, &source)
             .await
             .context(
-                "call scalar_udfs() method",
+                "calling scalar_udfs() method failed",
                 Some(&store.data().stderr.contents()),
-            )?;
+            )?
+            .context("scalar_udfs")?;
 
         let store = Arc::new(Mutex::new(store));
 

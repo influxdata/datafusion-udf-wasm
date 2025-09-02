@@ -29,3 +29,20 @@ impl<T> WasmToDataFusionResultExt for Result<T, wasmtime::Error> {
         self.map_err(|err| WasmToDataFusionErrorExt::context(err, msg, stderr))
     }
 }
+
+pub(crate) trait DataFusionResultExt {
+    type T;
+
+    fn context(self, description: impl Into<String>) -> Result<Self::T, DataFusionError>;
+}
+
+impl<T, E> DataFusionResultExt for Result<T, E>
+where
+    E: Into<DataFusionError>,
+{
+    type T = T;
+
+    fn context(self, description: impl Into<String>) -> Result<Self::T, DataFusionError> {
+        self.map_err(|e| e.into().context(description))
+    }
+}
