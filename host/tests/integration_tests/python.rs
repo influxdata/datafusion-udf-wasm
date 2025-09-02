@@ -2,8 +2,10 @@ use std::sync::Arc;
 
 use arrow::datatypes::{DataType, Field};
 use datafusion_common::{ScalarValue, assert_contains};
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
+use datafusion_expr::{ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmScalarUdf};
+
+use crate::integration_tests::test_utils::ColumnarValueExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test() {
@@ -28,7 +30,7 @@ async fn test() {
 
     assert_eq!(udf.return_type(&[]).unwrap(), DataType::Utf8,);
 
-    let ColumnarValue::Scalar(scalar) = udf
+    let scalar = udf
         .invoke_with_args(ScalarFunctionArgs {
             args: vec![],
             arg_fields: vec![],
@@ -36,9 +38,7 @@ async fn test() {
             return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
         })
         .unwrap()
-    else {
-        panic!("should be a scalar");
-    };
+        .unwrap_scalar();
     let ScalarValue::Utf8(s) = scalar else {
         panic!("scalar should be UTF8");
     };
