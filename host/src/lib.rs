@@ -14,14 +14,12 @@ use wasmtime_wasi::{
 };
 
 use crate::{
-    bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
-    compilation_cache::CompilationCache, error::DataFusionResultExt,
+    bindings::exports::datafusion_udf_wasm::udf::types as wit_types, error::DataFusionResultExt,
     tokio_helpers::async_in_sync_context,
 };
 use crate::{error::WasmToDataFusionResultExt, tokio_helpers::blocking_io};
 
 mod bindings;
-mod compilation_cache;
 mod conversion;
 mod error;
 mod tokio_helpers;
@@ -59,6 +57,54 @@ impl WasiView for WasmStateImpl {
     }
 }
 
+/// Pre-compiled WASM component.
+///
+/// The pre-compilation is stateless and can be used to [create](WasmScalarUdf::new) multiple instances that do not share
+/// any state.
+pub struct WasmComponentPrecompiled {
+    engine: Engine,
+    component: Component,
+}
+
+impl WasmComponentPrecompiled {
+    pub async fn new(wasm_binary: Arc<[u8]>) -> DataFusionResult<Self> {
+        tokio::task::spawn_blocking(move || {
+            let engine = Engine::new(
+                wasmtime::Config::new()
+                    .async_support(true)
+                    .memory_init_cow(true),
+            )
+            .context("create WASM engine", None)?;
+
+            let compiled_component = engine
+                .precompile_component(&wasm_binary)
+                .context("pre-compile component", None)?;
+
+            // SAFETY: the compiled version was produced by us with the same engine. This is NOT external/untrusted input.
+            let component_res = unsafe { Component::deserialize(&engine, compiled_component) };
+            let component = component_res.context("create WASM component", None)?;
+
+            Ok(Self { engine, component })
+        })
+        .await
+        .map_err(|e| DataFusionError::External(Box::new(e)))?
+    }
+}
+
+impl std::fmt::Debug for WasmComponentPrecompiled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            engine,
+            component: _,
+        } = self;
+
+        f.debug_struct("WasmComponentPrecompiled")
+            .field("engine", engine)
+            .field("component", &"<COMPONENT>")
+            .finish()
+    }
+}
+
 pub struct WasmScalarUdf {
     store: Arc<Mutex<Store<WasmStateImpl>>>,
     bindings: Arc<bindings::Datafusion>,
@@ -68,7 +114,15 @@ pub struct WasmScalarUdf {
 }
 
 impl WasmScalarUdf {
-    pub async fn new(wasm_binary: &[u8], source: String) -> DataFusionResult<Vec<Self>> {
+    /// Create multiple UDFs from a single WASM VM.
+    ///
+    /// UDFs bound to the same VM share state, however calling this method multiple times will yield independent WASM VMs.
+    pub async fn new(
+        component: &WasmComponentPrecompiled,
+        source: String,
+    ) -> DataFusionResult<Vec<Self>> {
+        let WasmComponentPrecompiled { engine, component } = component;
+
         // TODO: we need an in-mem file system for this, see
         //       - https://github.com/bytecodealliance/wasmtime/issues/8963
         //       - https://github.com/Timmmm/wasmtime_fs_demo
@@ -88,24 +142,13 @@ impl WasmScalarUdf {
             wasi_ctx,
             resource_table: ResourceTable::new(),
         };
+        let mut store = Store::new(engine, state);
 
-        let engine = Engine::new(
-            wasmtime::Config::new()
-                .async_support(true)
-                .enable_incremental_compilation(Arc::new(CompilationCache::default()))
-                .context("enable incremental compilation", None)?,
-        )
-        .context("create WASM engine", None)?;
-        let mut store = Store::new(&engine, state);
-
-        let component =
-            Component::from_binary(&engine, wasm_binary).context("create WASM component", None)?;
-
-        let mut linker = Linker::new(&engine);
+        let mut linker = Linker::new(engine);
         wasmtime_wasi::p2::add_to_linker_async(&mut linker).context("link WASI p2", None)?;
 
         let bindings = Arc::new(
-            bindings::Datafusion::instantiate_async(&mut store, &component, &linker)
+            bindings::Datafusion::instantiate_async(&mut store, component, &linker)
                 .await
                 .context("initialize bindings", Some(&store.data().stderr.contents()))?,
         );
