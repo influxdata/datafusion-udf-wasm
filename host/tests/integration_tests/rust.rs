@@ -8,6 +8,8 @@ use datafusion_common::ScalarValue;
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmScalarUdf};
 
+use crate::integration_tests::test_utils::ColumnarValueExt;
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_add_one() {
     let data = tokio::fs::read(format!(
@@ -38,7 +40,7 @@ async fn test_add_one() {
         @"Error during planning: add_one expects exactly one argument",
     );
 
-    let ColumnarValue::Array(array) = udf
+    let array = udf
         .invoke_with_args(ScalarFunctionArgs {
             args: vec![ColumnarValue::Array(Arc::new(Int32Array::from_iter([
                 Some(3),
@@ -50,14 +52,12 @@ async fn test_add_one() {
             return_field: Arc::new(Field::new("r", DataType::Int32, true)),
         })
         .unwrap()
-    else {
-        panic!("should be an array")
-    };
+        .unwrap_array();
     assert_eq!(
         array.as_ref(),
         &Int32Array::from_iter([Some(4), None, Some(2)]) as &dyn Array,
     );
-    let ColumnarValue::Scalar(scalar) = udf
+    let scalar = udf
         .invoke_with_args(ScalarFunctionArgs {
             args: vec![ColumnarValue::Scalar(ScalarValue::Int32(Some(3)))],
             arg_fields: vec![Arc::new(Field::new("a1", DataType::Int32, true))],
@@ -65,8 +65,6 @@ async fn test_add_one() {
             return_field: Arc::new(Field::new("r", DataType::Int32, true)),
         })
         .unwrap()
-    else {
-        panic!("should be a scalar")
-    };
+        .unwrap_scalar();
     assert_eq!(scalar, ScalarValue::Int32(Some(4)));
 }
