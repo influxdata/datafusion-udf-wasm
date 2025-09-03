@@ -1,3 +1,8 @@
+//! Auto-generated bindings based on WIT.
+
+// bindgen always generates a few undocumented items
+#![expect(missing_docs)]
+
 use wit_bindgen::generate;
 
 generate!({

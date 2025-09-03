@@ -1,3 +1,4 @@
+//! Conversion routes from/to [WIT types](crate::bindings).
 use arrow::{
     array::ArrayRef,
     datatypes::{DataType, Field, FieldRef},

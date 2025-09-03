@@ -1,3 +1,7 @@
+//! Host-code for WebAssembly-based [DataFusion] UDFs.
+//!
+//!
+//! [DataFusion]: https://datafusion.apache.org/
 use std::{any::Any, io::Cursor, ops::DerefMut, sync::Arc};
 
 use arrow::datatypes::DataType;
@@ -71,6 +75,12 @@ pub struct WasmComponentPrecompiled {
 }
 
 impl WasmComponentPrecompiled {
+    /// Pre-compile WASM payload.
+    ///
+    /// Accepts a WASM payload in [binary format].
+    ///
+    ///
+    /// [binary format]: https://webassembly.github.io/spec/core/binary/index.html
     pub async fn new(wasm_binary: Arc<[u8]>) -> DataFusionResult<Self> {
         tokio::task::spawn_blocking(move || {
             let engine = Engine::new(
@@ -109,6 +119,7 @@ impl std::fmt::Debug for WasmComponentPrecompiled {
     }
 }
 
+/// A [`ScalarUDFImpl`] that wraps a WebAssembly payload.
 pub struct WasmScalarUdf {
     store: Arc<Mutex<Store<WasmStateImpl>>>,
     bindings: Arc<bindings::Datafusion>,

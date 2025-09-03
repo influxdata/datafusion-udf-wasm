@@ -1,13 +1,22 @@
+//! Wrapper for [DataFusion] types so that the implement the respective [WIT interfaces](crate::bindings).
+//!
+//!
+//! [DataFusion]: https://datafusion.apache.org/
 use std::sync::Arc;
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
 use arrow::datatypes::DataType;
 use datafusion_expr::ScalarUDFImpl;
 
+/// Wraps a [`ScalarUDFImpl`] so that it implements the [WIT definition].
+///
+///
+/// [WIT definition]: wit_types::GuestScalarUdf
 #[derive(Debug)]
 pub struct ScalarUdfWrapper(Arc<dyn ScalarUDFImpl>);
 
 impl ScalarUdfWrapper {
+    /// Create new wrapper from [`ScalarUDFImpl`].
     pub fn new(udf: Arc<dyn ScalarUDFImpl>) -> Self {
         Self(udf)
     }

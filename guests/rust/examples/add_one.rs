@@ -1,3 +1,5 @@
+//! Example Scalar UDF that just implements "add one".
+
 // unused-crate-dependencies false positives
 #![expect(unused_crate_dependencies)]
 

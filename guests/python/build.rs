@@ -1,3 +1,16 @@
+//! Build script for [CPython]+[`pyo3`]-based UDFs.
+//!
+//! This ensures two things:
+//! - **linking:** Set up correct linker arguments. This only happens when the `WASI_SDK_LINK_PATH` environment
+//!   variable is set. Otherwise we assume that this is NOT a WASM build (e.g. during an ordinary `cargo check`) and
+//!   that [`pyo3`] manages the linking itself.
+//! - **root file system:** If the `PYO3_CROSS_LIB_DIR` environment variable is set, we assume that we must package
+//!   the [Python Standard Library].
+//!
+//!
+//! [CPython]: https://www.python.org/
+//! [Python Standard Library]: https://docs.python.org/3/library/index.html
+//! [`pyo3`]: https://pyo3.rs/
 use std::{fs::File, path::PathBuf};
 
 fn main() {

@@ -1,3 +1,8 @@
+//! [CPython]+[`pyo3`]-based UDFs.
+//!
+//!
+//! [CPython]: https://www.python.org/
+//! [`pyo3`]: https://pyo3.rs/
 use std::sync::Arc;
 
 use arrow::datatypes::DataType;

@@ -1,3 +1,9 @@
+//! Convert [`arrow`] types to/from bytes.
+//!
+//! This uses the [Arrow IPC] schema.
+//!
+//!
+//! [Arrow IPC]: https://arrow.apache.org/docs/format/IPC.html
 use std::{io::Cursor, sync::Arc};
 
 use arrow::{
@@ -12,6 +18,11 @@ use arrow::{
     },
 };
 
+/// Convert an [`Array`] to bytes.
+///
+/// This is done by encoding writing this as a [`RecordBatch`] with a single [`Field`].
+///
+/// See [`bytes2array`] for the reverse method.
 pub fn array2bytes(array: ArrayRef) -> Vec<u8> {
     let buffer = Vec::new();
 
@@ -28,6 +39,9 @@ pub fn array2bytes(array: ArrayRef) -> Vec<u8> {
     writer.into_inner().expect("writing to buffer never fails")
 }
 
+/// Decodes [`Array`] from bytes.
+///
+/// See [`array2bytes`] for the reverse method and the format description.
 pub fn bytes2array(bytes: &[u8]) -> Result<ArrayRef, ArrowError> {
     let bytes = Cursor::new(bytes);
     let mut reader = StreamReader::try_new(bytes, None)?;
@@ -48,12 +62,20 @@ pub fn bytes2array(bytes: &[u8]) -> Result<ArrayRef, ArrowError> {
     Ok(array)
 }
 
+/// Encodes [`DataType`] as bytes.
+///
+/// This is done by embedding the [`DataType`] into a [`Schema`] with a single [`Field`].
+///
+/// See [`bytes2datatype`] for the reverse method.
 pub fn datatype2bytes(dt: DataType) -> Vec<u8> {
     let schema = Schema::new(vec![Field::new("a", dt, false)]);
     let fb = IpcSchemaEncoder::new().schema_to_fb(&schema);
     fb.finished_data().to_owned()
 }
 
+/// Decodes [`DataType`] from bytes.
+///
+/// See [`datatype2bytes`] for the reverse method and format description.
 pub fn bytes2datatype(bytes: &[u8]) -> Result<DataType, ArrowError> {
     let ipc_schema =
         root_as_schema(bytes).map_err(|e| ArrowError::InvalidArgumentError(e.to_string()))?;

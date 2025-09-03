@@ -1,3 +1,6 @@
+// Docs are not strictly required for tests.
+#![expect(missing_docs)]
+
 use std::sync::Arc;
 
 use arrow::{
