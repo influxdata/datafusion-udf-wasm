@@ -31,7 +31,6 @@ wit-bindgen = "0.44"
 missing_copy_implementations = "deny"
 missing_debug_implementations = "deny"
 rust_2018_idioms = { level = "deny", priority = -1 }
-unexpected_cfgs = { level = "deny", check-cfg = ['cfg(tokio_unstable)'] }
 unreachable_pub = "deny"
 unused_crate_dependencies = "deny"
 
