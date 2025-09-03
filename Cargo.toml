@@ -37,14 +37,14 @@ unreachable_pub = "deny"
 unused_crate_dependencies = "deny"
 
 [workspace.lints.clippy]
+allow_attributes = "warn"
 clone_on_ref_ptr = "deny"
 dbg_macro = "deny"
 explicit_iter_loop = "deny"
 future_not_send = "deny"
 todo = "deny"
-use_self = "deny"
-allow_attributes = "warn"
 undocumented_unsafe_blocks = "deny"
+use_self = "deny"
 
 [workspace.lints.rustdoc]
 bare_urls = "deny"
