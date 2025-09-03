@@ -1,3 +1,8 @@
+//! [CPython]+[`pyo3`]-based UDFs.
+//!
+//!
+//! [CPython]: https://www.python.org/
+//! [`pyo3`]: https://pyo3.rs/
 use std::sync::Arc;
 
 use arrow::datatypes::DataType;
@@ -72,9 +77,12 @@ impl ScalarUDFImpl for Test {
     }
 }
 
+#[allow(clippy::allow_attributes, clippy::const_is_empty)]
 fn root() -> Option<Vec<u8>> {
+    // The build script will ALWAYS set this environment variable, but if we don't bundle the standard lib the file
+    // will simply be empty.
     const ROOT_TAR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/python-lib.tar"));
-    Some(ROOT_TAR.to_vec())
+    (!ROOT_TAR.is_empty()).then(|| ROOT_TAR.to_vec())
 }
 
 fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {

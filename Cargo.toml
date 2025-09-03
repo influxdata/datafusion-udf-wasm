@@ -30,8 +30,9 @@ wit-bindgen = "0.44"
 [workspace.lints.rust]
 missing_copy_implementations = "deny"
 missing_debug_implementations = "deny"
+missing_docs = "deny"
 rust_2018_idioms = { level = "deny", priority = -1 }
-unexpected_cfgs = { level = "deny", check-cfg = ['cfg(tokio_unstable)'] }
+unexpected_cfgs = "deny"
 unreachable_pub = "deny"
 unused_crate_dependencies = "deny"
 
@@ -48,7 +49,7 @@ undocumented_unsafe_blocks = "deny"
 [workspace.lints.rustdoc]
 bare_urls = "deny"
 broken_intra_doc_links = "deny"
-private_intra_doc_links = "allow"
+private_intra_doc_links = "deny"
 
 [patch.crates-io]
 # use same DataFusion fork as InfluxDB
