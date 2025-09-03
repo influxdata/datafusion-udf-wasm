@@ -33,9 +33,9 @@ async fn test_add_one() {
         udf.return_type(&[DataType::Int32]).unwrap(),
         DataType::Int32,
     );
-    assert_eq!(
-        udf.return_type(&[]).unwrap_err().to_string(),
-        "Error during planning: add_one expects exactly one argument",
+    insta::assert_snapshot!(
+        udf.return_type(&[]).unwrap_err(),
+        @"Error during planning: add_one expects exactly one argument",
     );
 
     let ColumnarValue::Array(array) = udf

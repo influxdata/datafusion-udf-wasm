@@ -47,6 +47,19 @@ just
 ## CI
 There is a single CI job that just runs `just check`. The job log output is grouped by the respective just recipe. If the CI job fails (e.g. at `check-rust-fmt`), you should be able replicate that using a local `just` invocation (e.g. `just check-rust-fmt`).
 
+## Snapshot Testing
+We use [insta] for snapshot testing. You can install/build the CLI interface for it using:
+
+```console
+cargo install --locked cargo-insta
+```
+
+If tests fail due to outdated snapshots, review them using:
+
+```console
+cargo insta review
+```
+
 ## Troubleshooting
 Here are some tips for when things don't work.
 
@@ -85,6 +98,7 @@ Then the [Python Standard Library] was not found or not bundled correctly. You m
 
 
 [cargo-deny]: https://embarkstudios.github.io/cargo-deny/
+[insta]: https://insta.rs/
 [just]: https://github.com/casey/just
 [Python]: https://www.python.org/
 [Python Standard Library]: https://docs.python.org/3/library/index.html
