@@ -15,12 +15,17 @@ use pyo3::ffi::c_str;
 use pyo3::prelude::*;
 use pyo3::types::IntoPyDict;
 
+/// A test UDF that demonstrate that we can call Python.
 #[derive(Debug)]
 struct Test {
+    /// Signature of the UDF.
+    ///
+    /// We store this here because [`ScalarUDFImpl::signature`] requires us to return a reference.
     signature: Signature,
 }
 
 impl Test {
+    /// Create new UDF.
     fn new() -> Self {
         Self {
             signature: Signature::uniform(0, vec![], Volatility::Immutable),
@@ -77,6 +82,9 @@ impl ScalarUDFImpl for Test {
     }
 }
 
+/// Return root file system.
+///
+/// This will be [`Some`] if built for WASM, but [`None`] if build for non-WASM host (e.g. during `cargo check`).
 #[allow(clippy::allow_attributes, clippy::const_is_empty)]
 fn root() -> Option<Vec<u8>> {
     // The build script will ALWAYS set this environment variable, but if we don't bundle the standard lib the file
@@ -85,6 +93,7 @@ fn root() -> Option<Vec<u8>> {
     (!ROOT_TAR.is_empty()).then(|| ROOT_TAR.to_vec())
 }
 
+/// Generate UDFs from given Python string.
 fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
     pyo3::prepare_freethreaded_python();
 

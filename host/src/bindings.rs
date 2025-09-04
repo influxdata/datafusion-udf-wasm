@@ -1,3 +1,4 @@
+//! Auto-generated bindings based on WIT.
 use wasmtime::component::bindgen;
 
 bindgen!({

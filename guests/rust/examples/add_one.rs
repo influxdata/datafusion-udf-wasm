@@ -12,13 +12,17 @@ use datafusion_common::{
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 use datafusion_udf_wasm_guest::export;
 
+/// UDF that implements "add one".
 #[derive(Debug)]
 struct AddOne {
+    /// Signature of the UDF.
+    ///
+    /// We store this here because [`ScalarUDFImpl::signature`] requires us to return a reference.
     signature: Signature,
 }
 
-impl AddOne {
-    fn new() -> Self {
+impl Default for AddOne {
+    fn default() -> Self {
         Self {
             signature: Signature::uniform(1, vec![DataType::Int32], Volatility::Immutable),
         }
@@ -88,12 +92,18 @@ impl ScalarUDFImpl for AddOne {
     }
 }
 
+/// Return root file system.
+///
+/// This always returns [`None`] because the example does not need any files.
 fn root() -> Option<Vec<u8>> {
     None
 }
 
+/// Returns our one example UDF.
+///
+/// The passed `source` is ignored.
 fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
-    Ok(vec![Arc::new(AddOne::new())])
+    Ok(vec![Arc::new(AddOne::default())])
 }
 
 export! {

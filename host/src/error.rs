@@ -1,6 +1,13 @@
+//! Helper for simpler error handling.
 use datafusion_common::DataFusionError;
 
+/// Extension for [`wasmtime::Error`].
 pub(crate) trait WasmToDataFusionErrorExt {
+    /// Add context to error.
+    ///
+    /// The context has:
+    /// - `msg`: a human-readable context description
+    /// - `stderr`: stderr output of the WASM payload if available
     fn context(self, msg: &str, stderr: Option<&[u8]>) -> DataFusionError;
 }
 
@@ -16,9 +23,16 @@ impl WasmToDataFusionErrorExt for wasmtime::Error {
     }
 }
 
+/// Extension for [`Result`] containing a [`wasmtime::Error`].
 pub(crate) trait WasmToDataFusionResultExt {
+    /// [`Ok`] payload.
     type T;
 
+    /// Add context to error.
+    ///
+    /// The context has:
+    /// - `msg`: a human-readable context description
+    /// - `stderr`: stderr output of the WASM payload if available
     fn context(self, msg: &str, stderr: Option<&[u8]>) -> Result<Self::T, DataFusionError>;
 }
 
@@ -30,9 +44,14 @@ impl<T> WasmToDataFusionResultExt for Result<T, wasmtime::Error> {
     }
 }
 
+/// Extension trait for [`Result`] containing a [`DataFusionError`].
 pub(crate) trait DataFusionResultExt {
+    /// [`Ok`] payload.
     type T;
 
+    /// Add description to error.
+    ///
+    /// See [`DataFusionError::context`].
     fn context(self, description: impl Into<String>) -> Result<Self::T, DataFusionError>;
 }
 

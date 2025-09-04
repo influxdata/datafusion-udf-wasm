@@ -32,10 +32,22 @@ mod conversion;
 mod error;
 mod tokio_helpers;
 
+/// State of the WASM payload.
 struct WasmStateImpl {
+    /// Temporary directory that holds the root filesystem.
+    ///
+    /// This filesystem is provided to the payload as read-only.
     root: TempDir,
+
+    /// A limited buffer for stderr.
+    ///
+    /// This is especially useful for when the payload crashes.
     stderr: MemoryOutputPipe,
+
+    /// WASI context.
     wasi_ctx: WasiCtx,
+
+    /// Resource tables.
     resource_table: ResourceTable,
 }
 
@@ -70,7 +82,10 @@ impl WasiView for WasmStateImpl {
 /// The pre-compilation is stateless and can be used to [create](WasmScalarUdf::new) multiple instances that do not share
 /// any state.
 pub struct WasmComponentPrecompiled {
+    /// WASM execution engine based on [`wasmtime`].
     engine: Engine,
+
+    /// The pre-compiled component based on the binary provided by the API user.
     component: Component,
 }
 
@@ -121,10 +136,29 @@ impl std::fmt::Debug for WasmComponentPrecompiled {
 
 /// A [`ScalarUDFImpl`] that wraps a WebAssembly payload.
 pub struct WasmScalarUdf {
+    /// Mutable state.
+    ///
+    /// This mostly contains [`WasmStateImpl`].
     store: Arc<Mutex<Store<WasmStateImpl>>>,
+
+    /// WIT-based bindings that we resolved within the payload.
     bindings: Arc<bindings::Datafusion>,
+
+    /// Resource handle for the Scalar UDF within the VM.
+    ///
+    /// This is somewhat an "object reference".
     resource: ResourceAny,
+
+    /// Name of the UDF.
+    ///
+    /// This was pre-fetched during UDF generation because [`ScalarUDFImpl::name`] is sync and requires us to return a
+    /// reference.
     name: String,
+
+    /// Signature of the UDF.
+    ///
+    /// This was pre-fetched during UDF generation because [`ScalarUDFImpl::signature`] is sync and requires us to return a
+    /// reference.
     signature: Signature,
 }
 
