@@ -141,7 +141,7 @@ pub struct WasmScalarUdf {
     /// This mostly contains [`WasmStateImpl`].
     store: Arc<Mutex<Store<WasmStateImpl>>>,
 
-    /// WIT-based bindings the we resolved within the payload.
+    /// WIT-based bindings that we resolved within the payload.
     bindings: Arc<bindings::Datafusion>,
 
     /// Resource handle for the Scalar UDF within the VM.
