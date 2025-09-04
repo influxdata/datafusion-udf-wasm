@@ -163,7 +163,7 @@ impl ScalarUDFImpl for PythonScalarUDF {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut parameter_iters = arrays
                 .iter()
                 .zip(&self.python_function.signature.parameters)
@@ -270,7 +270,7 @@ fn root() -> Option<Vec<u8>> {
 ///
 /// [Python Standard Library]: https://docs.python.org/3/library/index.html
 fn init_python() {
-    pyo3::prepare_freethreaded_python();
+    Python::initialize();
 }
 
 /// Generate UDFs from given Python string.
