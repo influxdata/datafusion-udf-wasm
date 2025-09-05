@@ -166,10 +166,13 @@ impl<'py> ArrayBuilder<'py> for ArrayBuilderNullChecker<'py> {
     type T = Bound<'py, PyAny>;
 
     fn push(&mut self, val: Self::T) -> DataFusionResult<()> {
-        let val = if val.is(&self.none) { None } else { Some(val) };
-        if !self.nullable && val.is_none() {
-            return exec_err!("method was not supposed to return None but did");
-        }
+        let val = match (self.nullable, val.is(&self.none)) {
+            (false, true) => {
+                return exec_err!("method was not supposed to return None but did");
+            }
+            (false | true, false) => Some(val),
+            (true, true) => None,
+        };
         self.inner.push(val)
     }
 
