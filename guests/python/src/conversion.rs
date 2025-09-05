@@ -68,6 +68,8 @@ impl PythonType {
     }
 
     /// Get a builder for the Arrow output [`Array`].
+    ///
+    /// This needs an "attached" [`Python`] to create Python objects.
     fn python_to_arrow<'py>(
         &self,
         num_rows: usize,
@@ -111,6 +113,8 @@ impl PythonNullableType {
     }
 
     /// Get a builder for the Arrow output [`Array`].
+    ///
+    /// This needs an "attached" [`Python`] to create Python objects.
     pub(crate) fn python_to_arrow<'py>(
         &self,
         py: Python<'py>,
