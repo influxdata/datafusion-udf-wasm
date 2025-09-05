@@ -49,24 +49,17 @@ impl PythonType {
                     exec_datafusion_err!("expected int64 array but got {}", array.data_type())
                 })?;
 
-                let mut idx = 0;
-                let it = std::iter::from_fn(move || {
-                    if idx >= array.len() {
-                        None
+                let it = (0..array.len()).map(move |idx| {
+                    if array.is_null(idx) {
+                        Ok(None)
                     } else {
-                        let val = if array.is_null(idx) {
-                            Ok(None)
-                        } else {
-                            let val = array.value(idx);
-                            match val.into_bound_py_any(py) {
-                                Ok(val) => Ok(Some(val)),
-                                Err(e) => {
-                                    Err(exec_datafusion_err!("cannot convert value to python: {e}"))
-                                }
+                        let val = array.value(idx);
+                        match val.into_bound_py_any(py) {
+                            Ok(val) => Ok(Some(val)),
+                            Err(e) => {
+                                Err(exec_datafusion_err!("cannot convert value to python: {e}"))
                             }
-                        };
-                        idx += 1;
-                        Some(val)
+                        }
                     }
                 });
                 Ok(Box::new(it))
