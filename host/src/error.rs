@@ -15,7 +15,9 @@ impl WasmToDataFusionErrorExt for wasmtime::Error {
     fn context(self, msg: &str, stderr: Option<&[u8]>) -> DataFusionError {
         let mut context = msg.to_owned();
 
-        if let Some(stderr) = stderr {
+        if let Some(stderr) = stderr
+            && !stderr.is_empty()
+        {
             context.push_str(&format!("\n\nstderr:\n{}", String::from_utf8_lossy(stderr)));
         }
 
