@@ -8,7 +8,9 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 
 use arrow::datatypes::DataType;
-use datafusion_common::{Result as DataFusionResult, exec_datafusion_err, exec_err, plan_err};
+use datafusion_common::{
+    DataFusionError, Result as DataFusionResult, exec_datafusion_err, exec_err,
+};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 use datafusion_udf_wasm_guest::export;
 use pyo3::prelude::*;
@@ -53,6 +55,39 @@ impl PythonScalarUDF {
             signature,
         }
     }
+
+    /// This is [`ScalarUDFImpl::return_type`] but with a more flexible interface, so it can be used in [`ScalarUDFImpl::invoke_with_args`] as well.
+    fn return_type_impl<'a, I>(&self, arg_types: I) -> Result<DataType, String>
+    where
+        I: ExactSizeIterator<Item = &'a DataType>,
+    {
+        if arg_types.len() != self.python_function.signature.parameters.len() {
+            return Err(format!(
+                "`{}` expects {} parameters but got {}",
+                self.name(),
+                self.python_function.signature.parameters.len(),
+                arg_types.len(),
+            ));
+        }
+
+        for (pos, (actual, expected)) in arg_types
+            .zip(&self.python_function.signature.parameters)
+            .enumerate()
+        {
+            let expected = expected.t.data_type();
+            if actual != &expected {
+                return Err(format!(
+                    "argument {} of `{}` should be {}, got {}",
+                    pos + 1,
+                    self.name(),
+                    expected,
+                    actual
+                ));
+            }
+        }
+
+        Ok(self.python_function.signature.return_type.t.data_type())
+    }
 }
 
 impl ScalarUDFImpl for PythonScalarUDF {
@@ -69,33 +104,8 @@ impl ScalarUDFImpl for PythonScalarUDF {
     }
 
     fn return_type(&self, arg_types: &[DataType]) -> DataFusionResult<DataType> {
-        if arg_types.len() != self.python_function.signature.parameters.len() {
-            return plan_err!(
-                "`{}` expects {} parameters but got {}",
-                self.name(),
-                self.python_function.signature.parameters.len(),
-                arg_types.len()
-            );
-        }
-
-        for (pos, (actual, expected)) in arg_types
-            .iter()
-            .zip(&self.python_function.signature.parameters)
-            .enumerate()
-        {
-            let expected = expected.t.data_type();
-            if actual != &expected {
-                return plan_err!(
-                    "argument {} of `{}` should be {}, got {}",
-                    pos + 1,
-                    self.name(),
-                    expected,
-                    actual
-                );
-            }
-        }
-
-        Ok(self.python_function.signature.return_type.t.data_type())
+        self.return_type_impl(arg_types.iter())
+            .map_err(DataFusionError::Plan)
     }
 
     fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
@@ -122,30 +132,11 @@ impl ScalarUDFImpl for PythonScalarUDF {
             );
         }
 
-        if arg_fields.len() != self.python_function.signature.parameters.len() {
-            return exec_err!(
-                "`{}` expects {} parameters (passed as fields) but got {}",
-                self.name(),
-                self.python_function.signature.parameters.len(),
-                arg_fields.len()
-            );
-        }
-        for (i, (arg_field, param)) in arg_fields
-            .iter()
-            .zip(&self.python_function.signature.parameters)
-            .enumerate()
-        {
-            let param_dt = param.t.data_type();
-            if arg_field.data_type() != &param_dt {
-                return exec_err!(
-                    "argument field {} of `{}` should be {} but got {}",
-                    i + 1,
-                    self.name(),
-                    param_dt,
-                    arg_field.data_type()
-                );
-            }
-        }
+        // check arg fields by re-using our `return_type` code
+        self.return_type_impl(arg_fields.iter().map(|arg_field| arg_field.data_type()))
+            .map_err(|msg| {
+                DataFusionError::Execution(format!("checking argument fields: {msg}"))
+            })?;
 
         if args.len() != self.python_function.signature.parameters.len() {
             return exec_err!(

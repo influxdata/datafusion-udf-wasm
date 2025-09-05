@@ -107,7 +107,7 @@ def foo(x: int) -> int:
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
         })
         .unwrap_err(),
-        @"Execution error: `foo` expects 1 parameters (passed as fields) but got 0",
+        @"Execution error: checking argument fields: `foo` expects 1 parameters but got 0",
     );
 
     insta::assert_snapshot!(
@@ -123,7 +123,7 @@ def foo(x: int) -> int:
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
         })
         .unwrap_err(),
-        @"Execution error: `foo` expects 1 parameters (passed as fields) but got 2",
+        @"Execution error: checking argument fields: `foo` expects 1 parameters but got 2",
     );
 
     insta::assert_snapshot!(
@@ -136,7 +136,7 @@ def foo(x: int) -> int:
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
         })
         .unwrap_err(),
-        @"Execution error: argument field 1 of `foo` should be Int64 but got Float64",
+        @"Execution error: checking argument fields: argument 1 of `foo` should be Int64, got Float64",
     );
 }
 
