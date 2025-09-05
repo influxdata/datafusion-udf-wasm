@@ -149,7 +149,18 @@ impl ScalarUDFImpl for PythonScalarUDF {
 
         let arrays = args
             .into_iter()
-            .map(|column_value| column_value.to_array(number_rows))
+            .enumerate()
+            .map(|(i, column_value)| {
+                let array = column_value.to_array(number_rows)?;
+                if array.len() != number_rows {
+                    return exec_err!(
+                        "array passed for argument {} should have {number_rows} rows but has {}",
+                        i + 1,
+                        array.len()
+                    );
+                }
+                Ok(array)
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         Python::with_gil(|py| {
@@ -205,8 +216,13 @@ impl ScalarUDFImpl for PythonScalarUDF {
             }
 
             // check invariants
-            for mut it in parameter_iters {
-                assert!(it.next().is_none(), "iterator should be done");
+            for (i, mut it) in parameter_iters.into_iter().enumerate() {
+                let next = it.next();
+                assert!(
+                    next.is_none(),
+                    "iterator {} should be done but produced {next:?}",
+                    i + 1,
+                );
             }
 
             let output_array = output_row_builder.finish();

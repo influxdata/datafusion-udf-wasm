@@ -86,6 +86,41 @@ def foo(x: int) -> int:
         .unwrap_err(),
         @"Execution error: expected int64 array but got Float64",
     );
+
+    insta::assert_snapshot!(
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![
+                ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                    Some(1),
+                ]))),
+            ],
+            arg_fields: vec![
+                Arc::new(Field::new("x", DataType::Int64, true)),
+            ],
+            number_rows: 2,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        })
+        .unwrap_err(),
+        @"Execution error: array passed for argument 1 should have 2 rows but has 1",
+    );
+
+    insta::assert_snapshot!(
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![
+                ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                    Some(1),
+                    Some(1),
+                ]))),
+            ],
+            arg_fields: vec![
+                Arc::new(Field::new("x", DataType::Int64, true)),
+            ],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        })
+        .unwrap_err(),
+        @"Execution error: array passed for argument 1 should have 1 rows but has 2",
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
