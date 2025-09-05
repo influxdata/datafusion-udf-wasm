@@ -129,7 +129,7 @@ impl<'py> FromPyObject<'py> for PythonFnSignature {
 
 /// Execute python code and retrieve the list of defined functions.
 pub(crate) fn inspect_python_code(code: &str) -> DataFusionResult<Vec<PythonFn>> {
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         inspect_python_code_inner(code, py)
             .map_err(|e| DataFusionError::Plan(py_err_to_string(e, py)))
     })

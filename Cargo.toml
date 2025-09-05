@@ -20,7 +20,7 @@ datafusion-expr = { version = "49.0.1", default-features = false }
 datafusion-udf-wasm-arrow2bytes = { path = "arrow2bytes", version = "0.1.0" }
 datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0" }
 tokio = { version = "1.47.1", default-features = false }
-pyo3 = { version = "0.25.1", default-features = false }
+pyo3 = { version = "0.26.0", default-features = false }
 tar = "0.4.44"
 tempfile = "3.20.0"
 wasmtime = { version = "36.0.2", default-features = false, features = ["async", "cranelift"] }
@@ -60,7 +60,7 @@ datafusion-expr = { git = "https://github.com/influxdata/arrow-datafusion.git", 
 
 # patches to get wasi p2 to run without extra feature flags
 # See <https://github.com/rust-lang/rust/issues/130323>.
-pyo3 = { git = "https://github.com/crepererum/pyo3.git", rev = "92f97bdb0291852e2e0fc59312b69e9f73e47f16" }
+pyo3 = { git = "https://github.com/crepererum/pyo3.git", rev = "adeb7e52822e0d0e7fe7234e466cd95126ad70b0" }
 
 # faster tests
 [profile.dev.package]

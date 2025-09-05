@@ -18,6 +18,9 @@ datafusion-expr.workspace = true
 datafusion-udf-wasm-guest.workspace = true
 pyo3.workspace = true
 
+[target.'cfg(all(target_os = "wasi", target_env = "p2"))'.dependencies]
+pyo3 = { workspace = true, features = ["nightly"] }
+
 [build-dependencies]
 tar.workspace = true
 walkdir = "2.5.0"
