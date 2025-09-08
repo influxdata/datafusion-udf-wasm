@@ -91,10 +91,7 @@ impl PythonType {
     /// Get a builder for the Arrow output [`Array`].
     ///
     /// This needs an "attached" [`Python`] to create Python objects.
-    fn python_to_arrow<'py>(
-        &self,
-        num_rows: usize,
-    ) -> Box<dyn ArrayBuilder<'py, T = Option<Bound<'py, PyAny>>>> {
+    fn python_to_arrow<'py>(&self, num_rows: usize) -> Box<dyn ArrayBuilder<'py>> {
         match self {
             Self::Bool => Box::new(BooleanBuilder::with_capacity(num_rows)),
             Self::Int => Box::new(Int64Builder::with_capacity(num_rows)),
@@ -141,7 +138,7 @@ impl PythonNullableType {
         &self,
         py: Python<'py>,
         num_rows: usize,
-    ) -> Box<dyn ArrayBuilder<'py, T = Bound<'py, PyAny>> + 'py> {
+    ) -> Box<dyn ArrayBuilder<'py> + 'py> {
         let inner = self.t.python_to_arrow(num_rows);
         let none = PyNone::get(py).into_bound();
         Box::new(ArrayBuilderNullChecker {
@@ -154,16 +151,10 @@ impl PythonNullableType {
 
 /// Abstract builder for Arrow output [`Array`].
 pub(crate) trait ArrayBuilder<'py> {
-    /// Types that can be converted into the respective [`Array`] value.
-    ///
-    /// This is either `Bound<'py, PyAny>` (if called directly using the Python value) or `Option<Bound<'py, PyAny>>`
-    /// (if we already reasoned about nullability).
-    type T;
-
     /// Push a new value.
     ///
     /// This may fail if the type doesn't match.
-    fn push(&mut self, val: Self::T) -> DataFusionResult<()>;
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()>;
 
     /// Skip this row, i.e. append a "null".
     fn skip(&mut self);
@@ -185,21 +176,21 @@ struct ArrayBuilderNullChecker<'py> {
     none: Bound<'py, PyNone>,
 
     /// The type-specific converter that came out of [`PythonType::arrow_to_python`].
-    inner: Box<dyn ArrayBuilder<'py, T = Option<Bound<'py, PyAny>>>>,
+    inner: Box<dyn ArrayBuilder<'py>>,
 }
 
 impl<'py> ArrayBuilder<'py> for ArrayBuilderNullChecker<'py> {
-    type T = Bound<'py, PyAny>;
-
-    fn push(&mut self, val: Self::T) -> DataFusionResult<()> {
-        let val = match (self.nullable, val.is(&self.none)) {
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        match (self.nullable, val.is(&self.none)) {
             (false, true) => {
-                return exec_err!("method was not supposed to return None but did");
+                exec_err!("method was not supposed to return None but did")
             }
-            (false | true, false) => Some(val),
-            (true, true) => None,
-        };
-        self.inner.push(val)
+            (false | true, false) => self.inner.push(val),
+            (true, true) => {
+                self.inner.skip();
+                Ok(())
+            }
+        }
     }
 
     fn skip(&mut self) {
@@ -212,22 +203,12 @@ impl<'py> ArrayBuilder<'py> for ArrayBuilderNullChecker<'py> {
 }
 
 impl<'py> ArrayBuilder<'py> for BooleanBuilder {
-    type T = Option<Bound<'py, PyAny>>;
-
-    fn push(&mut self, val: Self::T) -> DataFusionResult<()> {
-        match val {
-            Some(val) => {
-                let val: bool = val.extract().map_err(|_| {
-                    exec_datafusion_err!("expected bool but got {}", py_representation(&val))
-                })?;
-                self.append_value(val);
-                Ok(())
-            }
-            None => {
-                self.append_null();
-                Ok(())
-            }
-        }
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        let val: bool = val.extract().map_err(|_| {
+            exec_datafusion_err!("expected bool but got {}", py_representation(&val))
+        })?;
+        self.append_value(val);
+        Ok(())
     }
 
     fn skip(&mut self) {
@@ -240,29 +221,19 @@ impl<'py> ArrayBuilder<'py> for BooleanBuilder {
 }
 
 impl<'py> ArrayBuilder<'py> for Int64Builder {
-    type T = Option<Bound<'py, PyAny>>;
-
-    fn push(&mut self, val: Self::T) -> DataFusionResult<()> {
-        match val {
-            Some(val) => {
-                // in Python, `bool` is a sub-class of int we should probably not silently cast bools to integers
-                let val = val.downcast_exact::<PyInt>().map_err(|_| {
-                    exec_datafusion_err!("expected `int` but got {}", py_representation(&val))
-                })?;
-                let val: i64 = val.extract().map_err(|_| {
-                    exec_datafusion_err!(
-                        "expected i64 but got {}, which is out-of-range",
-                        py_representation(val)
-                    )
-                })?;
-                self.append_value(val);
-                Ok(())
-            }
-            None => {
-                self.append_null();
-                Ok(())
-            }
-        }
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        // in Python, `bool` is a sub-class of int we should probably not silently cast bools to integers
+        let val = val.downcast_exact::<PyInt>().map_err(|_| {
+            exec_datafusion_err!("expected `int` but got {}", py_representation(&val))
+        })?;
+        let val: i64 = val.extract().map_err(|_| {
+            exec_datafusion_err!(
+                "expected i64 but got {}, which is out-of-range",
+                py_representation(val)
+            )
+        })?;
+        self.append_value(val);
+        Ok(())
     }
 
     fn skip(&mut self) {
