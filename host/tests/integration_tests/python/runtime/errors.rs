@@ -84,7 +84,10 @@ def foo(x: int) -> int:
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
         })
         .unwrap_err(),
-        @"Execution error: expected int64 array but got Float64",
+        @r"
+    Internal error: could not cast array of type Float64 to arrow_array::array::primitive_array::PrimitiveArray<arrow_array::types::Int64Type>.
+    This issue was likely caused by a bug in DataFusion's code. Please help us to resolve this by filing a bug report in our issue tracker: https://github.com/apache/datafusion/issues
+    ",
     );
 
     insta::assert_snapshot!(

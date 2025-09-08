@@ -2,10 +2,14 @@
 use std::{ops::ControlFlow, sync::Arc};
 
 use arrow::{
-    array::{Array, ArrayRef, BooleanArray, BooleanBuilder, Int64Array, Int64Builder},
+    array::{Array, ArrayRef, BooleanBuilder, Int64Builder},
     datatypes::DataType,
 };
-use datafusion_common::{error::Result as DataFusionResult, exec_datafusion_err, exec_err};
+use datafusion_common::{
+    cast::{as_boolean_array, as_int64_array},
+    error::Result as DataFusionResult,
+    exec_datafusion_err, exec_err,
+};
 use pyo3::{
     Bound, BoundObject, IntoPyObjectExt, PyAny, Python,
     types::{PyAnyMethods, PyInt, PyNone},
@@ -46,12 +50,7 @@ impl PythonType {
     ) -> DataFusionResult<PythonOptValueIter<'a>> {
         match self {
             Self::Bool => {
-                let array = array
-                    .as_any()
-                    .downcast_ref::<BooleanArray>()
-                    .ok_or_else(|| {
-                        exec_datafusion_err!("expected bool array but got {}", array.data_type())
-                    })?;
+                let array = as_boolean_array(array)?;
 
                 let it = (0..array.len()).map(move |idx| {
                     if array.is_null(idx) {
@@ -69,9 +68,7 @@ impl PythonType {
                 Ok(Box::new(it))
             }
             Self::Int => {
-                let array = array.as_any().downcast_ref::<Int64Array>().ok_or_else(|| {
-                    exec_datafusion_err!("expected int64 array but got {}", array.data_type())
-                })?;
+                let array = as_int64_array(array)?;
 
                 let it = (0..array.len()).map(move |idx| {
                     if array.is_null(idx) {
