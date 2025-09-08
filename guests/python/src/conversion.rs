@@ -60,9 +60,9 @@ impl PythonType {
                         let val = array.value(idx);
                         match val.into_bound_py_any(py) {
                             Ok(val) => Ok(Some(val)),
-                            Err(e) => {
-                                Err(exec_datafusion_err!("cannot convert value to python: {e}"))
-                            }
+                            Err(e) => Err(exec_datafusion_err!(
+                                "cannot convert Rust `bool` value to Python: {e}"
+                            )),
                         }
                     }
                 });
@@ -80,9 +80,9 @@ impl PythonType {
                         let val = array.value(idx);
                         match val.into_bound_py_any(py) {
                             Ok(val) => Ok(Some(val)),
-                            Err(e) => {
-                                Err(exec_datafusion_err!("cannot convert value to python: {e}"))
-                            }
+                            Err(e) => Err(exec_datafusion_err!(
+                                "cannot convert Rust `i64` value to Python: {e}"
+                            )),
                         }
                     }
                 });
