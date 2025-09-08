@@ -2,13 +2,17 @@
 use std::{ops::ControlFlow, sync::Arc};
 
 use arrow::{
-    array::{Array, ArrayRef, Int64Array, Int64Builder},
+    array::{Array, ArrayRef, BooleanBuilder, Int64Builder},
     datatypes::DataType,
 };
-use datafusion_common::{error::Result as DataFusionResult, exec_datafusion_err, exec_err};
+use datafusion_common::{
+    cast::{as_boolean_array, as_int64_array},
+    error::Result as DataFusionResult,
+    exec_datafusion_err, exec_err,
+};
 use pyo3::{
     Bound, BoundObject, IntoPyObjectExt, PyAny, Python,
-    types::{PyAnyMethods, PyNone},
+    types::{PyAnyMethods, PyInt, PyNone},
 };
 
 use crate::{
@@ -33,6 +37,7 @@ impl PythonType {
     /// Arrow [`DataType`] for a given Python type.
     pub(crate) fn data_type(&self) -> DataType {
         match self {
+            Self::Bool => DataType::Boolean,
             Self::Int => DataType::Int64,
         }
     }
@@ -44,10 +49,8 @@ impl PythonType {
         py: Python<'a>,
     ) -> DataFusionResult<PythonOptValueIter<'a>> {
         match self {
-            Self::Int => {
-                let array = array.as_any().downcast_ref::<Int64Array>().ok_or_else(|| {
-                    exec_datafusion_err!("expected int64 array but got {}", array.data_type())
-                })?;
+            Self::Bool => {
+                let array = as_boolean_array(array)?;
 
                 let it = (0..array.len()).map(move |idx| {
                     if array.is_null(idx) {
@@ -56,9 +59,27 @@ impl PythonType {
                         let val = array.value(idx);
                         match val.into_bound_py_any(py) {
                             Ok(val) => Ok(Some(val)),
-                            Err(e) => {
-                                Err(exec_datafusion_err!("cannot convert value to python: {e}"))
-                            }
+                            Err(e) => Err(exec_datafusion_err!(
+                                "cannot convert Rust `bool` value to Python: {e}"
+                            )),
+                        }
+                    }
+                });
+                Ok(Box::new(it))
+            }
+            Self::Int => {
+                let array = as_int64_array(array)?;
+
+                let it = (0..array.len()).map(move |idx| {
+                    if array.is_null(idx) {
+                        Ok(None)
+                    } else {
+                        let val = array.value(idx);
+                        match val.into_bound_py_any(py) {
+                            Ok(val) => Ok(Some(val)),
+                            Err(e) => Err(exec_datafusion_err!(
+                                "cannot convert Rust `i64` value to Python: {e}"
+                            )),
                         }
                     }
                 });
@@ -75,6 +96,7 @@ impl PythonType {
         num_rows: usize,
     ) -> Box<dyn ArrayBuilder<'py, T = Option<Bound<'py, PyAny>>>> {
         match self {
+            Self::Bool => Box::new(BooleanBuilder::with_capacity(num_rows)),
             Self::Int => Box::new(Int64Builder::with_capacity(num_rows)),
         }
     }
@@ -189,14 +211,49 @@ impl<'py> ArrayBuilder<'py> for ArrayBuilderNullChecker<'py> {
     }
 }
 
+impl<'py> ArrayBuilder<'py> for BooleanBuilder {
+    type T = Option<Bound<'py, PyAny>>;
+
+    fn push(&mut self, val: Self::T) -> DataFusionResult<()> {
+        match val {
+            Some(val) => {
+                let val: bool = val.extract().map_err(|_| {
+                    exec_datafusion_err!("expected bool but got {}", py_representation(&val))
+                })?;
+                self.append_value(val);
+                Ok(())
+            }
+            None => {
+                self.append_null();
+                Ok(())
+            }
+        }
+    }
+
+    fn skip(&mut self) {
+        self.append_null();
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        Arc::new(self.finish())
+    }
+}
+
 impl<'py> ArrayBuilder<'py> for Int64Builder {
     type T = Option<Bound<'py, PyAny>>;
 
     fn push(&mut self, val: Self::T) -> DataFusionResult<()> {
         match val {
             Some(val) => {
+                // in Python, `bool` is a sub-class of int we should probably not silently cast bools to integers
+                let val = val.downcast_exact::<PyInt>().map_err(|_| {
+                    exec_datafusion_err!("expected `int` but got {}", py_representation(&val))
+                })?;
                 let val: i64 = val.extract().map_err(|_| {
-                    exec_datafusion_err!("expected i64 but got {}", py_representation(&val))
+                    exec_datafusion_err!(
+                        "expected i64 but got {}, which is out-of-range",
+                        py_representation(val)
+                    )
                 })?;
                 self.append_value(val);
                 Ok(())

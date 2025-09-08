@@ -6,7 +6,19 @@ use pyo3::{Py, PyAny};
 /// Note that this type does NOT reason about nullability. See [`PythonNullableType`] for that.
 #[derive(Debug)]
 pub(crate) enum PythonType {
-    /// Integer.
+    /// Boolean.
+    ///
+    /// # Python
+    /// The type is called `bool`, documentation can be found here:
+    ///
+    /// - <https://docs.python.org/3/library/stdtypes.html#boolean-type-bool>
+    /// - <https://docs.python.org/3/library/functions.html#bool>
+    ///
+    /// # Arrow
+    /// We map this to [`Boolean`](arrow::datatypes::DataType::Boolean).
+    Bool,
+
+    /// Signed integer.
     ///
     /// # Python
     /// The type is called `int`, documentation can be found here:
