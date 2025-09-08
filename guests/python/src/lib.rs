@@ -4,7 +4,7 @@
 //! [CPython]: https://www.python.org/
 //! [`pyo3`]: https://pyo3.rs/
 use std::any::Any;
-use std::ops::ControlFlow;
+use std::ops::{ControlFlow, Range};
 use std::sync::Arc;
 
 use arrow::datatypes::DataType;
@@ -24,6 +24,9 @@ mod conversion;
 mod error;
 mod inspect;
 mod signature;
+
+/// Supported Python version range.
+const PYTHON_VERSION_RANGE: Range<(u8, u8, u8)> = (3, 14, 0)..(3, 15, 0);
 
 /// A test UDF that demonstrate that we can call Python.
 #[derive(Debug)]
@@ -267,10 +270,21 @@ fn root() -> Option<Vec<u8>> {
 ///   <no Python frame>
 /// ```
 ///
+/// This also checks if the running Python version is supported.
+///
 ///
 /// [Python Standard Library]: https://docs.python.org/3/library/index.html
 fn init_python() {
     Python::initialize();
+
+    Python::attach(|py| {
+        let version_info = py.version_info();
+        let version_tuple = (version_info.major, version_info.minor, version_info.patch);
+        assert!(
+            PYTHON_VERSION_RANGE.contains(&version_tuple),
+            "Unsupported python version: {version_tuple:?}, supported range is {PYTHON_VERSION_RANGE:?}",
+        );
+    });
 }
 
 /// Generate UDFs from given Python string.

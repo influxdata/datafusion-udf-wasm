@@ -39,6 +39,9 @@ pub(crate) enum PythonType {
 /// - <https://docs.python.org/3/library/stdtypes.html#the-null-object>
 ///
 /// Nullable types are represented using a union with another type, e.g. `int | None`.
+///
+/// There used to be an older representation too: `typing.Optional[int]`. As of Python 3.14, this results in the same
+/// representation as `int | None`. See <https://docs.python.org/3.14/whatsnew/3.14.html#typing>. So we support both.
 #[derive(Debug)]
 pub(crate) struct PythonNullableType {
     /// Python type.

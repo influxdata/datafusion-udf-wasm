@@ -26,7 +26,7 @@ def add(x: int, y: int) -> int:
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_first_arg_optional() {
+async fn test_first_arg_optional_union() {
     const CODE: &str = "
 def add(x: int | None, y: int) -> int:
     if x is None:
@@ -42,7 +42,25 @@ def add(x: int | None, y: int) -> int:
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_second_arg_optional() {
+async fn test_first_arg_optional_old_alias() {
+    const CODE: &str = "
+from typing import Optional
+
+def add(x: Optional[int], y: int) -> int:
+    if x is None:
+        x = 9
+    assert y is not None
+    return x + y
+";
+
+    assert_eq!(
+        xy_null_test(CODE).await.as_ref(),
+        &Int64Array::from_iter([None, Some(29), None, Some(44)]) as &dyn Array,
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_second_arg_optional_union() {
     const CODE: &str = "
 def add(x: int, y: int | None) -> int:
     assert x is not None
@@ -58,7 +76,25 @@ def add(x: int, y: int | None) -> int:
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_both_args_optional() {
+async fn test_second_arg_optional_old_alias() {
+    const CODE: &str = "
+from typing import Optional
+
+def add(x: int, y: Optional[int]) -> int:
+    assert x is not None
+    if y is None:
+        y = 90
+    return x + y
+";
+
+    assert_eq!(
+        xy_null_test(CODE).await.as_ref(),
+        &Int64Array::from_iter([None, None, Some(93), Some(44)]) as &dyn Array,
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_both_args_optional_union() {
     const CODE: &str = "
 def add(x: int | None, y: int | None) -> int:
     if x is None:
@@ -75,7 +111,26 @@ def add(x: int | None, y: int | None) -> int:
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_optional_passthrough() {
+async fn test_both_args_optional_old_alias() {
+    const CODE: &str = "
+from typing import Optional
+
+def add(x: Optional[int], y: Optional[int]) -> int:
+    if x is None:
+        x = 9
+    if y is None:
+        y = 90
+    return x + y
+";
+
+    assert_eq!(
+        xy_null_test(CODE).await.as_ref(),
+        &Int64Array::from_iter([Some(99), Some(29), Some(93), Some(44)]) as &dyn Array,
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_optional_passthrough_union() {
     const CODE: &str = "
 def add(x: int | None, y: int | None) -> int | None:
     if x is None or y is None:
@@ -90,9 +145,51 @@ def add(x: int | None, y: int | None) -> int | None:
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_optional_flip() {
+async fn test_optional_passthrough_old_alias() {
+    const CODE: &str = "
+from typing import Optional
+
+def add(x: Optional[int], y: Optional[int]) -> Optional[int]:
+    if x is None or y is None:
+        return None
+    return x + y
+";
+
+    assert_eq!(
+        xy_null_test(CODE).await.as_ref(),
+        &Int64Array::from_iter([None, None, None, Some(44)]) as &dyn Array,
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_optional_flip_union() {
     const CODE: &str = "
 def add(x: int | None, y: int | None) -> int | None:
+    if x is None:
+        x = 9
+    else:
+        return None
+
+    if y is None:
+        y = 90
+    else:
+        return None
+
+    return x + y
+";
+
+    assert_eq!(
+        xy_null_test(CODE).await.as_ref(),
+        &Int64Array::from_iter([Some(99), None, None, None]) as &dyn Array,
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_optional_flip_old_alias() {
+    const CODE: &str = "
+from typing import Optional
+
+def add(x: Optional[int], y: Optional[int]) -> Optional[int]:
     if x is None:
         x = 9
     else:
