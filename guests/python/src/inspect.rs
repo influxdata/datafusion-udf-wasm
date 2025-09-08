@@ -21,10 +21,13 @@ impl<'py> FromPyObject<'py> for PythonType {
         // https://docs.python.org/3/library/builtins.html
         let mod_builtins = py.import(intern!(py, "builtins"))?;
         let type_bool = mod_builtins.getattr(intern!(py, "bool"))?;
+        let type_float = mod_builtins.getattr(intern!(py, "float"))?;
         let type_int = mod_builtins.getattr(intern!(py, "int"))?;
 
         if ob.is(type_bool) {
             Ok(Self::Bool)
+        } else if ob.is(type_float) {
+            Ok(Self::Float)
         } else if ob.is(type_int) {
             Ok(Self::Int)
         } else {
