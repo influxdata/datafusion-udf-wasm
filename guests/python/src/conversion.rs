@@ -52,37 +52,35 @@ impl PythonType {
             Self::Bool => {
                 let array = as_boolean_array(array)?;
 
-                let it = (0..array.len()).map(move |idx| {
-                    if array.is_null(idx) {
-                        Ok(None)
-                    } else {
-                        let val = array.value(idx);
-                        match val.into_bound_py_any(py) {
-                            Ok(val) => Ok(Some(val)),
-                            Err(e) => Err(exec_datafusion_err!(
-                                "cannot convert Rust `bool` value to Python: {e}"
-                            )),
-                        }
-                    }
+                let it = array.into_iter().map(move |maybe_val| {
+                    maybe_val
+                        .map(|val| {
+                            val.into_bound_py_any(py).map_err(|e| {
+                                exec_datafusion_err!(
+                                    "cannot convert Rust `bool` value to Python: {e}"
+                                )
+                            })
+                        })
+                        .transpose()
                 });
+
                 Ok(Box::new(it))
             }
             Self::Int => {
                 let array = as_int64_array(array)?;
 
-                let it = (0..array.len()).map(move |idx| {
-                    if array.is_null(idx) {
-                        Ok(None)
-                    } else {
-                        let val = array.value(idx);
-                        match val.into_bound_py_any(py) {
-                            Ok(val) => Ok(Some(val)),
-                            Err(e) => Err(exec_datafusion_err!(
-                                "cannot convert Rust `i64` value to Python: {e}"
-                            )),
-                        }
-                    }
+                let it = array.into_iter().map(move |maybe_val| {
+                    maybe_val
+                        .map(|val| {
+                            val.into_bound_py_any(py).map_err(|e| {
+                                exec_datafusion_err!(
+                                    "cannot convert Rust `i64` value to Python: {e}"
+                                )
+                            })
+                        })
+                        .transpose()
                 });
+
                 Ok(Box::new(it))
             }
         }
