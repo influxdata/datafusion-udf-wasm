@@ -18,6 +18,18 @@ pub(crate) enum PythonType {
     /// We map this to [`Boolean`](arrow::datatypes::DataType::Boolean).
     Bool,
 
+    /// Float.
+    ///
+    /// # Python
+    /// The type is called `float`, documentation can be found here:
+    ///
+    /// - <https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex>
+    /// - <https://docs.python.org/3/library/functions.html#float>
+    ///
+    /// # Arrow
+    /// We map this to [`Float64`](arrow::datatypes::DataType::Float64).
+    Float,
+
     /// Signed integer.
     ///
     /// # Python

@@ -2,11 +2,11 @@
 use std::{ops::ControlFlow, sync::Arc};
 
 use arrow::{
-    array::{Array, ArrayRef, BooleanBuilder, Int64Builder},
+    array::{Array, ArrayRef, BooleanBuilder, Float64Builder, Int64Builder},
     datatypes::DataType,
 };
 use datafusion_common::{
-    cast::{as_boolean_array, as_int64_array},
+    cast::{as_boolean_array, as_float64_array, as_int64_array},
     error::Result as DataFusionResult,
     exec_datafusion_err, exec_err,
 };
@@ -38,6 +38,7 @@ impl PythonType {
     pub(crate) fn data_type(&self) -> DataType {
         match self {
             Self::Bool => DataType::Boolean,
+            Self::Float => DataType::Float64,
             Self::Int => DataType::Int64,
         }
     }
@@ -58,6 +59,23 @@ impl PythonType {
                             val.into_bound_py_any(py).map_err(|e| {
                                 exec_datafusion_err!(
                                     "cannot convert Rust `bool` value to Python: {e}"
+                                )
+                            })
+                        })
+                        .transpose()
+                });
+
+                Ok(Box::new(it))
+            }
+            Self::Float => {
+                let array = as_float64_array(array)?;
+
+                let it = array.into_iter().map(move |maybe_val| {
+                    maybe_val
+                        .map(|val| {
+                            val.into_bound_py_any(py).map_err(|e| {
+                                exec_datafusion_err!(
+                                    "cannot convert Rust `f64` value to Python: {e}"
                                 )
                             })
                         })
@@ -92,6 +110,7 @@ impl PythonType {
     fn python_to_arrow<'py>(&self, num_rows: usize) -> Box<dyn ArrayBuilder<'py>> {
         match self {
             Self::Bool => Box::new(BooleanBuilder::with_capacity(num_rows)),
+            Self::Float => Box::new(Float64Builder::with_capacity(num_rows)),
             Self::Int => Box::new(Int64Builder::with_capacity(num_rows)),
         }
     }
@@ -204,6 +223,24 @@ impl<'py> ArrayBuilder<'py> for BooleanBuilder {
     fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
         let val: bool = val.extract().map_err(|_| {
             exec_datafusion_err!("expected bool but got {}", py_representation(&val))
+        })?;
+        self.append_value(val);
+        Ok(())
+    }
+
+    fn skip(&mut self) {
+        self.append_null();
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        Arc::new(self.finish())
+    }
+}
+
+impl<'py> ArrayBuilder<'py> for Float64Builder {
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        let val: f64 = val.extract().map_err(|_| {
+            exec_datafusion_err!("expected `f64` but got {}", py_representation(&val))
         })?;
         self.append_value(val);
         Ok(())
