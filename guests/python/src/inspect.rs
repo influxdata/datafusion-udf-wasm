@@ -23,6 +23,7 @@ impl<'py> FromPyObject<'py> for PythonType {
         let type_bool = mod_builtins.getattr(intern!(py, "bool"))?;
         let type_float = mod_builtins.getattr(intern!(py, "float"))?;
         let type_int = mod_builtins.getattr(intern!(py, "int"))?;
+        let type_str = mod_builtins.getattr(intern!(py, "str"))?;
 
         if ob.is(type_bool) {
             Ok(Self::Bool)
@@ -30,6 +31,8 @@ impl<'py> FromPyObject<'py> for PythonType {
             Ok(Self::Float)
         } else if ob.is(type_int) {
             Ok(Self::Int)
+        } else if ob.is(type_str) {
+            Ok(Self::String)
         } else {
             Err(PyErr::new::<PyTypeError, _>(format!(
                 "unknown annotation type: {}",
