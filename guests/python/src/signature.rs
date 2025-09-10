@@ -41,6 +41,17 @@ pub(crate) enum PythonType {
     /// # Arrow
     /// We map this to [`Int64`](arrow::datatypes::DataType::Int64).
     Int,
+
+    /// String.
+    ///
+    /// # Python
+    /// The type is called `str`, documentation can be found here:
+    ///
+    /// - <https://docs.python.org/3/library/stdtypes.html#text-sequence-type-str>
+    ///
+    /// # Arrow
+    /// We map this to [`Utf8`](arrow::datatypes::DataType::Utf8).
+    String,
 }
 
 /// [`PythonType`] plus "nullable" flag.

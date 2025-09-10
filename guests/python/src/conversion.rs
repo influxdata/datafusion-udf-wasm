@@ -2,11 +2,11 @@
 use std::{ops::ControlFlow, sync::Arc};
 
 use arrow::{
-    array::{Array, ArrayRef, BooleanBuilder, Float64Builder, Int64Builder},
+    array::{Array, ArrayRef, BooleanBuilder, Float64Builder, Int64Builder, StringBuilder},
     datatypes::DataType,
 };
 use datafusion_common::{
-    cast::{as_boolean_array, as_float64_array, as_int64_array},
+    cast::{as_boolean_array, as_float64_array, as_int64_array, as_string_array},
     error::Result as DataFusionResult,
     exec_datafusion_err, exec_err,
 };
@@ -40,6 +40,7 @@ impl PythonType {
             Self::Bool => DataType::Boolean,
             Self::Float => DataType::Float64,
             Self::Int => DataType::Int64,
+            Self::String => DataType::Utf8,
         }
     }
 
@@ -101,6 +102,23 @@ impl PythonType {
 
                 Ok(Box::new(it))
             }
+            Self::String => {
+                let array = as_string_array(array)?;
+
+                let it = array.into_iter().map(move |maybe_val| {
+                    maybe_val
+                        .map(|val| {
+                            val.into_bound_py_any(py).map_err(|e| {
+                                exec_datafusion_err!(
+                                    "cannot convert Rust `str` value to Python: {e}"
+                                )
+                            })
+                        })
+                        .transpose()
+                });
+
+                Ok(Box::new(it))
+            }
         }
     }
 
@@ -112,6 +130,7 @@ impl PythonType {
             Self::Bool => Box::new(BooleanBuilder::with_capacity(num_rows)),
             Self::Float => Box::new(Float64Builder::with_capacity(num_rows)),
             Self::Int => Box::new(Int64Builder::with_capacity(num_rows)),
+            Self::String => Box::new(StringBuilder::with_capacity(num_rows, 1024)),
         }
     }
 }
@@ -266,6 +285,24 @@ impl<'py> ArrayBuilder<'py> for Int64Builder {
                 "expected i64 but got {}, which is out-of-range",
                 py_representation(val)
             )
+        })?;
+        self.append_value(val);
+        Ok(())
+    }
+
+    fn skip(&mut self) {
+        self.append_null();
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        Arc::new(self.finish())
+    }
+}
+
+impl<'py> ArrayBuilder<'py> for StringBuilder {
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        let val: &str = val.extract().map_err(|_| {
+            exec_datafusion_err!("expected `str` but got {}", py_representation(&val))
         })?;
         self.append_value(val);
         Ok(())
