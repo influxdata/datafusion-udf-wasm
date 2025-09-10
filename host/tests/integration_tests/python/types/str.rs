@@ -51,7 +51,7 @@ def foo(x: str) -> str:
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_returing_bytes_fails() {
+async fn test_returning_bytes_fails() {
     const CODE: &str = "
 def foo(x: str) -> str:
     return x.encode('utf-8')
