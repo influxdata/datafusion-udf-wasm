@@ -25,8 +25,14 @@ impl<'py> FromPyObject<'py> for PythonType {
         let type_int = mod_builtins.getattr(intern!(py, "int"))?;
         let type_str = mod_builtins.getattr(intern!(py, "str"))?;
 
+        // https://docs.python.org/3/library/datetime.html
+        let mod_datetime = py.import(intern!(py, "datetime"))?;
+        let type_dateime = mod_datetime.getattr(intern!(py, "datetime"))?;
+
         if ob.is(type_bool) {
             Ok(Self::Bool)
+        } else if ob.is(type_dateime) {
+            Ok(Self::DateTime)
         } else if ob.is(type_float) {
             Ok(Self::Float)
         } else if ob.is(type_int) {

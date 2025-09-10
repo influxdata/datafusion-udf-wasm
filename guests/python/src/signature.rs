@@ -18,6 +18,18 @@ pub(crate) enum PythonType {
     /// We map this to [`Boolean`](arrow::datatypes::DataType::Boolean).
     Bool,
 
+    /// Timestamp (date + time on that day).
+    ///
+    /// # Python
+    /// The type is called `datetime`, documentation can be found here:
+    ///
+    /// - <https://docs.python.org/3/library/datetime.html#datetime.datetime>
+    ///
+    /// # Arrow
+    /// We map this to [`Timestamp`](arrow::datatypes::DataType::Timestamp) with
+    /// [`Microsecond`](arrow::datatypes::TimeUnit::Microsecond) resolution (same as Python) and no time zone.
+    DateTime,
+
     /// Float.
     ///
     /// # Python

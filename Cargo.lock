@@ -843,6 +843,7 @@ name = "datafusion-udf-wasm-python"
 version = "0.1.0"
 dependencies = [
  "arrow",
+ "chrono",
  "datafusion-common",
  "datafusion-expr",
  "datafusion-udf-wasm-guest",
