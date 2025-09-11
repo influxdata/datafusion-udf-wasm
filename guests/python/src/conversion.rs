@@ -51,7 +51,7 @@ impl PythonType {
             Self::DateTime => DataType::Timestamp(TimeUnit::Microsecond, None),
             Self::Float => DataType::Float64,
             Self::Int => DataType::Int64,
-            Self::String => DataType::Utf8,
+            Self::Str => DataType::Utf8,
         }
     }
 
@@ -160,7 +160,7 @@ impl PythonType {
 
                 Ok(Box::new(it))
             }
-            Self::String => {
+            Self::Str => {
                 let array = as_string_array(array)?;
 
                 let it = array.into_iter().map(move |maybe_val| {
@@ -189,7 +189,7 @@ impl PythonType {
             Self::DateTime => Box::new(TimestampMicrosecondBuilder::with_capacity(num_rows)),
             Self::Float => Box::new(Float64Builder::with_capacity(num_rows)),
             Self::Int => Box::new(Int64Builder::with_capacity(num_rows)),
-            Self::String => Box::new(StringBuilder::with_capacity(num_rows, 1024)),
+            Self::Str => Box::new(StringBuilder::with_capacity(num_rows, 1024)),
         }
     }
 }
