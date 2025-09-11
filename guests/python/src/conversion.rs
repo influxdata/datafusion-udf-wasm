@@ -2,17 +2,27 @@
 use std::{ops::ControlFlow, sync::Arc};
 
 use arrow::{
-    array::{Array, ArrayRef, BooleanBuilder, Float64Builder, Int64Builder, StringBuilder},
-    datatypes::DataType,
+    array::{
+        Array, ArrayRef, BooleanBuilder, Float64Builder, Int64Builder, StringBuilder,
+        TimestampMicrosecondBuilder,
+    },
+    datatypes::{DataType, TimeUnit},
 };
+use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Timelike, Utc};
 use datafusion_common::{
-    cast::{as_boolean_array, as_float64_array, as_int64_array, as_string_array},
+    cast::{
+        as_boolean_array, as_float64_array, as_int64_array, as_string_array,
+        as_timestamp_microsecond_array,
+    },
     error::Result as DataFusionResult,
     exec_datafusion_err, exec_err,
 };
 use pyo3::{
     Bound, BoundObject, IntoPyObjectExt, PyAny, Python,
-    types::{PyAnyMethods, PyInt, PyNone},
+    types::{
+        PyAnyMethods, PyDateAccess, PyDateTime, PyInt, PyNone, PyStringMethods, PyTimeAccess,
+        PyTzInfoAccess,
+    },
 };
 
 use crate::{
@@ -38,6 +48,7 @@ impl PythonType {
     pub(crate) fn data_type(&self) -> DataType {
         match self {
             Self::Bool => DataType::Boolean,
+            Self::DateTime => DataType::Timestamp(TimeUnit::Microsecond, None),
             Self::Float => DataType::Float64,
             Self::Int => DataType::Int64,
             Self::String => DataType::Utf8,
@@ -61,6 +72,53 @@ impl PythonType {
                                 exec_datafusion_err!(
                                     "cannot convert Rust `bool` value to Python: {e}"
                                 )
+                            })
+                        })
+                        .transpose()
+                });
+
+                Ok(Box::new(it))
+            }
+            Self::DateTime => {
+                let array = as_timestamp_microsecond_array(array)?;
+                if let Some(tz) = array.timezone() {
+                    return exec_err!("expected no time zone but got {tz}");
+                }
+
+                let it = array.into_iter().map(move |maybe_val| {
+                    maybe_val
+                        .map(|val| {
+                            let dt = DateTime::from_timestamp_micros(val).ok_or_else(|| exec_datafusion_err!("cannot create DateTime object from microsecond timestamp: {val}"))?;
+
+                            PyDateTime::new(
+                                py,
+                                dt.year(),
+                                dt
+                                    .month()
+                                    .try_into()
+                                    .map_err(|e| exec_datafusion_err!("month out of range: {e}"))?,
+                                dt
+                                    .day()
+                                    .try_into()
+                                    .map_err(|e| exec_datafusion_err!("day out of range: {e}"))?,
+                                dt
+                                    .hour()
+                                    .try_into()
+                                    .map_err(|e| exec_datafusion_err!("hour out of range: {e}"))?,
+                                dt
+                                    .minute()
+                                    .try_into()
+                                    .map_err(|e| exec_datafusion_err!("minute out of range: {e}"))?,
+                                dt
+                                    .second()
+                                    .try_into()
+                                    .map_err(|e| exec_datafusion_err!("second out of range: {e}"))?,
+                                dt.timestamp_subsec_micros(),
+                                None,
+                            ).map_err(|e| {
+                                exec_datafusion_err!("cannot create PyDateTime: {e}")
+                            })?.into_bound_py_any(py).map_err(|e| {
+                                exec_datafusion_err!("cannot convert PyDateTime to any: {e}")
                             })
                         })
                         .transpose()
@@ -128,6 +186,7 @@ impl PythonType {
     fn python_to_arrow<'py>(&self, num_rows: usize) -> Box<dyn ArrayBuilder<'py>> {
         match self {
             Self::Bool => Box::new(BooleanBuilder::with_capacity(num_rows)),
+            Self::DateTime => Box::new(TimestampMicrosecondBuilder::with_capacity(num_rows)),
             Self::Float => Box::new(Float64Builder::with_capacity(num_rows)),
             Self::Int => Box::new(Int64Builder::with_capacity(num_rows)),
             Self::String => Box::new(StringBuilder::with_capacity(num_rows, 1024)),
@@ -304,6 +363,53 @@ impl<'py> ArrayBuilder<'py> for StringBuilder {
         let val: &str = val.extract().map_err(|_| {
             exec_datafusion_err!("expected `str` but got {}", py_representation(&val))
         })?;
+        self.append_value(val);
+        Ok(())
+    }
+
+    fn skip(&mut self) {
+        self.append_null();
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        Arc::new(self.finish())
+    }
+}
+
+impl<'py> ArrayBuilder<'py> for TimestampMicrosecondBuilder {
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        let val = val.downcast_exact::<PyDateTime>().map_err(|_| {
+            exec_datafusion_err!("expected `datetime` but got {}", py_representation(&val))
+        })?;
+        if let Some(tzinfo) = val.get_tzinfo() {
+            let s = tzinfo
+                .str()
+                .and_then(|name| name.to_str().map(|s| s.to_owned()))
+                .unwrap_or_else(|_| "<unknown>".to_owned());
+            return exec_err!("expected no tzinfo, got {s}");
+        }
+        let val =
+            NaiveDate::from_ymd_opt(val.get_year(), val.get_month().into(), val.get_day().into())
+                .ok_or_else(|| {
+                    exec_datafusion_err!(
+                        "cannot create NaiveDate based on year-month-day of {}",
+                        py_representation(val)
+                    )
+                })?
+                .and_hms_micro_opt(
+                    val.get_hour().into(),
+                    val.get_minute().into(),
+                    val.get_second().into(),
+                    val.get_microsecond(),
+                )
+                .ok_or_else(|| {
+                    exec_datafusion_err!(
+                        "cannot create NaiveDateTime based on hour-minute-second-microsecond of {}",
+                        py_representation(val)
+                    )
+                })?;
+        let val = Utc.from_utc_datetime(&val);
+        let val = val.timestamp_micros();
         self.append_value(val);
         Ok(())
     }
