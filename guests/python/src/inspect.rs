@@ -38,7 +38,7 @@ impl<'py> FromPyObject<'py> for PythonType {
         } else if ob.is(type_int) {
             Ok(Self::Int)
         } else if ob.is(type_str) {
-            Ok(Self::String)
+            Ok(Self::Str)
         } else {
             Err(PyErr::new::<PyTypeError, _>(format!(
                 "unknown annotation type: {}",

@@ -4,6 +4,10 @@ use pyo3::{Py, PyAny};
 /// Python types that we support.
 ///
 /// Note that this type does NOT reason about nullability. See [`PythonNullableType`] for that.
+///
+/// # Naming
+/// Since Python and Arrow use different names for the same type, we have to settle on some consistency. We chose to
+/// use the Python name in CamelCase style, so Python's `datetime` will become `DateTime`.
 #[derive(Debug)]
 pub(crate) enum PythonType {
     /// Boolean.
@@ -63,7 +67,7 @@ pub(crate) enum PythonType {
     ///
     /// # Arrow
     /// We map this to [`Utf8`](arrow::datatypes::DataType::Utf8).
-    String,
+    Str,
 }
 
 /// [`PythonType`] plus "nullable" flag.
