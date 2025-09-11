@@ -112,6 +112,13 @@ impl<'py> FromPyObject<'py> for PythonFnSignature {
     fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
         let py = ob.py();
 
+        // https://docs.python.org/3/library/inspect.html
+        let mod_inspect = py.import(intern!(py, "inspect"))?;
+        // https://docs.python.org/3/library/inspect.html#inspect.Parameter
+        let type_parameter = mod_inspect.getattr(intern!(py, "Parameter"))?;
+        // https://docs.python.org/3/library/inspect.html#inspect.Parameter.empty
+        let type_parameter_empty = type_parameter.getattr(intern!(py, "empty"))?;
+
         let parameters = ob.getattr(intern!(py, "parameters"))?;
         let parameters_values = parameters.getattr(intern!(py, "values"))?;
         let parameters = parameters_values
@@ -122,10 +129,31 @@ impl<'py> FromPyObject<'py> for PythonFnSignature {
                 let param = param?;
                 // param is now https://docs.python.org/3/library/inspect.html#inspect.Parameter
 
+                // check kind, see https://docs.python.org/3/library/inspect.html#inspect.Parameter.kind
+                let kind = param.getattr(intern!(py, "kind"))?;
+                let kind_name = kind.getattr(intern!(py, "name"))?;
+                let kind_name = kind_name.str()?;
+                let kind_name = kind_name.to_str()?;
+                if (kind_name != "POSITIONAL_OR_KEYWORD") && (kind_name != "POSITIONAL_ONLY") {
+                    return Err(PyErr::new::<PyTypeError, _>(
+                        format!("only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got {kind_name}")
+                    ));
+                }
+
+                // check default value
+                let default = param.getattr(intern!(py, "default"))?;
+                if !default.is(&type_parameter_empty) {
+                    return Err(PyErr::new::<PyTypeError, _>(
+                        format!("default parameter values are not supported, got {}", py_representation(&default))
+                    ));
+                }
+
+                // convert annotation type
                 let annotation = param.getattr(intern!(py, "annotation"))?;
                 let param: PythonNullableType = annotation
                     .extract()
                     .context::<PyTypeError>(format!("inspect parameter {}", i + 1), py)?;
+
                 PyResult::Ok(param)
             })
             .collect::<Result<Vec<_>, _>>()?;
