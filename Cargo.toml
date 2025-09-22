@@ -26,7 +26,7 @@ tar = "0.4.44"
 tempfile = "3.23.0"
 wasmtime = { version = "36.0.2", default-features = false, features = ["async", "cranelift"] }
 wasmtime-wasi = { version = "36.0.2", default-features = false }
-wit-bindgen = "0.44"
+wit-bindgen = "0.46"
 
 [workspace.lints.rust]
 missing_copy_implementations = "deny"
