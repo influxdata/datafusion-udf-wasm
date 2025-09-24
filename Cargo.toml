@@ -23,7 +23,7 @@ datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0" }
 tokio = { version = "1.47.1", default-features = false }
 pyo3 = { version = "0.26.0", default-features = false }
 tar = "0.4.44"
-tempfile = "3.22.0"
+tempfile = "3.23.0"
 wasmtime = { version = "36.0.2", default-features = false, features = ["async", "cranelift"] }
 wasmtime-wasi = { version = "36.0.2", default-features = false }
 wit-bindgen = "0.44"
