@@ -1,0 +1,20 @@
+[package]
+name = "datafusion-udf-wasm-bundle"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+example = ["dep:datafusion-udf-wasm-guest"]
+python = ["dep:datafusion-udf-wasm-python"]
+
+[dependencies]
+datafusion-udf-wasm-guest = { workspace = true, optional = true }
+datafusion-udf-wasm-python = { workspace = true, optional = true }
+
+[build-dependencies]
+serde_json = "1.0.145"

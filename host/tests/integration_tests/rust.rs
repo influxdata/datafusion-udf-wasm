@@ -12,14 +12,9 @@ use crate::integration_tests::test_utils::ColumnarValueExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_add_one() {
-    let data = tokio::fs::read(format!(
-        "{}/../target/wasm32-wasip2/debug/examples/add_one.wasm",
-        env!("CARGO_MANIFEST_DIR")
-    ))
-    .await
-    .unwrap();
-
-    let component = WasmComponentPrecompiled::new(data.into()).await.unwrap();
+    let component = WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_EXAMPLE.into())
+        .await
+        .unwrap();
     let mut udfs = WasmScalarUdf::new(&component, "".to_owned()).await.unwrap();
     assert_eq!(udfs.len(), 1);
     let udf = udfs.pop().unwrap();
