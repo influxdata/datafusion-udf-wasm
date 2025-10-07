@@ -25,6 +25,8 @@ use crate::{error::WasmToDataFusionResultExt, tokio_helpers::blocking_io};
 
 // unused-crate-dependencies false positives
 #[cfg(test)]
+use datafusion_udf_wasm_bundle as _;
+#[cfg(test)]
 use insta as _;
 
 mod bindings;
