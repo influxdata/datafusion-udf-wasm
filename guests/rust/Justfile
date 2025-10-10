@@ -1,7 +1,7 @@
 [private]
 build-add-one profile:
     @echo ::group::guests::rust::build-add-one {{profile}}
-    cargo +nightly build --target=wasm32-wasip2 --example=add_one --profile={{replace(profile, "debug", "dev")}}
+    cargo build --target=wasm32-wasip2 --example=add_one --profile={{replace(profile, "debug", "dev")}}
     @echo ::endgroup::
 
 # build `add-one` example in debug mode

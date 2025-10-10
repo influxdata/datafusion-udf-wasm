@@ -7,10 +7,10 @@ more information [on our website](https://www.influxdata.com/legal/cla/).
 ## Required Software
 
 ### Rust
-Install the `stable` [Rust] toolchain. The easiest way to do this is [rustup]. You also need the `nightly` toolchain for the `wasm32-wasip2` target. This can easily be done via (**note that this installs a NIGHTLY toolchain!**):
+Install the `stable` [Rust] toolchain. The easiest way to do this is [rustup]. You also the `wasm32-wasip2` target. This can easily be done via:
 
 ```console
-rustup toolchain install nightly --target=wasm32-wasip2
+rustup target add wasm32-wasip2
 ```
 
 ### Yamllint
@@ -74,10 +74,10 @@ error[E0463]: can't find crate for `core`
   = help: consider building the standard library from source with `cargo build -Zbuild-std`
 ```
 
-Then go back to ["Required Software > Rust"](#rust) and install the correct NIGHTLY toolchain. Note that the hint in the error message is wrong / incomplete. The correct way of installing the target for the nightly toolchain is -- which should NOT be required if you read & execute what is written in ["Required Software > Rust"](#rust):
+You should probably have followed ["Required Software > Rust"](#rust), but the compiler also tells you what to do:
 
 ```console
-rustup target add wasm32-wasip2 --toolchain=nightly
+rustup target add wasm32-wasip2
 ```
 
 ### Python Fails To Start / No module named `encodings`
