@@ -31,15 +31,7 @@ jobs:
         with:
           components: clippy, rustfmt
           toolchain: stable
-
-      - name: Install nightly toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9  # master
-        with:
-          toolchain: nightly
           targets: wasm32-wasip2
-
-      - name: Default to stable rust
-        run: rustup default stable
 
       - name: Cache
         uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1  # v2.8.1
