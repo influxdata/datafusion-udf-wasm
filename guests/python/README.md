@@ -14,7 +14,7 @@ just release
 ```
 
 ## Python Version
-We currently bundle [Python 3.14.0rc2].
+We currently bundle [Python 3.14.0].
 
 ## Python Standard Library
 In contrast to a normal Python installation there are a few notable public[^public] modules **missing** from the [Python Standard Library]:
@@ -199,7 +199,7 @@ There is NO I/O available that escapes the sandbox. The [Python Standard Library
 [`int`]: https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex
 [`Int64`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Int64
 [`Microsecond`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.TimeUnit.html#variant.Microsecond
-[Python 3.14.0rc2]: https://www.python.org/downloads/release/python-3140rc2/
+[Python 3.14.0]: https://www.python.org/downloads/release/python-3140
 [Python Standard Library]: https://docs.python.org/3/library/index.html
 [Scalar UDF]: https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.ScalarUDF.html
 [`str`]: https://docs.python.org/3/library/stdtypes.html#text-sequence-type-str

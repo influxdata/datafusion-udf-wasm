@@ -1,12 +1,12 @@
 PYTHON_VERSION_MAJOR := "3"
 PYTHON_VERSION_MINOR := "14"
-PYTHON_VERSION_MICRO := "0rc2"
+PYTHON_VERSION_MICRO := "0"
 
 WASI_SDK_VERSION_MAJOR := "24"
 WASI_SDK_VERSION_MINOR := "0"
 
-SHA256_PYTHON_SDK := "be233d6baf6a770550634fd6f51e12f15c1837455105c7e8b2a45efd3926805d"
-SHA256_PYTHON_SDK_BUILD := "d5240fdf3e2aedd5dcea9f60244060b2b6a7c4365066e2060402fd8f36fce229"
+SHA256_PYTHON_SDK := "54aa3e33ebb45e03b5c13b86ce8742b45bb94e394925622fa66c4700f6782979"
+SHA256_PYTHON_SDK_BUILD := "98e7cd352e512d1d2af6f999f4391df959eba1b213ef778646353620d697638a"
 SHA256_WASI_SDK_SYSROOT := "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99153a50888f08"
 
 PYTHON_VERSION_FULL := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR + "." + PYTHON_VERSION_MICRO
@@ -44,7 +44,7 @@ download-python-sdk:
         --tlsv1.2 \
         --location \
         --output "python-sdk.zip" \
-        "https://github.com/crepererum/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
+        "https://github.com/brettcannon/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
 
     curl \
         --fail \
@@ -54,7 +54,7 @@ download-python-sdk:
         --tlsv1.2 \
         --location \
         --output "build-python-sdk.zip" \
-        "https://github.com/crepererum/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/_build-python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
+        "https://github.com/brettcannon/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/_build-python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
 
     echo "{{SHA256_PYTHON_SDK}} python-sdk.zip" | sha256sum -c
     echo "{{SHA256_PYTHON_SDK_BUILD}} build-python-sdk.zip" | sha256sum -c
