@@ -29,6 +29,8 @@ use crate::{error::WasmToDataFusionResultExt, tokio_helpers::blocking_io};
 use datafusion_udf_wasm_bundle as _;
 #[cfg(test)]
 use insta as _;
+#[cfg(test)]
+use wiremock as _;
 
 mod bindings;
 mod conversion;
