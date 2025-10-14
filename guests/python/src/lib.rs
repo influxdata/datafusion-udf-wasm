@@ -199,16 +199,12 @@ impl ScalarUDFImpl for PythonScalarUDF {
                 match maybe_params {
                     ControlFlow::Continue(params) => {
                         let params = PyTuple::new(py, params).map_err(|e| {
-                            exec_datafusion_err!(
-                                "cannot create parameter tuple: {}",
-                                py_err_to_string(e, py)
-                            )
+                            exec_datafusion_err!("{}", py_err_to_string(e, py))
+                                .context("cannot create parameter tuple")
                         })?;
                         let rval = handle.call1(params).map_err(|e| {
-                            exec_datafusion_err!(
-                                "cannot call function: {}",
-                                py_err_to_string(e, py)
-                            )
+                            exec_datafusion_err!("{}", py_err_to_string(e, py))
+                                .context("cannot call function")
                         })?;
                         output_row_builder.push(rval)?;
                     }

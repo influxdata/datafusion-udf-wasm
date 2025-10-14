@@ -228,7 +228,7 @@ def foo(x: int) -> int:
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_exception() {
+async fn test_exception_direct() {
     const CODE: &str = "
 def foo(x: int) -> int:
     raise Exception('bar')
@@ -236,7 +236,63 @@ def foo(x: int) -> int:
 
     insta::assert_snapshot!(
         err(CODE).await,
-        @"Execution error: cannot call function: Exception: bar",
+        @r#"
+    This feature is not implemented: serialize error: cannot call function
+    caused by
+    Execution error: Traceback (most recent call last):
+      File "<string>", line 3, in foo
+    Exception: bar
+    "#,
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_exception_indirect() {
+    const CODE: &str = "
+def _inner1() -> None:
+    try:
+        _inner2()
+    except ValueError as e:
+        raise RuntimeError('foo') from e
+
+def _inner2() -> None:
+    _inner3()
+
+def _inner3() -> None:
+    raise ValueError('bar')
+
+
+def foo(x: int) -> int:
+    try:
+        _inner1()
+    except RuntimeError as e:
+        raise TypeError('baz') from e
+";
+
+    insta::assert_snapshot!(
+        err(CODE).await,
+        @r#"
+    This feature is not implemented: serialize error: cannot call function
+    caused by
+    Execution error: Traceback (most recent call last):
+      File "<string>", line 4, in _inner1
+      File "<string>", line 9, in _inner2
+      File "<string>", line 12, in _inner3
+    ValueError: bar
+
+    The above exception was the direct cause of the following exception:
+
+    Traceback (most recent call last):
+      File "<string>", line 17, in foo
+      File "<string>", line 6, in _inner1
+    RuntimeError: foo
+
+    The above exception was the direct cause of the following exception:
+
+    Traceback (most recent call last):
+      File "<string>", line 19, in foo
+    TypeError: baz
+    "#,
     );
 }
 
