@@ -16,6 +16,7 @@ use wasmtime::{
 use wasmtime_wasi::{
     DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe,
 };
+use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::{
     bindings::exports::datafusion_udf_wasm::udf::types as wit_types, error::DataFusionResultExt,
@@ -47,6 +48,9 @@ struct WasmStateImpl {
     /// WASI context.
     wasi_ctx: WasiCtx,
 
+    /// WASI HTTP context.
+    wasi_http_ctx: WasiHttpCtx,
+
     /// Resource tables.
     resource_table: ResourceTable,
 }
@@ -57,6 +61,7 @@ impl std::fmt::Debug for WasmStateImpl {
             root,
             stderr,
             wasi_ctx: _,
+            wasi_http_ctx: _,
             resource_table,
         } = self;
         f.debug_struct("WasmStateImpl")
@@ -74,6 +79,16 @@ impl WasiView for WasmStateImpl {
             ctx: &mut self.wasi_ctx,
             table: &mut self.resource_table,
         }
+    }
+}
+
+impl WasiHttpView for WasmStateImpl {
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
+        &mut self.wasi_http_ctx
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.resource_table
     }
 }
 
@@ -189,12 +204,15 @@ impl WasmScalarUdf {
             root,
             stderr,
             wasi_ctx,
+            wasi_http_ctx: WasiHttpCtx::new(),
             resource_table: ResourceTable::new(),
         };
         let mut store = Store::new(engine, state);
 
         let mut linker = Linker::new(engine);
         wasmtime_wasi::p2::add_to_linker_async(&mut linker).context("link WASI p2", None)?;
+        wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)
+            .context("link WASI p2 HTTP", None)?;
 
         let bindings = Arc::new(
             bindings::Datafusion::instantiate_async(&mut store, component, &linker)
