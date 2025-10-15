@@ -1723,7 +1723,7 @@ dependencies = [
 [[package]]
 name = "pyo3"
 version = "0.26.0"
-source = "git+https://github.com/crepererum/pyo3.git?rev=adeb7e52822e0d0e7fe7234e466cd95126ad70b0#adeb7e52822e0d0e7fe7234e466cd95126ad70b0"
+source = "git+https://github.com/crepererum/pyo3.git?rev=2a9f7e5b3d3203f3dc517c42352946bb6f352551#2a9f7e5b3d3203f3dc517c42352946bb6f352551"
 dependencies = [
  "libc",
  "memoffset",
@@ -1736,7 +1736,7 @@ dependencies = [
 [[package]]
 name = "pyo3-build-config"
 version = "0.26.0"
-source = "git+https://github.com/crepererum/pyo3.git?rev=adeb7e52822e0d0e7fe7234e466cd95126ad70b0#adeb7e52822e0d0e7fe7234e466cd95126ad70b0"
+source = "git+https://github.com/crepererum/pyo3.git?rev=2a9f7e5b3d3203f3dc517c42352946bb6f352551#2a9f7e5b3d3203f3dc517c42352946bb6f352551"
 dependencies = [
  "target-lexicon",
 ]
@@ -1744,7 +1744,7 @@ dependencies = [
 [[package]]
 name = "pyo3-ffi"
 version = "0.26.0"
-source = "git+https://github.com/crepererum/pyo3.git?rev=adeb7e52822e0d0e7fe7234e466cd95126ad70b0#adeb7e52822e0d0e7fe7234e466cd95126ad70b0"
+source = "git+https://github.com/crepererum/pyo3.git?rev=2a9f7e5b3d3203f3dc517c42352946bb6f352551#2a9f7e5b3d3203f3dc517c42352946bb6f352551"
 dependencies = [
  "libc",
  "pyo3-build-config",

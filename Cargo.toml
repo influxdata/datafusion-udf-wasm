@@ -59,9 +59,8 @@ private_intra_doc_links = "deny"
 datafusion-common = { git = "https://github.com/influxdata/arrow-datafusion.git", rev = "8347a71f62d4fef8d37548f22b93877170039357" }
 datafusion-expr = { git = "https://github.com/influxdata/arrow-datafusion.git", rev = "8347a71f62d4fef8d37548f22b93877170039357" }
 
-# patches to get wasi p2 to run without extra feature flags
-# See <https://github.com/rust-lang/rust/issues/130323>.
-pyo3 = { git = "https://github.com/crepererum/pyo3.git", rev = "adeb7e52822e0d0e7fe7234e466cd95126ad70b0" }
+# This is version 0.26.0 with https://github.com/PyO3/pyo3/pull/5368 backported.
+pyo3 = { git = "https://github.com/crepererum/pyo3.git", rev = "2a9f7e5b3d3203f3dc517c42352946bb6f352551" }
 
 # faster tests
 [profile.dev.package]

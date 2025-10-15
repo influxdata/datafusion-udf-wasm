@@ -113,7 +113,7 @@ download-wasi-sdk:
 [private]
 build-lib profile: download-python-sdk download-wasi-sdk
     @echo ::group::guests::python::build-lib {{profile}}
-    cargo +nightly build --target=wasm32-wasip2 --profile={{replace(profile, "debug", "dev")}}
+    cargo build --target=wasm32-wasip2 --profile={{replace(profile, "debug", "dev")}}
     @echo ::endgroup::
 
 # top-level entry point

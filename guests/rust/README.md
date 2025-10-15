@@ -1,10 +1,10 @@
 # Rust Guest
 
 ## Build
-Until <https://github.com/rust-lang/rust/issues/130323> is resolved, building the guest requires a nightly Rust toolchain with the `wasm32-wasi` target installed:
+Building the guest requires the `wasm32-wasi` target to be installed:
 
 ```console
-rustup toolchain install nightly --target=wasm32-wasip2
+rustup target add wasm32-wasip2
 ```
 
 Then build with:
