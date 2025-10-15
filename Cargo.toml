@@ -70,6 +70,7 @@ cranelift-entity.opt-level = 3
 cranelift-frontend.opt-level = 3
 regalloc2.opt-level = 3
 wasmparser.opt-level = 3
+wasmtime-internal-cranelift.opt-level = 3
 
 # faster insta snapshots
 insta.opt-level = 3
