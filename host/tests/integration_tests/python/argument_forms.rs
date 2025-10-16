@@ -63,10 +63,11 @@ def foo(x: int = 1) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `foo`
+    Error during planning: TypeError: default parameter values are not supported, got `1` of type `int`
 
-    Caused by:
-    TypeError: default parameter values are not supported, got `1` of type `int`
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `foo`
     ",
     );
 }
@@ -121,10 +122,11 @@ def foo(x: int = 1, /) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `foo`
+    Error during planning: TypeError: default parameter values are not supported, got `1` of type `int`
 
-    Caused by:
-    TypeError: default parameter values are not supported, got `1` of type `int`
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `foo`
     ",
     );
 }
@@ -182,10 +184,11 @@ def foo(*x: int) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `foo`
+    Error during planning: TypeError: only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got VAR_POSITIONAL
 
-    Caused by:
-    TypeError: only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got VAR_POSITIONAL
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `foo`
     ",
     );
 }
@@ -203,10 +206,11 @@ def foo(*, x: int) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `foo`
+    Error during planning: TypeError: only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got KEYWORD_ONLY
 
-    Caused by:
-    TypeError: only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got KEYWORD_ONLY
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `foo`
     ",
     );
 }
@@ -224,10 +228,11 @@ def foo(**x: int) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `foo`
+    Error during planning: TypeError: only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got VAR_KEYWORD
 
-    Caused by:
-    TypeError: only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got VAR_KEYWORD
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `foo`
     ",
     );
 }

@@ -8,11 +8,14 @@ async fn test_invalid_syntax() {
 
     insta::assert_snapshot!(
         err(CODE).await,
-        @r"
+        @r#"
     scalar_udfs
     caused by
-    Error during planning: SyntaxError: unmatched ')' (<string>, line 1)
-    ",
+    Error during planning:   File "<string>", line 1
+        )
+        ^
+    SyntaxError: unmatched ')'
+    "#,
     );
 }
 
@@ -28,13 +31,15 @@ def add_one(x: int):
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `add_one`
+    Error during planning: TypeError: type missing
 
-    Caused by:
+    The above exception was the direct cause of the following exception:
+
     TypeError: inspect return type
 
-    Caused by:
-    TypeError: type missing
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `add_one`
     ",
     );
 }
@@ -51,13 +56,15 @@ def add_one(x) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `add_one`
+    Error during planning: TypeError: type missing
 
-    Caused by:
+    The above exception was the direct cause of the following exception:
+
     TypeError: inspect parameter 1
 
-    Caused by:
-    TypeError: type missing
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `add_one`
     ",
     );
 }
@@ -74,13 +81,15 @@ def add_one(x: int | str) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `add_one`
+    Error during planning: TypeError: only unions with None are supported
 
-    Caused by:
+    The above exception was the direct cause of the following exception:
+
     TypeError: inspect parameter 1
 
-    Caused by:
-    TypeError: only unions with None are supported
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `add_one`
     ",
     );
 }
@@ -97,13 +106,15 @@ def add_one(x: int | str | None) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `add_one`
+    Error during planning: TypeError: only unions of length 2 are supported, got 3
 
-    Caused by:
+    The above exception was the direct cause of the following exception:
+
     TypeError: inspect parameter 1
 
-    Caused by:
-    TypeError: only unions of length 2 are supported, got 3
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `add_one`
     ",
     );
 }
@@ -120,13 +131,15 @@ def add_one(x: 1337) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `add_one`
+    Error during planning: TypeError: unknown annotation type: `1337` of type `int`
 
-    Caused by:
+    The above exception was the direct cause of the following exception:
+
     TypeError: inspect parameter 1
 
-    Caused by:
-    TypeError: unknown annotation type: `1337` of type `int`
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `add_one`
     ",
     );
 }
@@ -143,13 +156,15 @@ def add_one(x: list[int]) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `add_one`
+    Error during planning: TypeError: unknown annotation type: `list[int]` of type `GenericAlias`
 
-    Caused by:
+    The above exception was the direct cause of the following exception:
+
     TypeError: inspect parameter 1
 
-    Caused by:
-    TypeError: unknown annotation type: `list[int]` of type `GenericAlias`
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `add_one`
     ",
     );
 }
@@ -169,13 +184,15 @@ def add_one(x: C) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: inspect type of `add_one`
+    Error during planning: TypeError: unknown annotation type: `<class '__main__.C'>` of type `type`
 
-    Caused by:
+    The above exception was the direct cause of the following exception:
+
     TypeError: inspect parameter 1
 
-    Caused by:
-    TypeError: unknown annotation type: `<class '__main__.C'>` of type `type`
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `add_one`
     ",
     );
 }
@@ -188,11 +205,13 @@ raise Exception('foo')
 
     insta::assert_snapshot!(
         err(CODE).await,
-        @r"
+        @r#"
     scalar_udfs
     caused by
-    Error during planning: Exception: foo
-    ",
+    Error during planning: Traceback (most recent call last):
+      File "<string>", line 2, in <module>
+    Exception: foo
+    "#,
     );
 }
 
