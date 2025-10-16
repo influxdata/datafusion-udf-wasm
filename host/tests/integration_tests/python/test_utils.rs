@@ -4,7 +4,7 @@ use tokio::sync::OnceCell;
 
 static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
 
-async fn python_component() -> &'static WasmComponentPrecompiled {
+pub(crate) async fn python_component() -> &'static WasmComponentPrecompiled {
     COMPONENT
         .get_or_init(async || {
             let wasm_binary = tokio::fs::read(format!(
