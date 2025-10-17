@@ -31,6 +31,7 @@ mod bindings;
 mod conversion;
 mod error;
 mod tokio_helpers;
+pub mod udf_query;
 
 /// State of the WASM payload.
 struct WasmStateImpl {
@@ -344,3 +345,6 @@ impl ScalarUDFImpl for WasmScalarUdf {
         })
     }
 }
+
+// Re-export the UDF query functionality
+pub use udf_query::{UdfQuery, UdfQueryInvocator};
