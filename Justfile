@@ -8,37 +8,37 @@ default:
 check-rust-build: guests::rust::check-build guests::python::check-build
 
 # check Rust files via `cargo check`
-check-rust-check:
+check-rust-check $JUSTCHECK="1":
     @echo ::group::check-rust-check
     cargo check --workspace --all-features
     @echo ::endgroup::
 
 # check Rust files via `cargo clippy`
-check-rust-clippy:
+check-rust-clippy $JUSTCHECK="1":
     @echo ::group::check-rust-clippy
     cargo clippy --all-features --all-targets --workspace -- -D warnings
     @echo ::endgroup::
 
 # check Rust formatting
-check-rust-fmt:
+check-rust-fmt $JUSTCHECK="1":
     @echo ::group::check-rust-fmt
     cargo fmt --all -- --check
     @echo ::endgroup::
 
 # test Rust code
-check-rust-test $RUST_BACKTRACE="1": check-rust-build
+check-rust-test $RUST_BACKTRACE="1":
     @echo ::group::check-rust-test
     cargo test --all-features --workspace
     @echo ::endgroup::
 
 # build Rust docs
-check-rust-doc:
+check-rust-doc $JUSTCHECK="1":
     @echo ::group::check-rust-doc
     cargo doc --document-private-items --all-features --workspace
     @echo ::endgroup::
 
 # dry-run Rust benchmarks
-check-rust-bench: check-rust-build
+check-rust-bench:
     @echo ::group::check-rust-bench
     cargo bench --profile=dev --all-features --workspace -- --test
     @echo ::endgroup::

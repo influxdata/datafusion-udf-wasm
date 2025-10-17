@@ -20,5 +20,6 @@ wasmtime.workspace = true
 wasmtime-wasi.workspace = true
 
 [dev-dependencies]
+datafusion-udf-wasm-bundle = { workspace = true, features = ["example", "python"] }
 insta = "1.43.2"
 tokio = { workspace = true, features = ["fs", "macros"] }

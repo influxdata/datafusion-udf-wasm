@@ -7,6 +7,7 @@ license = "MIT OR Apache-2.0"
 [workspace]
 members = [
     "arrow2bytes",
+    "guests/bundle",
     "guests/python",
     "guests/rust",
     "host",
@@ -19,7 +20,9 @@ chrono = { version = "0.4.42", default-features = false }
 datafusion-common = { version = "49.0.1", default-features = false }
 datafusion-expr = { version = "49.0.1", default-features = false }
 datafusion-udf-wasm-arrow2bytes = { path = "arrow2bytes", version = "0.1.0" }
+datafusion-udf-wasm-bundle = { path = "guests/bundle", version = "0.1.0" }
 datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0" }
+datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0" }
 tokio = { version = "1.48.0", default-features = false }
 pyo3 = { version = "0.26.0", default-features = false }
 tar = { version = "0.4.44", default-features = false }
