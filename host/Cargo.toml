@@ -18,7 +18,9 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync"] }
 wasmtime.workspace = true
 wasmtime-wasi.workspace = true
+wasmtime-wasi-http.workspace = true
 
 [dev-dependencies]
 insta = "1.43.2"
 tokio = { workspace = true, features = ["fs", "macros"] }
+wiremock = "0.6.5"

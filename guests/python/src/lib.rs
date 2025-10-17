@@ -5,7 +5,7 @@
 //! [`pyo3`]: https://pyo3.rs/
 use std::any::Any;
 use std::ops::{ControlFlow, Range};
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use arrow::datatypes::DataType;
 use datafusion_common::{
@@ -23,6 +23,7 @@ use crate::signature::PythonFn;
 mod conversion;
 mod error;
 mod inspect;
+mod python_modules;
 mod signature;
 
 /// Supported Python version range.
@@ -271,15 +272,20 @@ fn root() -> Option<Vec<u8>> {
 ///
 /// [Python Standard Library]: https://docs.python.org/3/library/index.html
 fn init_python() {
-    Python::initialize();
+    static INIT: Once = Once::new();
 
-    Python::attach(|py| {
-        let version_info = py.version_info();
-        let version_tuple = (version_info.major, version_info.minor, version_info.patch);
-        assert!(
-            PYTHON_VERSION_RANGE.contains(&version_tuple),
-            "Unsupported python version: {version_tuple:?}, supported range is {PYTHON_VERSION_RANGE:?}",
-        );
+    INIT.call_once(|| {
+        python_modules::register();
+        Python::initialize();
+
+        Python::attach(|py| {
+            let version_info = py.version_info();
+            let version_tuple = (version_info.major, version_info.minor, version_info.patch);
+            assert!(
+                PYTHON_VERSION_RANGE.contains(&version_tuple),
+                "Unsupported python version: {version_tuple:?}, supported range is {PYTHON_VERSION_RANGE:?}",
+            );
+        });
     });
 }
 
