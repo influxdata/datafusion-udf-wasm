@@ -22,6 +22,9 @@ Install [cargo-deny] to check dependencies.
 ### Just
 Install [just] to easily run all the tests/scripts.
 
+### Python
+Install [Python] to set up the environment for the [Python] guest.
+
 
 ## Checks
 There is one "run everything" [just] recipe:

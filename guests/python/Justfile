@@ -16,6 +16,9 @@ DOWNLOADS_DIR := source_directory() / "downloads"
 export PYO3_CROSS_PYTHON_VERSION := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR
 export PYO3_CROSS_LIB_DIR := DOWNLOADS_DIR / "python-sdk"
 
+PYTHON_TMP_VENV := DOWNLOADS_DIR / "venv"
+PYTHON_SITE_PACKAGES := PYO3_CROSS_LIB_DIR / "lib" / "python" + PYO3_CROSS_PYTHON_VERSION / "site-packages"
+
 export WASI_SDK_LINK_PATH := DOWNLOADS_DIR / "wasi-sysroot" / "lib" / "wasm32-wasip2"
 
 # download pre-built Python WASM SDK
@@ -33,6 +36,8 @@ download-python-sdk:
     # skip if already downloaded
     if [ -d python-sdk ]; then
         echo "python sdk already present"
+        set +x
+        echo ::endgroup::
         exit 0
     fi
 
@@ -90,6 +95,8 @@ download-wasi-sdk:
     # skip if already downloaded
     if [ -d wasi-sysroot ]; then
         echo "wasi sdk already present"
+        set +x
+        echo ::endgroup::
         exit 0
     fi
 
@@ -111,7 +118,34 @@ download-wasi-sdk:
     echo ::endgroup::
 
 [private]
-build-lib profile: download-python-sdk download-wasi-sdk
+python-site-packages: download-python-sdk
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo ::group::guests::python::python-site-packages
+    set -x
+
+    # skip if already downloaded
+    if [ -d "{{PYTHON_TMP_VENV}}" ]; then
+        echo "site-packages already set up"
+        set +x
+        echo ::endgroup::
+        exit 0
+    fi
+
+    python -m venv "{{PYTHON_TMP_VENV}}"
+    "{{PYTHON_TMP_VENV}}"/bin/pip install \
+        --disable-pip-version-check \
+        --ignore-installed \
+        --isolated \
+        --requirement=requirements.txt \
+        --target="{{PYTHON_SITE_PACKAGES}}"
+
+    set +x
+    echo ::endgroup::
+
+[private]
+build-lib profile: download-python-sdk download-wasi-sdk python-site-packages
     @echo ::group::guests::python::build-lib {{profile}}
     cargo build --target=wasm32-wasip2 --profile={{replace(profile, "debug", "dev")}}
     @echo ::endgroup::

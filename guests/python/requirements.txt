@@ -1,0 +1,2 @@
+# That's https://github.com/urllib3/urllib3/pull/3593 as a wheel.
+urllib3 @ https://github.com/crepererum/urllib3/releases/download/2.5.100/urllib3-2.5.100-py3-none-any.whl --hash=sha256:b48be99c923c989e8db2a41a21f2511d830a7b7e99bfde24ae7214baadf7daaf
