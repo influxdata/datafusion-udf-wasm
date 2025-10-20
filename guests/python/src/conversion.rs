@@ -336,7 +336,7 @@ impl<'py> ArrayBuilder<'py> for Float64Builder {
 impl<'py> ArrayBuilder<'py> for Int64Builder {
     fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
         // in Python, `bool` is a sub-class of int we should probably not silently cast bools to integers
-        let val = val.downcast_exact::<PyInt>().map_err(|_| {
+        let val = val.cast_exact::<PyInt>().map_err(|_| {
             exec_datafusion_err!("expected `int` but got {}", py_representation(&val))
         })?;
         let val: i64 = val.extract().map_err(|_| {
@@ -378,7 +378,7 @@ impl<'py> ArrayBuilder<'py> for StringBuilder {
 
 impl<'py> ArrayBuilder<'py> for TimestampMicrosecondBuilder {
     fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
-        let val = val.downcast_exact::<PyDateTime>().map_err(|_| {
+        let val = val.cast_exact::<PyDateTime>().map_err(|_| {
             exec_datafusion_err!("expected `datetime` but got {}", py_representation(&val))
         })?;
         if let Some(tzinfo) = val.get_tzinfo() {

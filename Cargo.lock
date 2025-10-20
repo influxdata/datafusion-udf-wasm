@@ -1792,8 +1792,9 @@ dependencies = [
 
 [[package]]
 name = "pyo3"
-version = "0.26.0"
-source = "git+https://github.com/crepererum/pyo3.git?rev=2a9f7e5b3d3203f3dc517c42352946bb6f352551#2a9f7e5b3d3203f3dc517c42352946bb6f352551"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa8e48c12afdeb26aa4be4e5c49fb5e11c3efa0878db783a960eea2b9ac6dd19"
 dependencies = [
  "libc",
  "memoffset",
@@ -1805,16 +1806,18 @@ dependencies = [
 
 [[package]]
 name = "pyo3-build-config"
-version = "0.26.0"
-source = "git+https://github.com/crepererum/pyo3.git?rev=2a9f7e5b3d3203f3dc517c42352946bb6f352551#2a9f7e5b3d3203f3dc517c42352946bb6f352551"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc1989dbf2b60852e0782c7487ebf0b4c7f43161ffe820849b56cf05f945cee1"
 dependencies = [
  "target-lexicon",
 ]
 
 [[package]]
 name = "pyo3-ffi"
-version = "0.26.0"
-source = "git+https://github.com/crepererum/pyo3.git?rev=2a9f7e5b3d3203f3dc517c42352946bb6f352551#2a9f7e5b3d3203f3dc517c42352946bb6f352551"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c808286da7500385148930152e54fb6883452033085bf1f857d85d4e82ca905c"
 dependencies = [
  "libc",
  "pyo3-build-config",

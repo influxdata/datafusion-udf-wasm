@@ -3,7 +3,7 @@ use std::ffi::CString;
 
 use datafusion_common::{DataFusionError, error::Result as DataFusionResult};
 use pyo3::{
-    Bound, FromPyObject, PyAny, PyErr, PyResult, Python,
+    Borrowed, Bound, FromPyObject, PyAny, PyErr, PyResult, Python,
     exceptions::PyTypeError,
     intern,
     types::{PyAnyMethods, PyDictMethods, PyModuleMethods, PyStringMethods, PyTypeMethods},
@@ -14,8 +14,10 @@ use crate::{
     signature::{PythonFn, PythonFnSignature, PythonNullableType, PythonType},
 };
 
-impl<'py> FromPyObject<'py> for PythonType {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for PythonType {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
         let py = ob.py();
 
         // https://docs.python.org/3/library/builtins.html
@@ -42,14 +44,16 @@ impl<'py> FromPyObject<'py> for PythonType {
         } else {
             Err(PyErr::new::<PyTypeError, _>(format!(
                 "unknown annotation type: {}",
-                py_representation(ob)
+                py_representation(ob.as_any())
             )))
         }
     }
 }
 
-impl<'py> FromPyObject<'py> for PythonNullableType {
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+impl<'a, 'py> FromPyObject<'a, 'py> for PythonNullableType {
+    type Error = PyErr;
+
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
         let py = ob.py();
 
         // https://docs.python.org/3/library/inspect.html
@@ -105,11 +109,13 @@ impl<'py> FromPyObject<'py> for PythonNullableType {
     }
 }
 
-impl<'py> FromPyObject<'py> for PythonFnSignature {
+impl<'a, 'py> FromPyObject<'a, 'py> for PythonFnSignature {
+    type Error = PyErr;
+
     /// Convert [`inspect.Signature`] to [`PythonFnSignature`].
     ///
     /// [`inspect.Signature`]: https://docs.python.org/3/library/inspect.html#inspect.Signature
-    fn extract_bound(ob: &Bound<'py, PyAny>) -> PyResult<Self> {
+    fn extract(ob: Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
         let py = ob.py();
 
         // https://docs.python.org/3/library/inspect.html
