@@ -24,7 +24,7 @@ datafusion-udf-wasm-bundle = { path = "guests/bundle", version = "0.1.0" }
 datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0" }
 datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0" }
 tokio = { version = "1.48.0", default-features = false }
-pyo3 = { version = "0.26.0", default-features = false }
+pyo3 = { version = "0.27.0", default-features = false }
 tar = { version = "0.4.44", default-features = false }
 tempfile = { version = "3.23.0", default-features = false }
 wasmtime = { version = "37.0.2", default-features = false, features = ["async", "cranelift"] }
@@ -62,9 +62,6 @@ private_intra_doc_links = "deny"
 # See https://github.com/influxdata/arrow-datafusion/pull/72
 datafusion-common = { git = "https://github.com/influxdata/arrow-datafusion.git", rev = "8347a71f62d4fef8d37548f22b93877170039357" }
 datafusion-expr = { git = "https://github.com/influxdata/arrow-datafusion.git", rev = "8347a71f62d4fef8d37548f22b93877170039357" }
-
-# This is version 0.26.0 with https://github.com/PyO3/pyo3/pull/5368 backported.
-pyo3 = { git = "https://github.com/crepererum/pyo3.git", rev = "2a9f7e5b3d3203f3dc517c42352946bb6f352551" }
 
 # faster tests
 [profile.dev.package]
