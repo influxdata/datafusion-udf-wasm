@@ -7,14 +7,7 @@ static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
 async fn python_component() -> &'static WasmComponentPrecompiled {
     COMPONENT
         .get_or_init(async || {
-            let wasm_binary = tokio::fs::read(format!(
-                "{}/../target/wasm32-wasip2/debug/datafusion_udf_wasm_python.wasm",
-                env!("CARGO_MANIFEST_DIR")
-            ))
-            .await
-            .unwrap();
-
-            WasmComponentPrecompiled::new(wasm_binary.into())
+            WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_PYTHON.into())
                 .await
                 .unwrap()
         })

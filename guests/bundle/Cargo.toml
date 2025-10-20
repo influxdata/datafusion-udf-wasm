@@ -1,0 +1,21 @@
+[package]
+name = "datafusion-udf-wasm-bundle"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+example = ["dep:datafusion-udf-wasm-guest"]
+python = ["dep:datafusion-udf-wasm-python"]
+
+[build-dependencies]
+# these need to be marked as build dependencies so the build script reruns whenever they change
+datafusion-udf-wasm-guest = { workspace = true, optional = true }
+datafusion-udf-wasm-python = { workspace = true, optional = true }
+
+# the actual build-time dependencies
+serde_json = "1.0.145"
