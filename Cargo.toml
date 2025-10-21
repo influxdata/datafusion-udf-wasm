@@ -28,7 +28,7 @@ pyo3 = { version = "0.27.0", default-features = false, features = ["macros"] }
 tar = { version = "0.4.44", default-features = false }
 tempfile = { version = "3.23.0", default-features = false }
 wasip2 = { version = "1" }
-wasmtime = { version = "37.0.2", default-features = false, features = ["async", "cranelift"] }
+wasmtime = { version = "38.0.1", default-features = false, features = ["async", "cranelift"] }
 wasmtime-wasi = { version = "37.0.0", default-features = false }
 wasmtime-wasi-http = { version = "37.0.0", default-features = false, features = ["default-send-request"] }
 wit-bindgen = { version = "0.46", default-features = false, features = ["macros"] }
