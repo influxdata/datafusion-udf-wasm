@@ -24,3 +24,4 @@ wasmtime-wasi-http.workspace = true
 datafusion-udf-wasm-bundle = { workspace = true, features = ["example", "python"] }
 insta = "1.43.2"
 tokio = { workspace = true, features = ["fs", "macros"] }
+wiremock = "0.6.5"

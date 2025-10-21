@@ -18,6 +18,7 @@ datafusion-common.workspace = true
 datafusion-expr.workspace = true
 datafusion-udf-wasm-guest.workspace = true
 pyo3.workspace = true
+wasip2.workspace = true
 
 [build-dependencies]
 tar.workspace = true
