@@ -18,7 +18,7 @@ pub(crate) fn register() {
 /// Note that we currently only implement the interfaces that we need.
 ///
 /// # Why
-/// When ones compiles [CPython] for [WASI], it links against [`wasi-libc`]. This provides essential I/O features like
+/// When one compiles [CPython] for [WASI], it links against [`wasi-libc`]. This provides essential I/O features like
 /// stdout. However there are some [WASI] features that are NOT found in a traditional libc interface like
 /// [`wasi-http`]. These interfaces however are super helpful to embed WebAssembly payloads. Currently [CPython] also
 /// has no special [WASI] module that would expose these interfaces. Instead, the ecosystem kinda converged towards
@@ -73,7 +73,7 @@ pub(crate) fn register() {
 /// - Some more hacking made the linker pass but then the [wasmtime] rejected the result because it was seemingly
 ///   invalid.
 ///
-/// So I have up.
+/// So I gave up.
 ///
 /// # Implementation
 /// This mostly just bridges Python to the respective interface in [`wasip2`]. We could likely write an auto-generator
