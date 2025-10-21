@@ -6,12 +6,18 @@ updates:
     schedule:
       interval: "daily"
     open-pull-requests-limit: 10
-    ignore:
-      # We want to update arrow and datafusion manually
-      - dependency-name: "arrow"
-      - dependency-name: "arrow-*"
-      - dependency-name: "datafusion"
-      - dependency-name: "datafusion-*"
+    # NOTE: groups are "match first", and "unmatched dependencies have individual PRs"
+    groups:
+      arrow-and-datafusion:
+        patterns:
+          - "arrow"
+          - "arrow-*"
+          - "datafusion"
+          - "datafusion-*"
+      wasmtime:
+        patterns:
+          - "wasmtime"
+          - "wasmtime-*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
