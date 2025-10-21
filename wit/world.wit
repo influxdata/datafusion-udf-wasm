@@ -2,12 +2,17 @@ package datafusion-udf-wasm:udf@0.1.0;
 
 interface types {
     // TODO: add more variants
-    variant data-fusion-error {
+    variant data-fusion-error-kind {
         not-implemented(string),
         internal(string),
         plan(string),
         configuration(string),
         execution(string),
+    }
+
+    record data-fusion-error {
+        context: list<string>,
+        kind: data-fusion-error-kind,
     }
 
     record data-type {

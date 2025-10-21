@@ -11,15 +11,22 @@ use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
 
 impl From<wit_types::DataFusionError> for DataFusionError {
     fn from(value: wit_types::DataFusionError) -> Self {
-        use wit_types::DataFusionError;
+        use wit_types::DataFusionErrorKind;
 
-        match value {
-            DataFusionError::NotImplemented(msg) => Self::NotImplemented(msg),
-            DataFusionError::Internal(msg) => Self::Internal(msg),
-            DataFusionError::Plan(msg) => Self::Plan(msg),
-            DataFusionError::Configuration(msg) => Self::Configuration(msg),
-            DataFusionError::Execution(msg) => Self::Execution(msg),
+        let mut e = match value.kind {
+            DataFusionErrorKind::NotImplemented(msg) => Self::NotImplemented(msg),
+            DataFusionErrorKind::Internal(msg) => Self::Internal(msg),
+            DataFusionErrorKind::Plan(msg) => Self::Plan(msg),
+            DataFusionErrorKind::Configuration(msg) => Self::Configuration(msg),
+            DataFusionErrorKind::Execution(msg) => Self::Execution(msg),
+        };
+
+        // context chain is stored "top-level to inner-level", but we assemble the types inner-to-outer
+        for context in value.context.into_iter().rev() {
+            e = e.context(context);
         }
+
+        e
     }
 }
 

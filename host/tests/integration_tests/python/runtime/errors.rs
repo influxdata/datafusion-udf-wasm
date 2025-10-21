@@ -237,7 +237,7 @@ def foo(x: int) -> int:
     insta::assert_snapshot!(
         err(CODE).await,
         @r#"
-    This feature is not implemented: serialize error: cannot call function
+    cannot call function
     caused by
     Execution error: Traceback (most recent call last):
       File "<string>", line 3, in foo
@@ -272,7 +272,7 @@ def foo(x: int) -> int:
     insta::assert_snapshot!(
         err(CODE).await,
         @r#"
-    This feature is not implemented: serialize error: cannot call function
+    cannot call function
     caused by
     Execution error: Traceback (most recent call last):
       File "<string>", line 4, in _inner1
