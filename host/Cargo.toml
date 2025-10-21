@@ -13,6 +13,8 @@ arrow.workspace = true
 datafusion-common.workspace = true
 datafusion-expr.workspace = true
 datafusion-udf-wasm-arrow2bytes.workspace = true
+http.workspace = true
+hyper.workspace = true
 tar.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync"] }
