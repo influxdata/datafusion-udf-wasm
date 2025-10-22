@@ -1,15 +1,24 @@
 //! Error handling helpers.
 use pyo3::{exceptions::PyValueError, prelude::*};
 
+/// Implements [`Display`](std::fmt::Display) by just forwarding it to [`Debug`](std::fmt::Debug).
+macro_rules! display_like_debug {
+    ($struct:ident) => {
+        impl ::std::fmt::Display for $struct {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                ::std::fmt::Debug::fmt(self, f)
+            }
+        }
+    };
+}
+
+pub(crate) use display_like_debug;
+
 /// A resource (handle) was already used/moved/closed.
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct ResourceMoved;
 
-impl std::fmt::Display for ResourceMoved {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ResourceMoved")
-    }
-}
+display_like_debug!(ResourceMoved);
 
 impl std::error::Error for ResourceMoved {}
 

@@ -3,7 +3,7 @@ use pyo3::{BoundObject, exceptions::PyValueError, prelude::*};
 
 mod error;
 
-use error::{ResourceMoved, ResourceMovedOptionExt};
+use error::{ResourceMoved, ResourceMovedOptionExt, display_like_debug};
 
 /// Register python modules.
 ///
@@ -288,17 +288,21 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct StreamError_LastOperationFailed {
                 value: Py<Error>,
             }
 
+            display_like_debug!(StreamError_LastOperationFailed);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct StreamError_Closed;
+
+            display_like_debug!(StreamError_Closed);
 
             #[derive(Debug, IntoPyObject)]
             pub(crate) enum StreamError {
@@ -342,12 +346,14 @@ mod wit_world {
             }
 
             #[pyclass]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[derive(Debug, Clone)]
             struct DnsErrorPayload {
                 rcode: Option<String>,
                 info_code: Option<u16>,
             }
+
+            display_like_debug!(DnsErrorPayload);
 
             impl From<wasip2::http::types::DnsErrorPayload> for DnsErrorPayload {
                 fn from(p: wasip2::http::types::DnsErrorPayload) -> Self {
@@ -360,267 +366,345 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_DnsTimeout;
 
+            display_like_debug!(ErrorCode_DnsTimeout);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_DnsError {
                 value: DnsErrorPayload,
             }
 
+            display_like_debug!(ErrorCode_DnsError);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_DestinationNotFound;
 
+            display_like_debug!(ErrorCode_DestinationNotFound);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_DestinationUnavailable;
 
+            display_like_debug!(ErrorCode_DestinationUnavailable);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_DestinationIpProhibited;
 
+            display_like_debug!(ErrorCode_DestinationIpProhibited);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_DestinationIpUnroutable;
 
+            display_like_debug!(ErrorCode_DestinationIpUnroutable);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_ConnectionRefused;
 
+            display_like_debug!(ErrorCode_ConnectionRefused);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_ConnectionTerminated;
 
+            display_like_debug!(ErrorCode_ConnectionTerminated);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_ConnectionTimeout;
 
+            display_like_debug!(ErrorCode_ConnectionTimeout);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_ConnectionReadTimeout;
 
+            display_like_debug!(ErrorCode_ConnectionReadTimeout);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_ConnectionWriteTimeout;
 
+            display_like_debug!(ErrorCode_ConnectionWriteTimeout);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_ConnectionLimitReached;
 
+            display_like_debug!(ErrorCode_ConnectionLimitReached);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_TlsProtocolError;
 
+            display_like_debug!(ErrorCode_TlsProtocolError);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_TlsCertificateError;
 
+            display_like_debug!(ErrorCode_TlsCertificateError);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_TlsAlertReceived {
                 value: TlsAlertReceivedPayload,
             }
 
+            display_like_debug!(ErrorCode_TlsAlertReceived);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpRequestDenied;
 
+            display_like_debug!(ErrorCode_HttpRequestDenied);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpRequestLengthRequired;
 
+            display_like_debug!(ErrorCode_HttpRequestLengthRequired);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpRequestBodySize {
                 value: Option<u64>,
             }
 
+            display_like_debug!(ErrorCode_HttpRequestBodySize);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpRequestMethodInvalid;
 
+            display_like_debug!(ErrorCode_HttpRequestMethodInvalid);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpRequestUriInvalid;
 
+            display_like_debug!(ErrorCode_HttpRequestUriInvalid);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpRequestUriTooLong;
 
+            display_like_debug!(ErrorCode_HttpRequestUriTooLong);
+
             #[pyclass]
             #[derive(Debug, Clone, Copy)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpRequestHeaderSectionSize {
                 value: Option<u32>,
             }
 
+            display_like_debug!(ErrorCode_HttpRequestHeaderSectionSize);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpRequestHeaderSize {
                 value: Option<FieldSizePayload>,
             }
 
+            display_like_debug!(ErrorCode_HttpRequestHeaderSize);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpRequestTrailerSectionSize {
                 value: Option<u32>,
             }
 
+            display_like_debug!(ErrorCode_HttpRequestTrailerSectionSize);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpRequestTrailerSize {
                 value: FieldSizePayload,
             }
 
+            display_like_debug!(ErrorCode_HttpRequestTrailerSize);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpResponseIncomplete;
 
+            display_like_debug!(ErrorCode_HttpResponseIncomplete);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpResponseHeaderSectionSize {
                 value: Option<u32>,
             }
 
+            display_like_debug!(ErrorCode_HttpResponseHeaderSectionSize);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpResponseHeaderSize {
                 value: FieldSizePayload,
             }
 
+            display_like_debug!(ErrorCode_HttpResponseHeaderSize);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpResponseBodySize {
                 value: Option<u64>,
             }
 
+            display_like_debug!(ErrorCode_HttpResponseBodySize);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpResponseTrailerSectionSize {
                 value: Option<u32>,
             }
 
+            display_like_debug!(ErrorCode_HttpResponseTrailerSectionSize);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpResponseTrailerSize {
                 value: FieldSizePayload,
             }
 
+            display_like_debug!(ErrorCode_HttpResponseTrailerSize);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpResponseTransferCoding {
                 value: Option<String>,
             }
 
+            display_like_debug!(ErrorCode_HttpResponseTransferCoding);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpResponseContentCoding {
                 value: Option<String>,
             }
 
+            display_like_debug!(ErrorCode_HttpResponseContentCoding);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpResponseTimeout;
 
+            display_like_debug!(ErrorCode_HttpResponseTimeout);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpUpgradeFailed;
 
+            display_like_debug!(ErrorCode_HttpUpgradeFailed);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_HttpProtocolError;
 
+            display_like_debug!(ErrorCode_HttpProtocolError);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_LoopDetected;
 
+            display_like_debug!(ErrorCode_LoopDetected);
+
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_ConfigurationError;
 
+            display_like_debug!(ErrorCode_ConfigurationError);
+
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             #[expect(non_camel_case_types)]
             pub(crate) struct ErrorCode_InternalError {
                 value: Option<String>,
             }
+
+            display_like_debug!(ErrorCode_InternalError);
 
             #[derive(Debug, IntoPyObject)]
             pub(crate) enum ErrorCode {
@@ -870,11 +954,13 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             struct FieldSizePayload {
                 field_name: Option<String>,
                 field_size: Option<u32>,
             }
+
+            display_like_debug!(FieldSizePayload);
 
             impl From<wasip2::http::types::FieldSizePayload> for FieldSizePayload {
                 fn from(p: wasip2::http::types::FieldSizePayload) -> Self {
@@ -949,21 +1035,27 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct HeaderError_InvalidSyntax;
 
-            #[pyclass]
-            #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
-            #[expect(non_camel_case_types)]
-            struct HeaderError_Forbidden;
+            display_like_debug!(HeaderError_InvalidSyntax);
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
+            #[expect(non_camel_case_types)]
+            struct HeaderError_Forbidden;
+
+            display_like_debug!(HeaderError_Forbidden);
+
+            #[pyclass]
+            #[derive(Debug, Default, Clone, Copy)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct HeaderError_Immutable;
+
+            display_like_debug!(HeaderError_Immutable);
 
             #[derive(Debug, IntoPyObject)]
             enum HeaderError {
@@ -1052,9 +1144,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Method_Get;
+
+            display_like_debug!(Method_Get);
 
             #[pymethods]
             impl Method_Get {
@@ -1066,9 +1160,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Method_Head;
+
+            display_like_debug!(Method_Head);
 
             #[pymethods]
             impl Method_Head {
@@ -1080,9 +1176,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Method_Post;
+
+            display_like_debug!(Method_Post);
 
             #[pymethods]
             impl Method_Post {
@@ -1094,9 +1192,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Method_Put;
+
+            display_like_debug!(Method_Put);
 
             #[pymethods]
             impl Method_Put {
@@ -1108,9 +1208,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Method_Delete;
+
+            display_like_debug!(Method_Delete);
 
             #[pymethods]
             impl Method_Delete {
@@ -1122,9 +1224,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Method_Connect;
+
+            display_like_debug!(Method_Connect);
 
             #[pymethods]
             impl Method_Connect {
@@ -1136,9 +1240,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Method_Options;
+
+            display_like_debug!(Method_Options);
 
             #[pymethods]
             impl Method_Options {
@@ -1150,9 +1256,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Method_Trace;
+
+            display_like_debug!(Method_Trace);
 
             #[pymethods]
             impl Method_Trace {
@@ -1164,9 +1272,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone, Copy)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Method_Patch;
+
+            display_like_debug!(Method_Patch);
 
             #[pymethods]
             impl Method_Patch {
@@ -1178,11 +1288,13 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Default, Clone)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Method_Other {
                 value: String,
             }
+
+            display_like_debug!(Method_Other);
 
             #[pymethods]
             impl Method_Other {
@@ -1333,9 +1445,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Scheme_Http;
+
+            display_like_debug!(Scheme_Http);
 
             #[pymethods]
             impl Scheme_Http {
@@ -1347,9 +1461,11 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Scheme_Https;
+
+            display_like_debug!(Scheme_Https);
 
             #[pymethods]
             impl Scheme_Https {
@@ -1361,11 +1477,13 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen)]
+            #[pyo3(frozen, str)]
             #[expect(non_camel_case_types)]
             struct Scheme_Other {
                 value: String,
             }
+
+            display_like_debug!(Scheme_Other);
 
             #[pymethods]
             impl Scheme_Other {
@@ -1397,11 +1515,13 @@ mod wit_world {
 
             #[pyclass]
             #[derive(Debug, Clone)]
-            #[pyo3(frozen, get_all)]
+            #[pyo3(frozen, get_all, str)]
             struct TlsAlertReceivedPayload {
                 alert_id: Option<u8>,
                 alert_message: Option<String>,
             }
+
+            display_like_debug!(TlsAlertReceivedPayload);
 
             impl From<wasip2::http::types::TlsAlertReceivedPayload> for TlsAlertReceivedPayload {
                 fn from(p: wasip2::http::types::TlsAlertReceivedPayload) -> Self {
@@ -1430,16 +1550,32 @@ mod wit_world {
 
         #[pyclass]
         #[derive(Debug)]
-        #[pyo3(frozen, get_all, name = "Ok")]
+        #[pyo3(frozen, get_all, name = "Ok", str)]
         pub(crate) struct OkWrapper {
             value: Py<PyAny>,
         }
 
+        impl std::fmt::Display for OkWrapper {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let Self { value } = self;
+
+                f.debug_struct("Ok").field("value", value).finish()
+            }
+        }
+
         #[pyclass]
         #[derive(Debug, IntoPyObject)]
-        #[pyo3(extends = PyValueError, frozen, get_all, name = "Err")]
+        #[pyo3(extends = PyValueError, frozen, get_all, name = "Err", str)]
         pub(crate) struct ErrWrapper {
             value: Py<PyAny>,
+        }
+
+        impl std::fmt::Display for ErrWrapper {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                let Self { value } = self;
+
+                f.debug_struct("Err").field("value", value).finish()
+            }
         }
 
         impl ErrWrapper {
