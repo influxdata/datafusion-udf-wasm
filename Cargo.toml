@@ -24,7 +24,7 @@ datafusion-udf-wasm-bundle = { path = "guests/bundle", version = "0.1.0" }
 datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0" }
 datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0" }
 tokio = { version = "1.48.0", default-features = false }
-pyo3 = { version = "0.27.0", default-features = false, features = ["macros"] }
+pyo3 = { version = "0.27.1", default-features = false, features = ["macros"] }
 tar = { version = "0.4.44", default-features = false }
 tempfile = { version = "3.23.0", default-features = false }
 wasip2 = { version = "1" }
