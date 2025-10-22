@@ -10,6 +10,7 @@ use datafusion_udf_wasm_host::{
     WasmPermissions, WasmScalarUdf,
     http::{AllowCertainHttpRequests, Matcher},
 };
+use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
 
 use crate::integration_tests::{
@@ -128,63 +129,161 @@ def perform_request(url: str) -> str:
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_urllib3_happy_path() {
+async fn test_integration() {
     const CODE: &str = r#"
 import urllib3
 
-def perform_request(method: str, url: str) -> str:
-    resp = urllib3.request(method, url)
+def _headers_str_to_dict(headers: str) -> dict[str, str]:
+    headers_dct = {}
+    if headers is not None:
+        for k_v in headers.split(";"):
+            [k, v] = k_v.split(":")
+            headers_dct[k] = v
+    return headers_dct
+
+def _headers_dict_to_str(headers: dict[str, str]) -> str:
+    headers = ";".join((
+        f"{k}:{v}"
+        for k, v in headers.items()
+        if k not in ["content-length", "content-type", "date"]
+    ))
+    if not headers:
+        return "n/a"
+    else:
+        return headers
+
+def perform_request(method: str, url: str, headers: str | None) -> str:
+    try:
+        resp = urllib3.request(
+            method=method,
+            url=url,
+            headers=_headers_str_to_dict(headers),
+        )
+    except Exception as e:
+        return f"ERR: {e}"
 
     resp_status = resp.status
     resp_body = resp.data.decode("utf-8")
+    resp_headers = _headers_dict_to_str(resp.headers)
 
-    return f"status={resp_status} body='{resp_body}'"
+    return f"OK: status={resp_status} headers={resp_headers} body='{resp_body}'"
 "#;
 
-    let cases = [
+    let mut cases = vec![
         TestCase {
-            resp_body: "case_1",
+            resp: Ok(TestResponse {
+                body: "case_1",
+                ..Default::default()
+            }),
             ..Default::default()
         },
         TestCase {
-            resp_body: "case_2",
             method: "POST",
+            resp: Ok(TestResponse {
+                body: "case_2",
+                ..Default::default()
+            }),
             ..Default::default()
         },
         TestCase {
-            resp_body: "case_3",
-            path: "/foo",
+            path: "/foo".to_owned(),
+            resp: Ok(TestResponse {
+                body: "case_3",
+                ..Default::default()
+            }),
             ..Default::default()
         },
         TestCase {
-            resp_body: "case_4",
-            path: "/201",
-            resp_status: 500,
+            path: "/500".to_owned(),
+            resp: Ok(TestResponse {
+                status: 500,
+                body: "case_4",
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        TestCase {
+            path: "/headers_in".to_owned(),
+            requ_headers: vec![
+                ("foo".to_owned(), &["bar"]),
+                ("multi".to_owned(), &["some", "thing"]),
+            ],
+            resp: Ok(TestResponse {
+                body: "case_5",
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        TestCase {
+            path: "/headers_out".to_owned(),
+            resp: Ok(TestResponse {
+                headers: vec![
+                    ("foo".to_owned(), &["bar"]),
+                    ("multi".to_owned(), &["some", "thing"]),
+                ],
+                body: "case_6",
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        TestCase {
+            base: Some("http://test.com"),
+            resp: Err("HTTPConnectionPool(host='test.com', port=80): Max retries exceeded with url: / (Caused by ProtocolError('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpRequestDenied')))".to_owned()),
             ..Default::default()
         },
     ];
+    cases.extend(DEFAULT_FORBIDDEN_HEADERS.iter().map(|h| TestCase {
+        path: format!("/forbidden_header/{h}"),
+        requ_headers: vec![(h.to_string(), &["foo"])],
+        resp: Err("Err { value: HeaderError_Forbidden }".to_owned()),
+        ..Default::default()
+    }));
 
     let server = MockServer::start().await;
     let mut permissions = AllowCertainHttpRequests::default();
 
     let mut builder_method = StringBuilder::new();
     let mut builder_url = StringBuilder::new();
+    let mut builder_headers = StringBuilder::new();
     let mut builder_result = StringBuilder::new();
 
     for case in &cases {
-        case.mock().mount(&server).await;
+        if let Some(mock) = case.mock(&server) {
+            mock.mount(&server).await;
+        }
         permissions.allow(case.matcher(&server));
 
         let TestCase {
+            base,
             method,
             path,
-            resp_body,
-            resp_status,
+            requ_headers,
+            resp,
         } = case;
 
         builder_method.append_value(method);
-        builder_url.append_value(format!("{}{}", server.uri(), path));
-        builder_result.append_value(format!("status={resp_status} body='{resp_body}'"));
+        builder_url.append_value(format!(
+            "{}{}",
+            base.map(|b| b.to_owned()).unwrap_or_else(|| server.uri()),
+            path
+        ));
+        builder_headers.append_option(headers_to_string(requ_headers));
+
+        match resp {
+            Ok(TestResponse {
+                status,
+                headers,
+                body,
+            }) => {
+                let resp_headers = headers_to_string(headers).unwrap_or_else(|| "n/a".to_owned());
+                builder_result.append_value(format!(
+                    "OK: status={status} headers={resp_headers} body='{body}'"
+                ));
+            }
+            Err(e) => {
+                builder_result.append_value(format!("ERR: {e}"));
+            }
+        }
     }
 
     let udfs = WasmScalarUdf::new(
@@ -202,10 +301,12 @@ def perform_request(method: str, url: str) -> str:
             args: vec![
                 ColumnarValue::Array(Arc::new(builder_method.finish())),
                 ColumnarValue::Array(Arc::new(builder_url.finish())),
+                ColumnarValue::Array(Arc::new(builder_headers.finish())),
             ],
             arg_fields: vec![
                 Arc::new(Field::new("method", DataType::Utf8, true)),
                 Arc::new(Field::new("url", DataType::Utf8, true)),
+                Arc::new(Field::new("headers", DataType::Utf8, true)),
             ],
             number_rows: cases.len(),
             return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
@@ -216,20 +317,39 @@ def perform_request(method: str, url: str) -> str:
     assert_eq!(array.as_ref(), &builder_result.finish() as &dyn Array,);
 }
 
+#[derive(Debug, Clone)]
+struct TestResponse {
+    status: u16,
+    headers: Vec<(String, &'static [&'static str])>,
+    body: &'static str,
+}
+
+impl Default for TestResponse {
+    fn default() -> Self {
+        Self {
+            status: 200,
+            headers: vec![],
+            body: "",
+        }
+    }
+}
+
 struct TestCase {
+    base: Option<&'static str>,
     method: &'static str,
-    path: &'static str,
-    resp_body: &'static str,
-    resp_status: u16,
+    path: String,
+    requ_headers: Vec<(String, &'static [&'static str])>,
+    resp: Result<TestResponse, String>,
 }
 
 impl Default for TestCase {
     fn default() -> Self {
         Self {
+            base: None,
             method: "GET",
-            path: "/",
-            resp_body: "",
-            resp_status: 200,
+            path: "/".to_owned(),
+            requ_headers: vec![],
+            resp: Ok(TestResponse::default()),
         }
     }
 }
@@ -243,17 +363,83 @@ impl TestCase {
         }
     }
 
-    fn mock(&self) -> Mock {
+    fn mock(&self, server: &MockServer) -> Option<Mock> {
         let Self {
+            base,
             method,
             path,
-            resp_body,
-            resp_status,
+            requ_headers,
+            resp,
         } = self;
+        if base.is_some() {
+            return None;
+        }
 
-        Mock::given(matchers::method(method))
-            .and(matchers::path(*path))
-            .respond_with(ResponseTemplate::new(*resp_status).set_body_string(*resp_body))
-            .expect(1)
+        let TestResponse {
+            status: resp_status,
+            headers: resp_headers,
+            body: resp_body,
+        } = resp.clone().unwrap_or_default();
+
+        let mut builder = Mock::given(matchers::method(method))
+            .and(matchers::path(path.as_str()))
+            .and(NoForbiddenHeaders::new(
+                server.address().ip().to_string(),
+                server.address().port(),
+            ));
+
+        for (k, v) in requ_headers {
+            builder = builder.and(matchers::headers(k.as_str(), v.to_vec()));
+        }
+
+        let mock = builder
+            .respond_with(
+                ResponseTemplate::new(resp_status)
+                    .set_body_string(resp_body)
+                    .append_headers(resp_headers.iter().map(|(k, v)| (k, v.join(",")))),
+            )
+            .expect(resp.is_ok() as u64);
+        Some(mock)
+    }
+}
+
+fn headers_to_string(headers: &[(String, &[&str])]) -> Option<String> {
+    if headers.is_empty() {
+        None
+    } else {
+        let headers = headers
+            .iter()
+            .map(|(k, v)| format!("{k}:{}", v.join(",")))
+            .collect::<Vec<_>>();
+        Some(headers.join(";"))
+    }
+}
+
+struct NoForbiddenHeaders {
+    host: String,
+    port: u16,
+}
+
+impl NoForbiddenHeaders {
+    fn new(host: String, port: u16) -> Self {
+        Self { host, port }
+    }
+}
+
+impl wiremock::Match for NoForbiddenHeaders {
+    fn matches(&self, request: &wiremock::Request) -> bool {
+        // "host" is part of the forbidden headers that the client is not supposed to use, but it is set by our own
+        // host HTTP lib
+        let Some(host_val) = request.headers.get(http::header::HOST) else {
+            return false;
+        };
+        if host_val.to_str().expect("always a string") != format!("{}:{}", self.host, self.port) {
+            return false;
+        }
+
+        DEFAULT_FORBIDDEN_HEADERS
+            .iter()
+            .filter(|h| *h != http::header::HOST)
+            .all(|h| !request.headers.contains_key(h))
     }
 }
