@@ -4,6 +4,7 @@
 //! [DataFusion]: https://datafusion.apache.org/
 use std::{any::Any, ops::DerefMut, sync::Arc};
 
+use ::http::HeaderName;
 use arrow::datatypes::DataType;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature};
@@ -17,7 +18,10 @@ use wasmtime_wasi_http::{
     HttpResult, WasiHttpCtx, WasiHttpView,
     bindings::http::types::ErrorCode as HttpErrorCode,
     body::HyperOutgoingBody,
-    types::{HostFutureIncomingResponse, OutgoingRequestConfig, default_send_request_handler},
+    types::{
+        DEFAULT_FORBIDDEN_HEADERS, HostFutureIncomingResponse, OutgoingRequestConfig,
+        default_send_request_handler,
+    },
 };
 
 use crate::{
@@ -111,9 +115,12 @@ impl WasiHttpView for WasmStateImpl {
 
     fn send_request(
         &mut self,
-        request: hyper::Request<HyperOutgoingBody>,
+        mut request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
     ) -> HttpResult<HostFutureIncomingResponse> {
+        // Python `requests` sends this so we allow it but later drop it from the actual request.
+        request.headers_mut().remove(hyper::header::CONNECTION);
+
         // technically we could return an error straight away, but `urllib3` doesn't handle that super well, so we
         // create a future and validate the error in there (before actually starting the request of course)
 
@@ -132,6 +139,15 @@ impl WasiHttpView for WasmStateImpl {
         });
 
         Ok(HostFutureIncomingResponse::pending(handle))
+    }
+
+    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
+        // Python `requests` sends this so we allow it but later drop it from the actual request.
+        if name == hyper::header::CONNECTION {
+            return false;
+        }
+
+        DEFAULT_FORBIDDEN_HEADERS.contains(name)
     }
 }
 
