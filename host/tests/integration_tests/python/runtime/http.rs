@@ -132,13 +132,37 @@ async fn test_urllib3_happy_path() {
     const CODE: &str = r#"
 import urllib3
 
-def perform_request(method: str, url: str) -> str:
-    resp = urllib3.request(method, url)
+def _headers_str_to_dict(headers: str) -> dict[str, str]:
+    headers_dct = {}
+    if headers is not None:
+        for k_v in headers.split(";"):
+            [k, v] = k_v.split(":")
+            headers_dct[k] = v
+    return headers_dct
+
+def _headers_dict_to_str(headers: dict[str, str]) -> str:
+    headers = ";".join((
+        f"{k}:{v}"
+        for k, v in headers.items()
+        if k not in ["content-length", "content-type", "date"]
+    ))
+    if not headers:
+        return "n/a"
+    else:
+        return headers
+
+def perform_request(method: str, url: str, headers: str | None) -> str:
+    resp = urllib3.request(
+        method=method,
+        url=url,
+        headers=_headers_str_to_dict(headers),
+    )
 
     resp_status = resp.status
     resp_body = resp.data.decode("utf-8")
+    resp_headers = _headers_dict_to_str(resp.headers)
 
-    return f"status={resp_status} body='{resp_body}'"
+    return f"status={resp_status} headers={resp_headers} body='{resp_body}'"
 "#;
 
     let cases = [
@@ -162,6 +186,18 @@ def perform_request(method: str, url: str) -> str:
             resp_status: 500,
             ..Default::default()
         },
+        TestCase {
+            resp_body: "case_5",
+            path: "/headers_in",
+            requ_headers: &[("foo", &["bar"]), ("multi", &["some", "thing"])],
+            ..Default::default()
+        },
+        TestCase {
+            resp_body: "case_5",
+            path: "/headers_out",
+            resp_headers: &[("foo", &["bar"]), ("multi", &["some", "thing"])],
+            ..Default::default()
+        },
     ];
 
     let server = MockServer::start().await;
@@ -169,6 +205,7 @@ def perform_request(method: str, url: str) -> str:
 
     let mut builder_method = StringBuilder::new();
     let mut builder_url = StringBuilder::new();
+    let mut builder_headers = StringBuilder::new();
     let mut builder_result = StringBuilder::new();
 
     for case in &cases {
@@ -178,13 +215,20 @@ def perform_request(method: str, url: str) -> str:
         let TestCase {
             method,
             path,
-            resp_body,
+            requ_headers,
             resp_status,
+            resp_headers,
+            resp_body,
         } = case;
+
+        let resp_headers = headers_to_string(resp_headers).unwrap_or_else(|| "n/a".to_owned());
 
         builder_method.append_value(method);
         builder_url.append_value(format!("{}{}", server.uri(), path));
-        builder_result.append_value(format!("status={resp_status} body='{resp_body}'"));
+        builder_headers.append_option(headers_to_string(requ_headers));
+        builder_result.append_value(format!(
+            "status={resp_status} headers={resp_headers} body='{resp_body}'"
+        ));
     }
 
     let udfs = WasmScalarUdf::new(
@@ -202,10 +246,12 @@ def perform_request(method: str, url: str) -> str:
             args: vec![
                 ColumnarValue::Array(Arc::new(builder_method.finish())),
                 ColumnarValue::Array(Arc::new(builder_url.finish())),
+                ColumnarValue::Array(Arc::new(builder_headers.finish())),
             ],
             arg_fields: vec![
                 Arc::new(Field::new("method", DataType::Utf8, true)),
                 Arc::new(Field::new("url", DataType::Utf8, true)),
+                Arc::new(Field::new("headers", DataType::Utf8, true)),
             ],
             number_rows: cases.len(),
             return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
@@ -219,8 +265,10 @@ def perform_request(method: str, url: str) -> str:
 struct TestCase {
     method: &'static str,
     path: &'static str,
-    resp_body: &'static str,
+    requ_headers: &'static [(&'static str, &'static [&'static str])],
     resp_status: u16,
+    resp_headers: &'static [(&'static str, &'static [&'static str])],
+    resp_body: &'static str,
 }
 
 impl Default for TestCase {
@@ -228,8 +276,10 @@ impl Default for TestCase {
         Self {
             method: "GET",
             path: "/",
-            resp_body: "",
+            requ_headers: &[],
             resp_status: 200,
+            resp_headers: &[],
+            resp_body: "",
         }
     }
 }
@@ -247,13 +297,36 @@ impl TestCase {
         let Self {
             method,
             path,
-            resp_body,
+            requ_headers,
             resp_status,
+            resp_headers,
+            resp_body,
         } = self;
 
-        Mock::given(matchers::method(method))
-            .and(matchers::path(*path))
-            .respond_with(ResponseTemplate::new(*resp_status).set_body_string(*resp_body))
+        let mut builder = Mock::given(matchers::method(method)).and(matchers::path(*path));
+
+        for (k, v) in *requ_headers {
+            builder = builder.and(matchers::headers(*k, v.to_vec()));
+        }
+
+        builder
+            .respond_with(
+                ResponseTemplate::new(*resp_status)
+                    .set_body_string(*resp_body)
+                    .append_headers(resp_headers.iter().map(|(k, v)| (*k, v.join(",")))),
+            )
             .expect(1)
+    }
+}
+
+fn headers_to_string(headers: &[(&str, &[&str])]) -> Option<String> {
+    if headers.is_empty() {
+        None
+    } else {
+        let headers = headers
+            .iter()
+            .map(|(k, v)| format!("{k}:{}", v.join(",")))
+            .collect::<Vec<_>>();
+        Some(headers.join(";"))
     }
 }
