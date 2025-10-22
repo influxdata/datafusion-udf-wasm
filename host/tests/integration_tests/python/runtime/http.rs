@@ -152,27 +152,28 @@ def _headers_dict_to_str(headers: dict[str, str]) -> str:
     else:
         return headers
 
-def perform_request(method: str, url: str, headers: str | None) -> str:
+def perform_request(method: str, url: str, headers: str | None, body: str | None) -> str:
     try:
         resp = urllib3.request(
             method=method,
             url=url,
             headers=_headers_str_to_dict(headers),
+            body=body,
         )
     except Exception as e:
         return f"ERR: {e}"
 
     resp_status = resp.status
-    resp_body = resp.data.decode("utf-8")
+    resp_body = f"'{resp.data.decode("utf-8")}'" if resp.data else "n/a"
     resp_headers = _headers_dict_to_str(resp.headers)
 
-    return f"OK: status={resp_status} headers={resp_headers} body='{resp_body}'"
+    return f"OK: status={resp_status} headers={resp_headers} body={resp_body}"
 "#;
 
     let mut cases = vec![
         TestCase {
             resp: Ok(TestResponse {
-                body: "case_1",
+                body: Some("case_1"),
                 ..Default::default()
             }),
             ..Default::default()
@@ -180,7 +181,7 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
         TestCase {
             method: "POST",
             resp: Ok(TestResponse {
-                body: "case_2",
+                body: Some("case_2"),
                 ..Default::default()
             }),
             ..Default::default()
@@ -188,7 +189,7 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
         TestCase {
             path: "/foo".to_owned(),
             resp: Ok(TestResponse {
-                body: "case_3",
+                body: Some("case_3"),
                 ..Default::default()
             }),
             ..Default::default()
@@ -197,7 +198,7 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
             path: "/500".to_owned(),
             resp: Ok(TestResponse {
                 status: 500,
-                body: "case_4",
+                body: Some("case_4"),
                 ..Default::default()
             }),
             ..Default::default()
@@ -209,7 +210,7 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
                 ("multi".to_owned(), &["some", "thing"]),
             ],
             resp: Ok(TestResponse {
-                body: "case_5",
+                body: Some("case_5"),
                 ..Default::default()
             }),
             ..Default::default()
@@ -221,7 +222,24 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
                     ("foo".to_owned(), &["bar"]),
                     ("multi".to_owned(), &["some", "thing"]),
                 ],
-                body: "case_6",
+                body: Some("case_6"),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        TestCase {
+            path: "/body_in".to_owned(),
+            requ_body: Some("foo"),
+            resp: Ok(TestResponse {
+                body: Some("case_7"),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        TestCase {
+            path: "/no_body_out".to_owned(),
+            resp: Ok(TestResponse {
+                body: None,
                 ..Default::default()
             }),
             ..Default::default()
@@ -245,6 +263,7 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
     let mut builder_method = StringBuilder::new();
     let mut builder_url = StringBuilder::new();
     let mut builder_headers = StringBuilder::new();
+    let mut builder_body = StringBuilder::new();
     let mut builder_result = StringBuilder::new();
 
     for case in &cases {
@@ -258,6 +277,7 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
             method,
             path,
             requ_headers,
+            requ_body,
             resp,
         } = case;
 
@@ -268,6 +288,7 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
             path
         ));
         builder_headers.append_option(headers_to_string(requ_headers));
+        builder_body.append_option(requ_body.map(|s| s.to_owned()));
 
         match resp {
             Ok(TestResponse {
@@ -275,10 +296,12 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
                 headers,
                 body,
             }) => {
-                let resp_headers = headers_to_string(headers).unwrap_or_else(|| "n/a".to_owned());
-                builder_result.append_value(format!(
-                    "OK: status={status} headers={resp_headers} body='{body}'"
-                ));
+                let headers = headers_to_string(headers).unwrap_or_else(|| "n/a".to_owned());
+                let body = body
+                    .map(|s| format!("'{s}'"))
+                    .unwrap_or_else(|| "n/a".to_owned());
+                builder_result
+                    .append_value(format!("OK: status={status} headers={headers} body={body}"));
             }
             Err(e) => {
                 builder_result.append_value(format!("ERR: {e}"));
@@ -302,11 +325,13 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
                 ColumnarValue::Array(Arc::new(builder_method.finish())),
                 ColumnarValue::Array(Arc::new(builder_url.finish())),
                 ColumnarValue::Array(Arc::new(builder_headers.finish())),
+                ColumnarValue::Array(Arc::new(builder_body.finish())),
             ],
             arg_fields: vec![
                 Arc::new(Field::new("method", DataType::Utf8, true)),
                 Arc::new(Field::new("url", DataType::Utf8, true)),
                 Arc::new(Field::new("headers", DataType::Utf8, true)),
+                Arc::new(Field::new("body", DataType::Utf8, true)),
             ],
             number_rows: cases.len(),
             return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
@@ -321,7 +346,7 @@ def perform_request(method: str, url: str, headers: str | None) -> str:
 struct TestResponse {
     status: u16,
     headers: Vec<(String, &'static [&'static str])>,
-    body: &'static str,
+    body: Option<&'static str>,
 }
 
 impl Default for TestResponse {
@@ -329,7 +354,7 @@ impl Default for TestResponse {
         Self {
             status: 200,
             headers: vec![],
-            body: "",
+            body: None,
         }
     }
 }
@@ -339,6 +364,7 @@ struct TestCase {
     method: &'static str,
     path: String,
     requ_headers: Vec<(String, &'static [&'static str])>,
+    requ_body: Option<&'static str>,
     resp: Result<TestResponse, String>,
 }
 
@@ -349,6 +375,7 @@ impl Default for TestCase {
             method: "GET",
             path: "/".to_owned(),
             requ_headers: vec![],
+            requ_body: None,
             resp: Ok(TestResponse::default()),
         }
     }
@@ -369,6 +396,7 @@ impl TestCase {
             method,
             path,
             requ_headers,
+            requ_body,
             resp,
         } = self;
         if base.is_some() {
@@ -392,12 +420,18 @@ impl TestCase {
             builder = builder.and(matchers::headers(k.as_str(), v.to_vec()));
         }
 
+        if let Some(requ_body) = requ_body {
+            builder = builder.and(matchers::body_string(*requ_body));
+        }
+
+        let mut resp_template = ResponseTemplate::new(resp_status)
+            .append_headers(resp_headers.iter().map(|(k, v)| (k, v.join(","))));
+        if let Some(resp_body) = resp_body {
+            resp_template = resp_template.set_body_string(resp_body);
+        }
+
         let mock = builder
-            .respond_with(
-                ResponseTemplate::new(resp_status)
-                    .set_body_string(resp_body)
-                    .append_headers(resp_headers.iter().map(|(k, v)| (k, v.join(",")))),
-            )
+            .respond_with(resp_template)
             .expect(resp.is_ok() as u64);
         Some(mock)
     }
