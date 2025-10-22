@@ -1,21 +1,62 @@
 use std::sync::Arc;
 
 use arrow::{
-    array::{Array, StringBuilder},
+    array::{Array, StringArray, StringBuilder},
     datatypes::{DataType, Field},
 };
 use datafusion_common::ScalarValue;
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
 use datafusion_udf_wasm_host::{
     WasmPermissions, WasmScalarUdf,
-    http::{AllowCertainHttpRequests, Matcher},
+    http::{AllowCertainHttpRequests, HttpRequestValidator, Matcher},
 };
+use http::Method;
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
 
 use crate::integration_tests::{
     python::test_utils::{python_component, python_scalar_udf},
     test_utils::ColumnarValueExt,
 };
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_requests() {
+    const CODE: &str = r#"
+import requests
+
+def perform_request(url: str) -> str:
+    return requests.get(url).text
+"#;
+
+    let server = MockServer::start().await;
+    Mock::given(matchers::any())
+        .respond_with(ResponseTemplate::new(200).set_body_string("hello world!"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut permissions = AllowCertainHttpRequests::new();
+    permissions.allow(Matcher {
+        method: Method::GET,
+        host: server.address().ip().to_string().into(),
+        port: server.address().port(),
+    });
+    let udf = python_udf_with_permissions(CODE, permissions).await;
+
+    let array = udf
+        .invoke_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+        })
+        .unwrap()
+        .unwrap_array();
+
+    assert_eq!(
+        array.as_ref(),
+        &StringArray::from_iter([Some("hello world!".to_owned()),]) as &dyn Array,
+    );
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_urllib3_unguarded_fail() {
@@ -249,15 +290,7 @@ def perform_request(method: str, url: str, headers: str | None, body: str | None
         ));
     }
 
-    let udfs = WasmScalarUdf::new(
-        python_component().await,
-        &WasmPermissions::new().with_http(permissions),
-        CODE.to_string(),
-    )
-    .await
-    .unwrap();
-    assert_eq!(udfs.len(), 1);
-    let udf = udfs.into_iter().next().unwrap();
+    let udf = python_udf_with_permissions(CODE, permissions).await;
 
     let array = udf
         .invoke_with_args(ScalarFunctionArgs {
@@ -356,4 +389,19 @@ fn headers_to_string(headers: &[(&str, &[&str])]) -> Option<String> {
             .collect::<Vec<_>>();
         Some(headers.join(";"))
     }
+}
+
+async fn python_udf_with_permissions<V>(code: &'static str, permissions: V) -> WasmScalarUdf
+where
+    V: HttpRequestValidator,
+{
+    let udfs = WasmScalarUdf::new(
+        python_component().await,
+        &WasmPermissions::new().with_http(permissions),
+        code.to_owned(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(udfs.len(), 1);
+    udfs.into_iter().next().unwrap()
 }
