@@ -105,8 +105,10 @@ impl<'a> UdfQueryInvocator<'a> {
 
         for statement in statements {
             match statement {
-                Statement::Statement(s) => parse_statement(&s, &mut code)?,
-                _ => sql_statements.push(statement.to_string()),
+                Statement::Statement(s) => parse_statement(*s, &mut code, &mut sql_statements)?,
+                _ => {
+                    // do nothing
+                }
             }
         }
 
@@ -120,14 +122,22 @@ impl<'a> UdfQueryInvocator<'a> {
             return Err(DataFusionError::Plan("no SQL query found".to_string()));
         }
 
-        let sql_query = sql_statements.join(";\n");
+        let sql_query = sql_statements
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>()
+            .join(";\n");
 
         Ok((code, sql_query))
     }
 }
 
 /// Parse a single SQL statement to extract Python UDF code
-fn parse_statement(stmt: &SqlStatement, code: &mut String) -> DataFusionResult<()> {
+fn parse_statement(
+    stmt: SqlStatement,
+    code: &mut String,
+    sql: &mut Vec<SqlStatement>,
+) -> DataFusionResult<()> {
     match stmt {
         SqlStatement::CreateFunction(cf) => {
             let function_body = cf.function_body.as_ref();
@@ -149,7 +159,10 @@ fn parse_statement(stmt: &SqlStatement, code: &mut String) -> DataFusionResult<(
                 )),
             }
         }
-        _ => Ok(()),
+        _ => {
+            sql.push(stmt);
+            Ok(())
+        }
     }
 }
 
