@@ -815,6 +815,7 @@ dependencies = [
 name = "datafusion-udf-wasm-host"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "arrow",
  "datafusion-common",
  "datafusion-expr",
@@ -829,6 +830,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
+ "wasmtime-wasi-io",
  "wiremock",
 ]
 
