@@ -3,10 +3,9 @@
 use datafusion::prelude::SessionContext;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_expr::ScalarUDF;
-use datafusion_sql::sqlparser::ast::Statement;
-use datafusion_sql::sqlparser::dialect::GenericDialect;
-use datafusion_sql::sqlparser::parser::Parser;
-use sqlparser::ast::{CreateFunctionBody, Expr, Value};
+use datafusion_sql::parser::{DFParserBuilder, Statement};
+use sqlparser::ast::{CreateFunctionBody, Expr, Statement as SqlStatement, Value};
+use sqlparser::dialect::dialect_from_str;
 
 use crate::{WasmComponentPrecompiled, WasmScalarUdf};
 
@@ -31,14 +30,14 @@ pub struct UdfQueryInvocator<'a> {
     /// DataFusion session context
     session_ctx: SessionContext,
     /// Pre-compiled Python WASM component
-    python_component: &'a WasmComponentPrecompiled,
+    component: &'a WasmComponentPrecompiled,
 }
 
 impl std::fmt::Debug for UdfQueryInvocator<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UdfQueryInvocator")
             .field("session_ctx", &"SessionContext { ... }")
-            .field("python_component", &self.python_component)
+            .field("python_component", &self.component)
             .finish()
     }
 }
@@ -47,11 +46,11 @@ impl<'a> UdfQueryInvocator<'a> {
     /// Registers the UDF query in DataFusion
     pub async fn new(
         session_ctx: SessionContext,
-        python_component: &'a WasmComponentPrecompiled,
+        component: &'a WasmComponentPrecompiled,
     ) -> DataFusionResult<Self> {
         Ok(Self {
             session_ctx,
-            python_component,
+            component,
         })
     }
 
@@ -59,23 +58,18 @@ impl<'a> UdfQueryInvocator<'a> {
     pub async fn invoke(&mut self, udf_query: UdfQuery) -> DataFusionResult<Vec<Vec<String>>> {
         let query_str = udf_query.query();
 
-        // Parse the combined query to extract CREATE FUNCTION and SELECT statements
-        let (python_code, sql_query) = self.parse_combined_query(query_str)?;
+        let (code, sql_query) = self.parse_combined_query(query_str)?;
 
-        // Create Python UDFs from the code
-        let udfs = WasmScalarUdf::new(self.python_component, python_code).await?;
+        let udfs = WasmScalarUdf::new(self.component, code).await?;
 
-        // Register UDFs with DataFusion
         for udf in udfs {
             let scalar_udf = ScalarUDF::new_from_impl(udf);
             self.session_ctx.register_udf(scalar_udf);
         }
 
-        // Execute the SQL query
         let df = self.session_ctx.sql(&sql_query).await?;
         let batches = df.collect().await?;
 
-        // Convert results to strings for easy testing/display
         let mut results = Vec::new();
         for batch in batches {
             for row_idx in 0..batch.num_rows() {
@@ -94,78 +88,95 @@ impl<'a> UdfQueryInvocator<'a> {
 
     /// Parse the combined query to extract Python code and SQL
     fn parse_combined_query(&self, query: &str) -> DataFusionResult<(String, String)> {
-        let dialect = GenericDialect {};
-        let statements = Parser::parse_sql(&dialect, query)
-            .map_err(|e| DataFusionError::Plan(format!("Failed to parse SQL: {}", e)))?;
+        let task_ctx = self.session_ctx.task_ctx();
+        let options = task_ctx.session_config().options();
 
-        let mut python_code = String::new();
+        let dialect = dialect_from_str(options.sql_parser.dialect.clone()).expect("valid dialect");
+        let recursion_limit = options.sql_parser.recursion_limit;
+
+        let statements = DFParserBuilder::new(query)
+            .with_dialect(dialect.as_ref())
+            .with_recursion_limit(recursion_limit)
+            .build()?
+            .parse_statements()?;
+
+        let mut code = String::new();
         let mut sql_statements = Vec::new();
 
         for statement in statements {
             match statement {
-                Statement::CreateFunction(create_function) => {
-                    let function_body = create_function.function_body;
-                    let language = create_function.language;
-
-                    // Verify it's a Python function
-                    if let Some(lang) = language
-                        && lang.to_string().to_lowercase() != "python"
-                    {
-                        return Err(DataFusionError::Plan(format!(
-                            "Only Python language is supported, got: {}",
-                            lang
-                        )));
-                    }
-
-                    // Extract Python code from function body
-                    if let Some(body) = function_body {
-                        match body {
-                            CreateFunctionBody::AsAfterOptions(e)
-                            | CreateFunctionBody::AsBeforeOptions(e) => match e {
-                                Expr::Value(v) => match v.value {
-                                    Value::SingleQuotedString(s) | Value::DoubleQuotedString(s) => {
-                                        python_code.push_str(&s);
-                                        python_code.push('\n');
-                                    }
-                                    _ => {
-                                        return Err(DataFusionError::Plan(
-                                            "Function body must be a string".to_string(),
-                                        ));
-                                    }
-                                },
-                                _ => {
-                                    return Err(DataFusionError::Plan(
-                                        "Function body must be a string".to_string(),
-                                    ));
-                                }
-                            },
-                            _ => {
-                                return Err(DataFusionError::Plan(
-                                    "Unsupported function body type".to_string(),
-                                ));
-                            }
-                        }
-                    }
-                }
-                _ => {
-                    // All other statements (like SELECT) are treated as SQL
-                    sql_statements.push(statement.to_string());
-                }
+                Statement::Statement(s) => parse_statement(&s, &mut code)?,
+                _ => sql_statements.push(statement.to_string()),
             }
         }
 
-        if python_code.is_empty() {
+        if code.is_empty() {
             return Err(DataFusionError::Plan(
-                "No Python UDF found in query".to_string(),
+                "no Python UDF found in query".to_string(),
             ));
         }
 
         if sql_statements.is_empty() {
-            return Err(DataFusionError::Plan("No SQL query found".to_string()));
+            return Err(DataFusionError::Plan("no SQL query found".to_string()));
         }
 
         let sql_query = sql_statements.join(";\n");
 
-        Ok((python_code, sql_query))
+        Ok((code, sql_query))
+    }
+}
+
+/// Parse a single SQL statement to extract Python UDF code
+fn parse_statement(stmt: &SqlStatement, code: &mut String) -> DataFusionResult<()> {
+    match stmt {
+        SqlStatement::CreateFunction(cf) => {
+            let function_body = cf.function_body.as_ref();
+            let language = cf.language.as_ref();
+
+            if let Some(lang) = language
+                && lang.to_string().to_lowercase() != "python"
+            {
+                return Err(DataFusionError::Plan(format!(
+                    "only Python is supported, got: {}",
+                    lang
+                )));
+            }
+
+            match function_body {
+                Some(body) => extract_function_body(body, code),
+                None => Err(DataFusionError::Plan(
+                    "function body is required for Python UDFs".to_string(),
+                )),
+            }
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Extracts the code from the function body
+fn extract_function_body(body: &CreateFunctionBody, code: &mut String) -> DataFusionResult<()> {
+    match body {
+        CreateFunctionBody::AsAfterOptions(e) | CreateFunctionBody::AsBeforeOptions(e) => {
+            let s = expression_into_str(e)?;
+            code.push_str(s);
+            code.push('\n');
+            Ok(())
+        }
+        CreateFunctionBody::Return(_) => Err(DataFusionError::Plan(
+            "`RETURN` function body not supported for Python UDFs".to_string(),
+        )),
+    }
+}
+
+/// Convert an expression into a string
+fn expression_into_str(expr: &Expr) -> DataFusionResult<&str> {
+    match expr {
+        Expr::Value(v) => match &v.value {
+            Value::SingleQuotedString(s) | Value::DoubleQuotedString(s) => Ok(s),
+            _ => Err(DataFusionError::Plan("expected string value".to_string())),
+        },
+        _ => Err(DataFusionError::Plan(
+            "expected value expression".to_string(),
+        )),
     }
 }
