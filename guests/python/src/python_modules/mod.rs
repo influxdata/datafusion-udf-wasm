@@ -1567,7 +1567,7 @@ mod wit_world {
         }
 
         #[pyclass]
-        #[derive(Debug, IntoPyObject)]
+        #[derive(Debug)]
         #[pyo3(extends = PyValueError, frozen, get_all, name = "Err", str)]
         pub(crate) struct ErrWrapper {
             value: Py<PyAny>,
@@ -1628,9 +1628,9 @@ mod wit_world {
         #[derive(Debug, IntoPyObject)]
         pub(crate) enum ResultWrapper {
             #[pyo3(transparent)]
-            Ok(OkWrapper),
+            Ok(Py<OkWrapper>),
             #[pyo3(transparent)]
-            Err(ErrWrapper),
+            Err(Py<ErrWrapper>),
         }
 
         impl ResultWrapper {
@@ -1640,26 +1640,30 @@ mod wit_world {
                 E: IntoPyObject<'py>,
             {
                 let res = match res {
-                    Ok(val) => Self::Ok(OkWrapper {
-                        value: val
+                    Ok(val) => {
+                        let val = val
                             .into_pyobject(py)
                             .map_err(|e| {
                                 let e: PyErr = e.into();
                                 e
                             })?
                             .into_any()
-                            .unbind(),
-                    }),
-                    Err(val) => Self::Err(ErrWrapper {
-                        value: val
+                            .unbind();
+
+                        Self::Ok(Py::new(py, OkWrapper { value: val })?)
+                    }
+                    Err(val) => {
+                        let val = val
                             .into_pyobject(py)
                             .map_err(|e| {
                                 let e: PyErr = e.into();
                                 e
                             })?
                             .into_any()
-                            .unbind(),
-                    }),
+                            .unbind();
+
+                        Self::Err(Py::new(py, ErrWrapper { value: val })?)
+                    }
                 };
                 Ok(res)
             }
