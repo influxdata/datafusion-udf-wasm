@@ -3,7 +3,7 @@ use pyo3::{BoundObject, exceptions::PyValueError, prelude::*};
 
 mod error;
 
-use error::{ResourceMoved, ResourceMovedOptionExt, display_like_debug};
+use error::{DebugLikeDisplay, ResourceMoved, ResourceMovedOptionExt, display_like_debug};
 
 /// Register python modules.
 ///
@@ -1536,6 +1536,7 @@ mod wit_world {
 
     #[pyo3::pymodule]
     pub(crate) mod types {
+
         use super::*;
 
         /// Hack: workaround for <https://github.com/PyO3/pyo3/issues/759>.
@@ -1559,7 +1560,9 @@ mod wit_world {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 let Self { value } = self;
 
-                f.debug_struct("Ok").field("value", value).finish()
+                f.debug_struct("Ok")
+                    .field("value", &DebugLikeDisplay(value))
+                    .finish()
             }
         }
 
@@ -1574,7 +1577,9 @@ mod wit_world {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 let Self { value } = self;
 
-                f.debug_struct("Err").field("value", value).finish()
+                f.debug_struct("Err")
+                    .field("value", &DebugLikeDisplay(value))
+                    .finish()
             }
         }
 

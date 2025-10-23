@@ -14,6 +14,20 @@ macro_rules! display_like_debug {
 
 pub(crate) use display_like_debug;
 
+/// Wrapper that forwards [`Debug`](std::fmt::Debug) to [`Display`](std::fmt::Display).
+pub(crate) struct DebugLikeDisplay<T>(pub(crate) T)
+where
+    T: std::fmt::Display;
+
+impl<T> std::fmt::Debug for DebugLikeDisplay<T>
+where
+    T: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 /// A resource (handle) was already used/moved/closed.
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct ResourceMoved;
