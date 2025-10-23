@@ -10,14 +10,28 @@ use datafusion_udf_wasm_arrow2bytes::{array2bytes, bytes2array, bytes2datatype, 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
 
 impl From<DataFusionError> for wit_types::DataFusionError {
-    fn from(value: DataFusionError) -> Self {
-        match value {
-            DataFusionError::NotImplemented(msg) => Self::NotImplemented(msg),
-            DataFusionError::Internal(msg) => Self::Internal(msg),
-            DataFusionError::Plan(msg) => Self::Plan(msg),
-            DataFusionError::Configuration(msg) => Self::Configuration(msg),
-            DataFusionError::Execution(msg) => Self::Execution(msg),
-            _ => Self::NotImplemented(format!("serialize error: {value}")),
+    fn from(e: DataFusionError) -> Self {
+        use wit_types::DataFusionErrorKind;
+
+        let mut e = e;
+        let mut context_chain = Vec::new();
+        while let DataFusionError::Context(context, e2) = e {
+            e = *e2;
+            context_chain.push(context);
+        }
+
+        let kind = match e {
+            DataFusionError::NotImplemented(msg) => DataFusionErrorKind::NotImplemented(msg),
+            DataFusionError::Internal(msg) => DataFusionErrorKind::Internal(msg),
+            DataFusionError::Plan(msg) => DataFusionErrorKind::Plan(msg),
+            DataFusionError::Configuration(msg) => DataFusionErrorKind::Configuration(msg),
+            DataFusionError::Execution(msg) => DataFusionErrorKind::Execution(msg),
+            _ => DataFusionErrorKind::NotImplemented(format!("serialize error: {e}")),
+        };
+
+        Self {
+            context: context_chain,
+            kind,
         }
     }
 }
