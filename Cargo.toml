@@ -25,6 +25,7 @@ datafusion-udf-wasm-arrow2bytes = { path = "arrow2bytes", version = "0.1.0" }
 datafusion-udf-wasm-bundle = { path = "guests/bundle", version = "0.1.0" }
 datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0" }
 datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0" }
+sqlparser = { version = "0.55.0", default-features = false, features = ["std", "visitor"] }
 tokio = { version = "1.48.0", default-features = false }
 pyo3 = { version = "0.27.1", default-features = false, features = ["macros"] }
 tar = { version = "0.4.44", default-features = false }
