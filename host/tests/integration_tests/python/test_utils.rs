@@ -4,7 +4,7 @@ use tokio::sync::OnceCell;
 
 static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
 
-async fn python_component() -> &'static WasmComponentPrecompiled {
+pub(crate) async fn python_component() -> &'static WasmComponentPrecompiled {
     COMPONENT
         .get_or_init(async || {
             WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_PYTHON.into())
@@ -17,7 +17,7 @@ async fn python_component() -> &'static WasmComponentPrecompiled {
 pub(crate) async fn python_scalar_udfs(code: &str) -> Result<Vec<WasmScalarUdf>, DataFusionError> {
     let component = python_component().await;
 
-    WasmScalarUdf::new(component, code.to_owned()).await
+    WasmScalarUdf::new(component, &Default::default(), code.to_owned()).await
 }
 
 pub(crate) async fn python_scalar_udf(code: &str) -> Result<WasmScalarUdf, DataFusionError> {

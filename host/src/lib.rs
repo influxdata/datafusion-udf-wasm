@@ -4,6 +4,7 @@
 //! [DataFusion]: https://datafusion.apache.org/
 use std::{any::Any, io::Cursor, ops::DerefMut, sync::Arc};
 
+use ::http::HeaderName;
 use arrow::datatypes::DataType;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature};
@@ -16,10 +17,19 @@ use wasmtime::{
 use wasmtime_wasi::{
     DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe,
 };
-use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::{
+    HttpResult, WasiHttpCtx, WasiHttpView,
+    body::HyperOutgoingBody,
+    types::{
+        DEFAULT_FORBIDDEN_HEADERS, HostFutureIncomingResponse, OutgoingRequestConfig,
+        default_send_request_handler,
+    },
+};
 
 use crate::{
-    bindings::exports::datafusion_udf_wasm::udf::types as wit_types, error::DataFusionResultExt,
+    bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
+    error::DataFusionResultExt,
+    http::{HttpRequestValidator, RejectAllHttpRequests},
     tokio_helpers::async_in_sync_context,
 };
 use crate::{error::WasmToDataFusionResultExt, tokio_helpers::blocking_io};
@@ -35,6 +45,7 @@ use wiremock as _;
 mod bindings;
 mod conversion;
 mod error;
+pub mod http;
 mod tokio_helpers;
 
 /// State of the WASM payload.
@@ -57,6 +68,9 @@ struct WasmStateImpl {
 
     /// Resource tables.
     resource_table: ResourceTable,
+
+    /// HTTP request validator.
+    http_validator: Arc<dyn HttpRequestValidator>,
 }
 
 impl std::fmt::Debug for WasmStateImpl {
@@ -67,12 +81,14 @@ impl std::fmt::Debug for WasmStateImpl {
             wasi_ctx: _,
             wasi_http_ctx: _,
             resource_table,
+            http_validator,
         } = self;
         f.debug_struct("WasmStateImpl")
             .field("root", root)
             .field("stderr", stderr)
             .field("wasi_ctx", &"<WASI_CTX>")
             .field("resource_table", resource_table)
+            .field("http_validator", http_validator)
             .finish()
     }
 }
@@ -93,6 +109,45 @@ impl WasiHttpView for WasmStateImpl {
 
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.resource_table
+    }
+
+    fn send_request(
+        &mut self,
+        mut request: hyper::Request<HyperOutgoingBody>,
+        config: OutgoingRequestConfig,
+    ) -> HttpResult<HostFutureIncomingResponse> {
+        // Python `requests` sends this so we allow it but later drop it from the actual request.
+        request.headers_mut().remove(hyper::header::CONNECTION);
+
+        // technically we could return an error straight away, but `urllib3` doesn't handle that super well, so we
+        // create a future and validate the error in there (before actually starting the request of course)
+
+        let validator = Arc::clone(&self.http_validator);
+        let handle = wasmtime_wasi::runtime::spawn(async move {
+            // yes, that's another layer of futures. The WASI interface is somewhat nested.
+            let fut = async {
+                use wasmtime_wasi_http::bindings::http::types::ErrorCode;
+
+                validator
+                    .validate(&request, config.use_tls)
+                    .map_err(|_| ErrorCode::HttpRequestDenied)?;
+
+                default_send_request_handler(request, config).await
+            };
+
+            Ok(fut.await)
+        });
+
+        Ok(HostFutureIncomingResponse::pending(handle))
+    }
+
+    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
+        // Python `requests` sends this so we allow it but later drop it from the actual request.
+        if name == hyper::header::CONNECTION {
+            return false;
+        }
+
+        DEFAULT_FORBIDDEN_HEADERS.contains(name)
     }
 }
 
@@ -153,6 +208,40 @@ impl std::fmt::Debug for WasmComponentPrecompiled {
     }
 }
 
+/// Permissions for a WASM component.
+#[derive(Debug)]
+pub struct WasmPermissions {
+    /// Validator for HTTP requests.
+    http: Arc<dyn HttpRequestValidator>,
+}
+
+impl WasmPermissions {
+    /// Create default permissions.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for WasmPermissions {
+    fn default() -> Self {
+        Self {
+            http: Arc::new(RejectAllHttpRequests),
+        }
+    }
+}
+
+impl WasmPermissions {
+    /// Set HTTP validator.
+    pub fn with_http<V>(self, http: V) -> Self
+    where
+        V: HttpRequestValidator,
+    {
+        Self {
+            http: Arc::new(http),
+        }
+    }
+}
+
 /// A [`ScalarUDFImpl`] that wraps a WebAssembly payload.
 pub struct WasmScalarUdf {
     /// Mutable state.
@@ -187,6 +276,7 @@ impl WasmScalarUdf {
     /// UDFs bound to the same VM share state, however calling this method multiple times will yield independent WASM VMs.
     pub async fn new(
         component: &WasmComponentPrecompiled,
+        permissions: &WasmPermissions,
         source: String,
     ) -> DataFusionResult<Vec<Self>> {
         let WasmComponentPrecompiled { engine, component } = component;
@@ -210,6 +300,7 @@ impl WasmScalarUdf {
             wasi_ctx,
             wasi_http_ctx: WasiHttpCtx::new(),
             resource_table: ResourceTable::new(),
+            http_validator: Arc::clone(&permissions.http),
         };
         let mut store = Store::new(engine, state);
 
