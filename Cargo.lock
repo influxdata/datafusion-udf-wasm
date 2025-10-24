@@ -820,6 +820,8 @@ dependencies = [
  "datafusion-expr",
  "datafusion-udf-wasm-arrow2bytes",
  "datafusion-udf-wasm-bundle",
+ "http",
+ "hyper",
  "insta",
  "tar",
  "tempfile",
