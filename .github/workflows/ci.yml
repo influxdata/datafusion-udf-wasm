@@ -5,6 +5,7 @@ name: CI
 on:
   merge_group:
   pull_request:
+    types: [opened, reopened, edited]
   push:
     branches:
       - main
