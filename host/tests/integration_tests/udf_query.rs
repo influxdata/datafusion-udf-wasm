@@ -3,7 +3,7 @@ use datafusion_udf_wasm_host::udf_query::{UdfQuery, UdfQueryInvocator};
 
 use crate::integration_tests::python::test_utils::python_component;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_simple_udf_query() {
     let query = r#"
 CREATE FUNCTION add_one()
@@ -30,7 +30,7 @@ SELECT add_one(1);
     assert_eq!(result[0][0], "2");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_multiple_functions() {
     let query = r#"
 CREATE FUNCTION add_one()
