@@ -1,6 +1,6 @@
 //! Embedded SQL approach for executing Python UDFs within SQL queries.
 
-use datafusion::prelude::SessionContext;
+use datafusion::prelude::{DataFrame, SessionContext};
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_expr::ScalarUDF;
 use datafusion_sql::parser::{DFParserBuilder, Statement};
@@ -55,7 +55,7 @@ impl<'a> UdfQueryInvocator<'a> {
     }
 
     /// Invoke the query, returning a result
-    pub async fn invoke(&mut self, udf_query: UdfQuery) -> DataFusionResult<Vec<Vec<String>>> {
+    pub async fn invoke(&mut self, udf_query: UdfQuery) -> DataFusionResult<DataFrame> {
         let query_str = udf_query.query();
 
         let (code, sql_query) = self.parse_combined_query(query_str)?;
@@ -67,23 +67,7 @@ impl<'a> UdfQueryInvocator<'a> {
             self.session_ctx.register_udf(scalar_udf);
         }
 
-        let df = self.session_ctx.sql(&sql_query).await?;
-        let batches = df.collect().await?;
-
-        let mut results = Vec::new();
-        for batch in batches {
-            for row_idx in 0..batch.num_rows() {
-                let mut row = Vec::new();
-                for col_idx in 0..batch.num_columns() {
-                    let column = batch.column(col_idx);
-                    let value = arrow::util::display::array_value_to_string(column, row_idx)?;
-                    row.push(value);
-                }
-                results.push(row);
-            }
-        }
-
-        Ok(results)
+        self.session_ctx.sql(&sql_query).await
     }
 
     /// Parse the combined query to extract Python code and SQL
@@ -103,12 +87,9 @@ impl<'a> UdfQueryInvocator<'a> {
         let mut code = String::new();
         let mut sql_statements = Vec::new();
 
-        for statement in statements {
-            match statement {
-                Statement::Statement(s) => parse_statement(*s, &mut code, &mut sql_statements)?,
-                _ => {
-                    // do nothing
-                }
+        for s in statements {
+            if let Statement::Statement(stmt) = s {
+                parse_udf(*stmt, &mut code, &mut sql_statements)?;
             }
         }
 
@@ -132,8 +113,8 @@ impl<'a> UdfQueryInvocator<'a> {
     }
 }
 
-/// Parse a single SQL statement to extract Python UDF code
-fn parse_statement(
+/// Parse a single SQL statement to extract a UDF
+fn parse_udf(
     stmt: SqlStatement,
     code: &mut String,
     sql: &mut Vec<SqlStatement>,
@@ -166,7 +147,7 @@ fn parse_statement(
     }
 }
 
-/// Extracts the code from the function body
+/// Extracts the code from the function body, adding it to `code`.
 fn extract_function_body(body: &CreateFunctionBody, code: &mut String) -> DataFusionResult<()> {
     match body {
         CreateFunctionBody::AsAfterOptions(e) | CreateFunctionBody::AsBeforeOptions(e) => {
@@ -181,7 +162,7 @@ fn extract_function_body(body: &CreateFunctionBody, code: &mut String) -> DataFu
     }
 }
 
-/// Convert an expression into a string
+/// Attempt to convert an `Expr` into a `str`
 fn expression_into_str(expr: &Expr) -> DataFusionResult<&str> {
     match expr {
         Expr::Value(v) => match &v.value {
