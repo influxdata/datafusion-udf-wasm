@@ -40,6 +40,12 @@ jobs:
 
       - name: just check
         run: just check
+        env:
+          # Disable incremental compilation to avoid overhead.
+          CARGO_INCREMENTAL: "0"
+          # Disable full debug symbol generation to speed up CI build
+          # "1" means line tables only, which is useful for panic tracebacks.
+          CARGO_PROFILE_DEV_DEBUG: "1"
 
       - name: upload docs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
