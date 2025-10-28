@@ -369,4 +369,4 @@ impl ScalarUDFImpl for WasmScalarUdf {
 }
 
 // Re-export the UDF query functionality
-pub use udf_query::{UdfQuery, UdfQueryInvocator};
+pub use udf_query::{UdfQuery, UdfQueryRegistrator};

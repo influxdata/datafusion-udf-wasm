@@ -1,11 +1,11 @@
 use datafusion::common::Result as DataFusionResult;
 use datafusion::prelude::{DataFrame, SessionContext};
-use datafusion_udf_wasm_host::udf_query::{UdfQuery, UdfQueryInvocator};
+use datafusion_udf_wasm_host::udf_query::{UdfQuery, UdfQueryRegistrator};
 
 use crate::integration_tests::python::test_utils::python_component;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_simple_udf_query() {
+async fn test_basic() {
     let query = r#"
 CREATE FUNCTION add_one()
 LANGUAGE python
@@ -21,15 +21,21 @@ SELECT add_one(1);
     let python_component = python_component().await;
 
     let udf_query = UdfQuery::new(query.to_string());
-    let mut invocator = UdfQueryInvocator::new(ctx, python_component).await.unwrap();
+    let mut registrator = UdfQueryRegistrator::new(ctx, python_component)
+        .await
+        .unwrap();
 
-    let df = invocator.invoke(udf_query).await.unwrap();
+    let df = registrator.invoke(udf_query.clone()).await.unwrap();
     let result = dataframe_to_string_matrix(df).await.unwrap();
 
     // Verify the result
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].len(), 1);
     assert_eq!(result[0][0], "2");
+
+
+    let plan = registrator.create_physical_expr(udf_query).await.unwrap();
+    println!("{:?}", plan);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -56,9 +62,11 @@ SELECT add_one(1), multiply_two(3);
     let python_component = python_component().await;
 
     let udf_query = UdfQuery::new(query.to_string());
-    let mut invocator = UdfQueryInvocator::new(ctx, python_component).await.unwrap();
+    let registrator = UdfQueryRegistrator::new(ctx, python_component)
+        .await
+        .unwrap();
 
-    let df = invocator.invoke(udf_query).await.unwrap();
+    let df = registrator.invoke(udf_query).await.unwrap();
     let result = dataframe_to_string_matrix(df).await.unwrap();
 
     // Verify the result
@@ -88,9 +96,11 @@ SELECT add_one(1), multiply_two(3);
     let python_component = python_component().await;
 
     let udf_query = UdfQuery::new(query.to_string());
-    let mut invocator = UdfQueryInvocator::new(ctx, python_component).await.unwrap();
+    let registrator = UdfQueryRegistrator::new(ctx, python_component)
+        .await
+        .unwrap();
 
-    let df = invocator.invoke(udf_query).await.unwrap();
+    let df = registrator.invoke(udf_query).await.unwrap();
     let result = dataframe_to_string_matrix(df).await.unwrap();
 
     // Verify the result
@@ -114,9 +124,11 @@ SELECT add_one(1)
     let python_component = python_component().await;
 
     let udf_query = UdfQuery::new(query.to_string());
-    let mut invocator = UdfQueryInvocator::new(ctx, python_component).await.unwrap();
+    let registrator = UdfQueryRegistrator::new(ctx, python_component)
+        .await
+        .unwrap();
 
-    let r = invocator.invoke(udf_query).await;
+    let r = registrator.invoke(udf_query).await;
     assert!(r.is_err());
 
     let err = r.err().unwrap();

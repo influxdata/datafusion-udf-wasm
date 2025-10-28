@@ -1,5 +1,8 @@
 //! Embedded SQL approach for executing Python UDFs within SQL queries.
 
+use std::sync::Arc;
+
+use datafusion::physical_plan::PhysicalExpr;
 use datafusion::prelude::{DataFrame, SessionContext};
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_expr::ScalarUDF;
@@ -18,31 +21,33 @@ impl UdfQuery {
     pub fn new(query: String) -> Self {
         Self(query)
     }
+}
 
-    /// Get the query string
-    pub fn query(&self) -> &str {
+impl AsRef<str> for UdfQuery {
+    fn as_ref(&self) -> &str {
         &self.0
     }
 }
 
-/// Accepts a [UdfQuery] and invokes the query using DataFusion
-pub struct UdfQueryInvocator<'a> {
+/// Handles the registration and invocation of UDF queries in DataFusion with a
+/// pre-compiled WASM component.
+pub struct UdfQueryRegistrator<'a> {
     /// DataFusion session context
     session_ctx: SessionContext,
     /// Pre-compiled Python WASM component
     component: &'a WasmComponentPrecompiled,
 }
 
-impl std::fmt::Debug for UdfQueryInvocator<'_> {
+impl std::fmt::Debug for UdfQueryRegistrator<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UdfQueryInvocator")
+        f.debug_struct("UdfQueryRegistrator")
             .field("session_ctx", &"SessionContext { ... }")
             .field("python_component", &self.component)
             .finish()
     }
 }
 
-impl<'a> UdfQueryInvocator<'a> {
+impl<'a> UdfQueryRegistrator<'a> {
     /// Registers the UDF query in DataFusion
     pub async fn new(
         session_ctx: SessionContext,
@@ -54,9 +59,10 @@ impl<'a> UdfQueryInvocator<'a> {
         })
     }
 
-    /// Invoke the query, returning a result
-    pub async fn invoke(&mut self, udf_query: UdfQuery) -> DataFusionResult<DataFrame> {
-        let query_str = udf_query.query();
+    /// Invoke the [UdfQuery], returning a [DataFrame]. This should not be used
+    /// outside of testing. Its made public to expose functionality for test cases.
+    pub async fn invoke(&self, udf_query: UdfQuery) -> DataFusionResult<DataFrame> {
+        let query_str = udf_query.as_ref();
 
         let (code, sql_query) = self.parse_combined_query(query_str)?;
 
@@ -68,6 +74,29 @@ impl<'a> UdfQueryInvocator<'a> {
         }
 
         self.session_ctx.sql(&sql_query).await
+    }
+
+    /// Create a physical expression for the UDF query
+    pub async fn create_physical_expr(
+        &mut self,
+        udf_query: UdfQuery,
+    ) -> DataFusionResult<Arc<dyn PhysicalExpr>> {
+        let query_str = udf_query.as_ref();
+
+        let (code, sql_query) = self.parse_combined_query(query_str)?;
+
+        let udfs = WasmScalarUdf::new(self.component, code).await?;
+
+        for udf in udfs {
+            let scalar_udf = ScalarUDF::new_from_impl(udf);
+            self.session_ctx.register_udf(scalar_udf);
+        }
+
+        let df = self.session_ctx.sql(&sql_query).await?;
+        let schema = df.schema();
+
+        let expr = self.session_ctx.parse_sql_expr(&sql_query, schema)?;
+        self.session_ctx.create_physical_expr(expr, schema)
     }
 
     /// Parse the combined query to extract Python code and SQL
