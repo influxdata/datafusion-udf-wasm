@@ -24,7 +24,7 @@ jobs:
         run: pip install --requirement=.github/workflows/requirements.txt
 
       - name: Install `cargo-deny` & `just`
-        uses: taiki-e/install-action@80466ef8efa80486cdfbddf929453a4f3565c791  # v2
+        uses: taiki-e/install-action@41ef8c65f4034ff24ab1cc2cef52f3000bcf9523  # v2
         with:
           tool: cargo-deny,just
 
@@ -48,7 +48,7 @@ jobs:
           CARGO_PROFILE_DEV_DEBUG: "1"
 
       - name: upload docs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
         with:
           name: docs
           path: target/doc
