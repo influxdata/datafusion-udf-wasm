@@ -4,15 +4,131 @@ use arrow::{
     array::{Array, StringBuilder},
     datatypes::{DataType, Field},
 };
+use datafusion_common::ScalarValue;
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
+use datafusion_udf_wasm_host::{
+    WasmPermissions, WasmScalarUdf,
+    http::{AllowCertainHttpRequests, Matcher},
+};
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
 
 use crate::integration_tests::{
-    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+    python::test_utils::{python_component, python_scalar_udf},
+    test_utils::ColumnarValueExt,
 };
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_http() {
+async fn test_urllib3_unguarded_fail() {
+    const CODE: &str = r#"
+import urllib3
+
+def perform_request(url: str) -> str:
+    resp = urllib3.request("GET", url)
+    return resp.data.decode("utf-8")
+"#;
+    let udf = python_scalar_udf(CODE).await.unwrap();
+
+    let server = MockServer::start().await;
+    Mock::given(matchers::any())
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let err = udf
+        .invoke_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+        })
+        .unwrap_err();
+
+    // the port number is part of the error message and not deterministic, so we replace it with a placeholder
+    let err = err
+        .to_string()
+        .replace(&format!("port={}", server.address().port()), "port=???");
+
+    insta::assert_snapshot!(
+        err,
+        @r#"
+    cannot call function
+    caused by
+    Execution error: urllib3.exceptions.ProtocolError: ('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpRequestDenied'))
+
+    The above exception was the direct cause of the following exception:
+
+    Traceback (most recent call last):
+      File "<string>", line 5, in perform_request
+      File "/lib/python3.14/site-packages/urllib3/__init__.py", line 193, in request
+        return _DEFAULT_POOL.request(
+               ~~~~~~~~~~~~~~~~~~~~~^
+            method,
+            ^^^^^^^
+        ...<9 lines>...
+            json=json,
+            ^^^^^^^^^^
+        )
+        ^
+      File "/lib/python3.14/site-packages/urllib3/_request_methods.py", line 135, in request
+        return self.request_encode_url(
+               ~~~~~~~~~~~~~~~~~~~~~~~^
+            method,
+            ^^^^^^^
+        ...<3 lines>...
+            **urlopen_kw,
+            ^^^^^^^^^^^^^
+        )
+        ^
+      File "/lib/python3.14/site-packages/urllib3/_request_methods.py", line 182, in request_encode_url
+        return self.urlopen(method, url, **extra_kw)
+               ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "/lib/python3.14/site-packages/urllib3/poolmanager.py", line 457, in urlopen
+        response = conn.urlopen(method, u.request_uri, **kw)
+      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+        return self.urlopen(
+               ~~~~~~~~~~~~^
+            method,
+            ^^^^^^^
+        ...<13 lines>...
+            **response_kw,
+            ^^^^^^^^^^^^^^
+        )
+        ^
+      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+        return self.urlopen(
+               ~~~~~~~~~~~~^
+            method,
+            ^^^^^^^
+        ...<13 lines>...
+            **response_kw,
+            ^^^^^^^^^^^^^^
+        )
+        ^
+      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+        return self.urlopen(
+               ~~~~~~~~~~~~^
+            method,
+            ^^^^^^^
+        ...<13 lines>...
+            **response_kw,
+            ^^^^^^^^^^^^^^
+        )
+        ^
+      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+        retries = retries.increment(
+            method, url, error=new_e, _pool=self, _stacktrace=sys.exc_info()[2]
+        )
+      File "/lib/python3.14/site-packages/urllib3/util/retry.py", line 519, in increment
+        raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='127.0.0.1', port=???): Max retries exceeded with url: / (Caused by ProtocolError('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpRequestDenied')))
+    "#,
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_urllib3_happy_path() {
     const CODE: &str = r#"
 import urllib3
 
@@ -24,7 +140,6 @@ def perform_request(method: str, url: str) -> str:
 
     return f"status={resp_status} body='{resp_body}'"
 "#;
-    let udf = python_scalar_udf(CODE).await.unwrap();
 
     let cases = [
         TestCase {
@@ -50,11 +165,15 @@ def perform_request(method: str, url: str) -> str:
     ];
 
     let server = MockServer::start().await;
+    let mut permissions = AllowCertainHttpRequests::default();
+
     let mut builder_method = StringBuilder::new();
     let mut builder_url = StringBuilder::new();
     let mut builder_result = StringBuilder::new();
+
     for case in &cases {
         case.mock().mount(&server).await;
+        permissions.allow(case.matcher(&server));
 
         let TestCase {
             method,
@@ -62,10 +181,21 @@ def perform_request(method: str, url: str) -> str:
             resp_body,
             resp_status,
         } = case;
+
         builder_method.append_value(method);
         builder_url.append_value(format!("{}{}", server.uri(), path));
         builder_result.append_value(format!("status={resp_status} body='{resp_body}'"));
     }
+
+    let udfs = WasmScalarUdf::new(
+        python_component().await,
+        &WasmPermissions::new().with_http(permissions),
+        CODE.to_string(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(udfs.len(), 1);
+    let udf = udfs.into_iter().next().unwrap();
 
     let array = udf
         .invoke_with_args(ScalarFunctionArgs {
@@ -105,6 +235,14 @@ impl Default for TestCase {
 }
 
 impl TestCase {
+    fn matcher(&self, server: &MockServer) -> Matcher {
+        Matcher {
+            method: self.method.try_into().unwrap(),
+            host: server.address().ip().to_string().into(),
+            port: server.address().port(),
+        }
+    }
+
     fn mock(&self) -> Mock {
         let Self {
             method,
