@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 1
 
       - name: Install `yamllint`
         run: pip install --requirement=.github/workflows/requirements.txt
@@ -38,6 +40,12 @@ jobs:
 
       - name: just check
         run: just check
+        env:
+          # Disable incremental compilation to avoid overhead.
+          CARGO_INCREMENTAL: "0"
+          # Disable full debug symbol generation to speed up CI build
+          # "1" means line tables only, which is useful for panic tracebacks.
+          CARGO_PROFILE_DEV_DEBUG: "1"
 
       - name: upload docs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
