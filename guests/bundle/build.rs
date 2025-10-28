@@ -82,9 +82,18 @@ impl CommandExt for Command {
             let Ok(k) = k.into_string() else {
                 continue;
             };
-            if k.starts_with("CARGO") || k.starts_with("RUST") {
+
+            // Generally we do NOT want to forward rustc and cargo arguments set for this build
+            // script. However some of them are used in CI to speed up compilation and reduce disk
+            // space usage. So we hard-code these here.
+            if (k.starts_with("CARGO") || k.starts_with("RUST"))
+                && !["CARGO_PROFILE_DEV_DEBUG", "CARGO_INCREMENTAL"]
+                    .into_iter()
+                    .any(|s| s == k)
+            {
                 continue;
             }
+
             cmd = cmd.env(k, v);
         }
 
