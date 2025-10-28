@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use datafusion::physical_plan::PhysicalExpr;
 use datafusion::prelude::{DataFrame, SessionContext};
-use datafusion_common::{DataFusionError, Result as DataFusionResult};
+use datafusion_common::{DFSchema, DataFusionError, Result as DataFusionResult};
 use datafusion_expr::ScalarUDF;
 use datafusion_sql::parser::{DFParserBuilder, Statement};
 use sqlparser::ast::{CreateFunctionBody, Expr, Statement as SqlStatement, Value};
@@ -83,7 +83,7 @@ impl<'a> UdfQueryRegistrator<'a> {
     ) -> DataFusionResult<Arc<dyn PhysicalExpr>> {
         let query_str = udf_query.as_ref();
 
-        let (code, sql_query) = self.parse_combined_query(query_str)?;
+        let (code, _sql_query) = self.parse_combined_query(query_str)?;
 
         let udfs = WasmScalarUdf::new(self.component, code).await?;
 
@@ -92,14 +92,11 @@ impl<'a> UdfQueryRegistrator<'a> {
             self.session_ctx.register_udf(scalar_udf);
         }
 
-        let df = self.session_ctx.sql(&sql_query).await?;
-        let schema = df.schema();
-
-        let expr = self.session_ctx.parse_sql_expr(&sql_query, schema)?;
-        self.session_ctx.create_physical_expr(expr, schema)
+        let expr = self.session_ctx.parse_sql_expr(&query_str, &DFSchema::empty())?;
+        self.session_ctx.create_physical_expr(expr, &DFSchema::empty())
     }
 
-    /// Parse the combined query to extract Python code and SQL
+    /// Parse the combined query to extract code and SQL
     fn parse_combined_query(&self, query: &str) -> DataFusionResult<(String, String)> {
         let task_ctx = self.session_ctx.task_ctx();
         let options = task_ctx.session_config().options();

@@ -34,8 +34,8 @@ SELECT add_one(1);
     assert_eq!(result[0][0], "2");
 
 
-    let plan = registrator.create_physical_expr(udf_query).await.unwrap();
-    println!("{:?}", plan);
+    let _plan = registrator.create_physical_expr(udf_query).await.unwrap();
+    // FIXME: Add proper assertions for the plan
 }
 
 #[tokio::test(flavor = "multi_thread")]
