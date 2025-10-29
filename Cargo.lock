@@ -808,6 +808,9 @@ dependencies = [
  "datafusion-common",
  "datafusion-expr",
  "datafusion-udf-wasm-arrow2bytes",
+ "libc",
+ "once_cell",
+ "syn",
  "wit-bindgen 0.47.0",
 ]
 
@@ -3356,9 +3359,6 @@ name = "wit-bindgen"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
-dependencies = [
- "bitflags",
-]
 
 [[package]]
 name = "wit-bindgen"
@@ -3366,6 +3366,7 @@ version = "0.47.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a374235c3c0dff10537040b437073d09f1e38f13216b5f3cbc809c6226814e5c"
 dependencies = [
+ "bitflags",
  "wit-bindgen-rust-macro",
 ]
 
