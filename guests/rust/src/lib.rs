@@ -2,6 +2,10 @@
 //!
 //!
 //! [DataFusion]: https://datafusion.apache.org/
+
+// libs that we only pull in to avoid rebuilds / aid feature unification
+use once_cell as _;
+
 pub mod bindings;
 pub mod conversion;
 pub mod wrapper;
