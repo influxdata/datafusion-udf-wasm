@@ -33,7 +33,7 @@ wasip2 = { version = "1" }
 wasmtime = { version = "38.0.3", default-features = false, features = ["async", "cranelift"] }
 wasmtime-wasi = { version = "38.0.3", default-features = false }
 wasmtime-wasi-http = { version = "38.0.3", default-features = false, features = ["default-send-request"] }
-wit-bindgen = { version = "0.46", default-features = false, features = ["macros"] }
+wit-bindgen = { version = "0.47", default-features = false, features = ["macros"] }
 
 [workspace.lints.rust]
 missing_copy_implementations = "deny"
