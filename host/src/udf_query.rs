@@ -1,11 +1,7 @@
 //! Embedded SQL approach for executing Python UDFs within SQL queries.
 
-use std::sync::Arc;
-
-use datafusion::physical_plan::PhysicalExpr;
-use datafusion::prelude::{DataFrame, SessionContext};
-use datafusion_common::{DFSchema, DataFusionError, Result as DataFusionResult};
-use datafusion_expr::ScalarUDF;
+use datafusion::execution::TaskContext;
+use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_sql::parser::{DFParserBuilder, Statement};
 use sqlparser::ast::{CreateFunctionBody, Expr, Statement as SqlStatement, Value};
 use sqlparser::dialect::dialect_from_str;
@@ -29,76 +25,46 @@ impl AsRef<str> for UdfQuery {
     }
 }
 
+/// A [UdfQueryParseResult] contains the set of registered UDFs and the SQL query string.
+type UdfQueryParseResult = DataFusionResult<(Vec<WasmScalarUdf>, String)>;
+
 /// Handles the registration and invocation of UDF queries in DataFusion with a
 /// pre-compiled WASM component.
-pub struct UdfQueryRegistrator<'a> {
-    /// DataFusion session context
-    session_ctx: SessionContext,
-    /// Pre-compiled Python WASM component
+pub struct UdfQueryParser<'a> {
+    /// Pre-compiled WASM component.
+    /// Necessary to create UDFs.
     component: &'a WasmComponentPrecompiled,
 }
 
-impl std::fmt::Debug for UdfQueryRegistrator<'_> {
+impl std::fmt::Debug for UdfQueryParser<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("UdfQueryRegistrator")
+        f.debug_struct("UdfQueryParser")
             .field("session_ctx", &"SessionContext { ... }")
             .field("python_component", &self.component)
             .finish()
     }
 }
 
-impl<'a> UdfQueryRegistrator<'a> {
+impl<'a> UdfQueryParser<'a> {
     /// Registers the UDF query in DataFusion
-    pub async fn new(
-        session_ctx: SessionContext,
-        component: &'a WasmComponentPrecompiled,
-    ) -> DataFusionResult<Self> {
-        Ok(Self {
-            session_ctx,
-            component,
-        })
+    pub async fn new(component: &'a WasmComponentPrecompiled) -> DataFusionResult<Self> {
+        Ok(Self { component })
     }
 
-    /// Invoke the [UdfQuery], returning a [DataFrame]. This should not be used
-    /// outside of testing. Its made public to expose functionality for test cases.
-    pub async fn invoke(&self, udf_query: UdfQuery) -> DataFusionResult<DataFrame> {
+    /// Parse the UDF query to extract UDFs and SQL in the form of a [UdfQueryParseResult]
+    pub async fn parse(&self, udf_query: UdfQuery, task_ctx: &TaskContext) -> UdfQueryParseResult {
         let query_str = udf_query.as_ref();
-
-        let (code, sql_query) = self.parse_combined_query(query_str)?;
-
+        let (code, sql_query) = self.parse_combined_query(query_str, task_ctx)?;
         let udfs = WasmScalarUdf::new(self.component, code).await?;
-
-        for udf in udfs {
-            let scalar_udf = ScalarUDF::new_from_impl(udf);
-            self.session_ctx.register_udf(scalar_udf);
-        }
-
-        self.session_ctx.sql(&sql_query).await
-    }
-
-    /// Create a physical expression for the UDF query
-    pub async fn create_physical_expr(
-        &mut self,
-        udf_query: UdfQuery,
-    ) -> DataFusionResult<Arc<dyn PhysicalExpr>> {
-        let query_str = udf_query.as_ref();
-
-        let (code, _sql_query) = self.parse_combined_query(query_str)?;
-
-        let udfs = WasmScalarUdf::new(self.component, code).await?;
-
-        for udf in udfs {
-            let scalar_udf = ScalarUDF::new_from_impl(udf);
-            self.session_ctx.register_udf(scalar_udf);
-        }
-
-        let expr = self.session_ctx.parse_sql_expr(&query_str, &DFSchema::empty())?;
-        self.session_ctx.create_physical_expr(expr, &DFSchema::empty())
+        Ok((udfs, sql_query))
     }
 
     /// Parse the combined query to extract code and SQL
-    fn parse_combined_query(&self, query: &str) -> DataFusionResult<(String, String)> {
-        let task_ctx = self.session_ctx.task_ctx();
+    fn parse_combined_query(
+        &self,
+        query: &str,
+        task_ctx: &TaskContext,
+    ) -> DataFusionResult<(String, String)> {
         let options = task_ctx.session_config().options();
 
         let dialect = dialect_from_str(options.sql_parser.dialect.clone()).expect("valid dialect");

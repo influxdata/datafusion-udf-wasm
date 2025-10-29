@@ -2,6 +2,8 @@
 //!
 //!
 //! [DataFusion]: https://datafusion.apache.org/
+//!
+use futures_util as _;
 use std::{any::Any, io::Cursor, ops::DerefMut, sync::Arc};
 
 use arrow::datatypes::DataType;
@@ -367,6 +369,3 @@ impl ScalarUDFImpl for WasmScalarUdf {
         })
     }
 }
-
-// Re-export the UDF query functionality
-pub use udf_query::{UdfQuery, UdfQueryRegistrator};

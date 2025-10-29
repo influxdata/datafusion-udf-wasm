@@ -15,6 +15,7 @@ datafusion-common.workspace = true
 datafusion-expr.workspace = true
 datafusion-udf-wasm-arrow2bytes.workspace = true
 datafusion-sql.workspace = true
+futures-util-preview = "0.2.2"
 sqlparser.workspace = true
 tar.workspace = true
 tempfile.workspace = true
