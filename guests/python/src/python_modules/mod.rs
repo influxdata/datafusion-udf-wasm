@@ -112,7 +112,7 @@ mod wit_world {
         use self::{
             error::Error,
             poll::Pollable,
-            streams::InputStream,
+            streams::{InputStream, OutputStream},
             types::{ErrorCode, FutureIncomingResponse, OutgoingRequest, RequestOptions},
         };
         use super::*;
@@ -278,6 +278,43 @@ mod wit_world {
                 fn blocking_read(&self, len: u64) -> PyResult<Vec<u8>> {
                     match self.inner()?.blocking_read(len) {
                         Ok(data) => Ok(data),
+                        Err(e) => {
+                            let e = Python::attach(|py| StreamError::new(py, e))?;
+                            Err(e).to_pyres()
+                        }
+                    }
+                }
+            }
+
+            #[pyclass]
+            pub(crate) struct OutputStream {
+                pub(crate) inner: Option<wasip2::http::types::OutputStream>,
+            }
+
+            impl OutputStream {
+                fn inner(&self) -> Result<&wasip2::http::types::OutputStream, ResourceMoved> {
+                    self.inner.as_ref().require_resource()
+                }
+            }
+
+            #[pymethods]
+            impl OutputStream {
+                fn __enter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+                    slf
+                }
+
+                fn __exit__(
+                    &mut self,
+                    _exc_type: &Bound<'_, PyAny>,
+                    _exc_value: &Bound<'_, PyAny>,
+                    _traceback: &Bound<'_, PyAny>,
+                ) {
+                    self.inner.take();
+                }
+
+                fn blocking_write_and_flush(&self, contents: Vec<u8>) -> PyResult<()> {
+                    match self.inner()?.blocking_write_and_flush(&contents) {
+                        Ok(()) => Ok(()),
                         Err(e) => {
                             let e = Python::attach(|py| StreamError::new(py, e))?;
                             Err(e).to_pyres()
@@ -1350,8 +1387,21 @@ mod wit_world {
                 inner: Option<wasip2::http::types::OutgoingBody>,
             }
 
+            impl OutgoingBody {
+                fn inner(&self) -> Result<&wasip2::http::types::OutgoingBody, ResourceMoved> {
+                    self.inner.as_ref().require_resource()
+                }
+            }
+
             #[pymethods]
             impl OutgoingBody {
+                fn write(&self) -> PyResult<OutputStream> {
+                    let stream = self.inner()?.write().to_pyres()?;
+                    Ok(OutputStream {
+                        inner: Some(stream),
+                    })
+                }
+
                 fn finish(&mut self, trailers: Option<&'_ mut Fields>) -> PyResult<()> {
                     let body = self.inner.take().require_resource()?;
                     let trailers = trailers
