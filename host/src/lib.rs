@@ -3,7 +3,6 @@
 //!
 //! [DataFusion]: https://datafusion.apache.org/
 //!
-use futures_util as _;
 use std::{any::Any, io::Cursor, ops::DerefMut, sync::Arc};
 
 use arrow::datatypes::DataType;

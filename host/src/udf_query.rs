@@ -1,5 +1,7 @@
 //! Embedded SQL approach for executing Python UDFs within SQL queries.
 
+use std::collections::HashMap;
+
 use datafusion::execution::TaskContext;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_sql::parser::{DFParserBuilder, Statement};
@@ -8,63 +10,84 @@ use sqlparser::dialect::dialect_from_str;
 
 use crate::{WasmComponentPrecompiled, WasmScalarUdf};
 
-/// A SQL query containing a Python UDF and SQL string that uses the UDF
-#[derive(Debug, Clone)]
-pub struct UdfQuery(String);
+/// Supported UDF languages
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum UDFLanguage {
+    /// The Python programming language
+    Python,
+    /// An unsupported UDF language
+    Unsupported,
+}
 
-impl UdfQuery {
-    /// Create a new UDF query
-    pub fn new(query: String) -> Self {
-        Self(query)
+impl From<String> for UDFLanguage {
+    fn from(value: String) -> Self {
+        match value.to_lowercase().as_str() {
+            "python" => Self::Python,
+            _ => Self::Unsupported,
+        }
     }
 }
 
-impl AsRef<str> for UdfQuery {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
+/// A [ParsedQuery] contains the extracted UDFs and SQL query string
+#[derive(Debug)]
+pub struct ParsedQuery {
+    /// Extracted UDFs from the query
+    pub udfs: Vec<WasmScalarUdf>,
+    /// SQL query string with UDF definitions removed
+    pub sql: String,
 }
-
-/// A [UdfQueryParseResult] contains the set of registered UDFs and the SQL query string.
-type UdfQueryParseResult = DataFusionResult<(Vec<WasmScalarUdf>, String)>;
 
 /// Handles the registration and invocation of UDF queries in DataFusion with a
 /// pre-compiled WASM component.
 pub struct UdfQueryParser<'a> {
     /// Pre-compiled WASM component.
     /// Necessary to create UDFs.
-    component: &'a WasmComponentPrecompiled,
+    components: HashMap<UDFLanguage, &'a WasmComponentPrecompiled>,
 }
 
 impl std::fmt::Debug for UdfQueryParser<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UdfQueryParser")
             .field("session_ctx", &"SessionContext { ... }")
-            .field("python_component", &self.component)
+            .field("components", &self.components)
             .finish()
     }
 }
 
 impl<'a> UdfQueryParser<'a> {
-    /// Registers the UDF query in DataFusion
-    pub async fn new(component: &'a WasmComponentPrecompiled) -> DataFusionResult<Self> {
-        Ok(Self { component })
+    /// Registers the UDF query in DataFusion.
+    pub async fn new(
+        components: HashMap<UDFLanguage, &'a WasmComponentPrecompiled>,
+    ) -> DataFusionResult<Self> {
+        Ok(Self { components })
     }
 
-    /// Parse the UDF query to extract UDFs and SQL in the form of a [UdfQueryParseResult]
-    pub async fn parse(&self, udf_query: UdfQuery, task_ctx: &TaskContext) -> UdfQueryParseResult {
-        let query_str = udf_query.as_ref();
-        let (code, sql_query) = self.parse_combined_query(query_str, task_ctx)?;
-        let udfs = WasmScalarUdf::new(self.component, code).await?;
-        Ok((udfs, sql_query))
+    /// Parses a SQL query that defines & uses Python UDFs into a [ParsedQuery].
+    pub async fn parse(
+        &self,
+        udf_query: &str,
+        task_ctx: &TaskContext,
+    ) -> DataFusionResult<ParsedQuery> {
+        let (code, sql, lang) = self.parse_inner(udf_query, task_ctx)?;
+
+        let component = self.components.get(&lang).ok_or_else(|| {
+            DataFusionError::Plan(format!(
+                "no WASM component registered for language: {:?}",
+                lang
+            ))
+        })?;
+
+        let udfs = WasmScalarUdf::new(component, code).await?;
+        Ok(ParsedQuery { udfs, sql })
     }
 
-    /// Parse the combined query to extract code and SQL
-    fn parse_combined_query(
+    /// Parse the combined query to extract the chosen UDF language, UDF
+    /// definitions, and SQL statements.
+    fn parse_inner(
         &self,
         query: &str,
         task_ctx: &TaskContext,
-    ) -> DataFusionResult<(String, String)> {
+    ) -> DataFusionResult<(String, String, UDFLanguage)> {
         let options = task_ctx.session_config().options();
 
         let dialect = dialect_from_str(options.sql_parser.dialect.clone()).expect("valid dialect");
@@ -76,77 +99,96 @@ impl<'a> UdfQueryParser<'a> {
             .build()?
             .parse_statements()?;
 
-        let mut code = String::new();
-        let mut sql_statements = Vec::new();
+        let mut udf_code = String::new();
+        let mut sql = String::new();
 
+        // Python is the only supported UDF language at this time.
+        let udf_language = UDFLanguage::Python;
         for s in statements {
-            if let Statement::Statement(stmt) = s {
-                parse_udf(*stmt, &mut code, &mut sql_statements)?;
+            let Statement::Statement(stmt) = s else {
+                continue;
+            };
+
+            match parse_udf(*stmt)? {
+                Parsed::Udf { code, language } => {
+                    udf_code.push_str(&code);
+                    udf_code.push('\n');
+                    // FIXME: handle multiple languages in a single query
+                    if language != udf_language {
+                        return Err(DataFusionError::Plan(
+                            "only Python UDFs are supported at this time".to_string(),
+                        ));
+                    }
+                }
+                Parsed::Other(statement) => {
+                    sql.push_str(&statement);
+                    sql.push_str(";\n");
+                }
             }
         }
 
-        if code.is_empty() {
+        if udf_code.is_empty() {
             return Err(DataFusionError::Plan(
-                "no Python UDF found in query".to_string(),
+                "UDF not defined in query".to_string(),
             ));
         }
 
-        if sql_statements.is_empty() {
+        if sql.is_empty() {
             return Err(DataFusionError::Plan("no SQL query found".to_string()));
         }
 
-        let sql_query = sql_statements
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>()
-            .join(";\n");
-
-        Ok((code, sql_query))
+        Ok((udf_code, sql, udf_language))
     }
 }
 
+/// Represents a parsed SQL statement
+enum Parsed {
+    /// A UDF definition
+    Udf {
+        /// UDF code
+        code: String,
+        /// UDF language
+        language: UDFLanguage,
+    },
+    /// Any other SQL statement
+    Other(String),
+}
+
 /// Parse a single SQL statement to extract a UDF
-fn parse_udf(
-    stmt: SqlStatement,
-    code: &mut String,
-    sql: &mut Vec<SqlStatement>,
-) -> DataFusionResult<()> {
+fn parse_udf(stmt: SqlStatement) -> DataFusionResult<Parsed> {
     match stmt {
         SqlStatement::CreateFunction(cf) => {
             let function_body = cf.function_body.as_ref();
-            let language = cf.language.as_ref();
 
-            if let Some(lang) = language
-                && lang.to_string().to_lowercase() != "python"
-            {
-                return Err(DataFusionError::Plan(format!(
-                    "only Python is supported, got: {}",
-                    lang
-                )));
-            }
+            let language = if let Some(lang) = cf.language.as_ref() {
+                UDFLanguage::from(lang.to_string())
+            } else {
+                return Err(DataFusionError::Plan(
+                    "function language is required for UDFs".to_string(),
+                ));
+            };
 
-            match function_body {
-                Some(body) => extract_function_body(body, code),
+            let code = match function_body {
+                Some(body) => extract_function_body(body),
                 None => Err(DataFusionError::Plan(
-                    "function body is required for Python UDFs".to_string(),
+                    "function body is required for UDFs".to_string(),
                 )),
-            }
+            }?;
+
+            Ok(Parsed::Udf {
+                code: code.to_string(),
+                language,
+            })
         }
-        _ => {
-            sql.push(stmt);
-            Ok(())
-        }
+        _ => Ok(Parsed::Other(stmt.to_string())),
     }
 }
 
 /// Extracts the code from the function body, adding it to `code`.
-fn extract_function_body(body: &CreateFunctionBody, code: &mut String) -> DataFusionResult<()> {
+fn extract_function_body(body: &CreateFunctionBody) -> DataFusionResult<&str> {
     match body {
         CreateFunctionBody::AsAfterOptions(e) | CreateFunctionBody::AsBeforeOptions(e) => {
-            let s = expression_into_str(e)?;
-            code.push_str(s);
-            code.push('\n');
-            Ok(())
+            expression_into_str(e)
         }
         CreateFunctionBody::Return(_) => Err(DataFusionError::Plan(
             "`RETURN` function body not supported for Python UDFs".to_string(),
