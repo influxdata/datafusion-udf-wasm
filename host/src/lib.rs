@@ -11,7 +11,7 @@ use tempfile::TempDir;
 use tokio::sync::Mutex;
 use wasmtime::{
     Engine, Store,
-    component::{Component, Linker, ResourceAny},
+    component::{Component, ResourceAny},
 };
 use wasmtime_wasi::{
     DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe,
@@ -27,6 +27,7 @@ use crate::{
     bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
     error::DataFusionResultExt,
     http::{HttpRequestValidator, RejectAllHttpRequests},
+    linker::link,
     tokio_helpers::async_in_sync_context,
 };
 use crate::{error::WasmToDataFusionResultExt, tokio_helpers::blocking_io};
@@ -43,6 +44,7 @@ mod bindings;
 mod conversion;
 mod error;
 pub mod http;
+mod linker;
 mod tokio_helpers;
 
 /// State of the WASM payload.
@@ -285,18 +287,9 @@ impl WasmScalarUdf {
             resource_table: ResourceTable::new(),
             http_validator: Arc::clone(&permissions.http),
         };
-        let mut store = Store::new(engine, state);
-
-        let mut linker = Linker::new(engine);
-        wasmtime_wasi::p2::add_to_linker_async(&mut linker).context("link WASI p2", None)?;
-        wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)
-            .context("link WASI p2 HTTP", None)?;
-
-        let bindings = Arc::new(
-            bindings::Datafusion::instantiate_async(&mut store, component, &linker)
-                .await
-                .context("initialize bindings", Some(&store.data().stderr.contents()))?,
-        );
+        let (bindings, mut store) = link(engine, component, state)
+            .await
+            .context("link WASM components", None)?;
 
         // fill root FS
         let root_data = bindings
