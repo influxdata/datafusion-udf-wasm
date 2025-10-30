@@ -9,7 +9,11 @@ use wasmtime::{
 };
 use wasmtime_wasi::{ResourceTable, WasiView};
 
-use crate::{WasmStateImpl, bindings::Datafusion};
+use crate::{
+    WasmStateImpl,
+    bindings::Datafusion,
+    vfs::{HasFs, VfsView},
+};
 
 /// Link everything.
 pub(crate) async fn link(
@@ -37,7 +41,6 @@ fn link_wasi_p2(linker: &mut Linker<WasmStateImpl>) -> Result<()> {
     use wasmtime_wasi::{
         cli::{WasiCli, WasiCliView},
         clocks::{WasiClocks, WasiClocksView},
-        filesystem::{WasiFilesystem, WasiFilesystemView},
         p2::bindings,
         random::WasiRandom,
         sockets::{WasiSockets, WasiSocketsView},
@@ -96,13 +99,10 @@ fn link_wasi_p2(linker: &mut Linker<WasmStateImpl>) -> Result<()> {
         linker,
         WasmStateImpl::cli,
     )?;
-    bindings::filesystem::types::add_to_linker::<WasmStateImpl, WasiFilesystem>(
+    bindings::filesystem::types::add_to_linker::<WasmStateImpl, HasFs>(linker, WasmStateImpl::vfs)?;
+    bindings::filesystem::preopens::add_to_linker::<WasmStateImpl, HasFs>(
         linker,
-        WasmStateImpl::filesystem,
-    )?;
-    bindings::filesystem::preopens::add_to_linker::<WasmStateImpl, WasiFilesystem>(
-        linker,
-        WasmStateImpl::filesystem,
+        WasmStateImpl::vfs,
     )?;
     bindings::random::random::add_to_linker::<WasmStateImpl, WasiRandom>(linker, |t| {
         t.ctx().ctx.random()

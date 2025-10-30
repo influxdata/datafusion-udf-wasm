@@ -11,12 +11,3 @@ where
 {
     tokio::task::block_in_place(move || tokio::runtime::Handle::current().block_on(fut))
 }
-
-/// Spawn blocking I/O.
-pub(crate) async fn blocking_io<F, T>(f: F) -> std::io::Result<T>
-where
-    F: FnOnce() -> std::io::Result<T> + Send + 'static,
-    T: Send + 'static,
-{
-    tokio::task::spawn_blocking(f).await?
-}

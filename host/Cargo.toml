@@ -16,8 +16,9 @@ datafusion-expr.workspace = true
 datafusion-udf-wasm-arrow2bytes.workspace = true
 http.workspace = true
 hyper.workspace = true
+rand = { version = "0.9" }
+siphasher = { version = "1", default-features = false }
 tar.workspace = true
-tempfile.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync"] }
 wasmtime.workspace = true
 wasmtime-wasi.workspace = true
