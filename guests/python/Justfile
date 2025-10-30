@@ -134,10 +134,18 @@ python-site-packages: download-python-sdk
     fi
 
     python -m venv "{{PYTHON_TMP_VENV}}"
+
+    # Notes:
+    # - "only binary" means "only wheels, no sdist", i.e. we don't need to run any Python lib build code
+    # - "implementation=py" ensures that we use the most neutral wheel possible, i.e. not actual binary code
     "{{PYTHON_TMP_VENV}}"/bin/pip install \
         --disable-pip-version-check \
+        --no-deps \
         --ignore-installed \
+        --implementation=py \
         --isolated \
+        --only-binary=:all: \
+        --python-version={{PYTHON_VERSION_FULL}} \
         --requirement=requirements.txt \
         --target="{{PYTHON_SITE_PACKAGES}}"
 
