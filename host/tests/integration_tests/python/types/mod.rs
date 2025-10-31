@@ -1,5 +1,9 @@
 mod bool;
+mod bytes;
+mod date;
 mod datetime;
 mod float;
 mod int;
 mod str;
+mod time;
+mod timedelta;

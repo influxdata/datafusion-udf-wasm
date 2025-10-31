@@ -23,16 +23,24 @@ impl<'a, 'py> FromPyObject<'a, 'py> for PythonType {
         // https://docs.python.org/3/library/builtins.html
         let mod_builtins = py.import(intern!(py, "builtins"))?;
         let type_bool = mod_builtins.getattr(intern!(py, "bool"))?;
+        let type_bytes = mod_builtins.getattr(intern!(py, "bytes"))?;
         let type_float = mod_builtins.getattr(intern!(py, "float"))?;
         let type_int = mod_builtins.getattr(intern!(py, "int"))?;
         let type_str = mod_builtins.getattr(intern!(py, "str"))?;
 
         // https://docs.python.org/3/library/datetime.html
         let mod_datetime = py.import(intern!(py, "datetime"))?;
+        let type_date = mod_datetime.getattr(intern!(py, "date"))?;
         let type_dateime = mod_datetime.getattr(intern!(py, "datetime"))?;
+        let type_time = mod_datetime.getattr(intern!(py, "time"))?;
+        let type_timedelta = mod_datetime.getattr(intern!(py, "timedelta"))?;
 
         if ob.is(type_bool) {
             Ok(Self::Bool)
+        } else if ob.is(type_bytes) {
+            Ok(Self::Bytes)
+        } else if ob.is(type_date) {
+            Ok(Self::Date)
         } else if ob.is(type_dateime) {
             Ok(Self::DateTime)
         } else if ob.is(type_float) {
@@ -41,6 +49,10 @@ impl<'a, 'py> FromPyObject<'a, 'py> for PythonType {
             Ok(Self::Int)
         } else if ob.is(type_str) {
             Ok(Self::Str)
+        } else if ob.is(type_time) {
+            Ok(Self::Time)
+        } else if ob.is(type_timedelta) {
+            Ok(Self::Timedelta)
         } else {
             Err(PyErr::new::<PyTypeError, _>(format!(
                 "unknown annotation type: {}",
