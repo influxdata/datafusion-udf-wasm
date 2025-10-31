@@ -207,7 +207,7 @@ impl PythonType {
                     maybe_val
                         .map(|val| {
                             let days_since_epoch = val;
-                            let epoch = NaiveDate::from_ymd_opt(1970, 1, 1)
+                            let epoch = NaiveDate::from_epoch_days(0)
                                 .ok_or_else(|| exec_datafusion_err!("cannot create epoch date"))?;
                             let date = epoch + chrono::Duration::days(days_since_epoch as i64);
 
@@ -568,7 +568,7 @@ impl<'py> ArrayBuilder<'py> for Date32Builder {
                 )
             })?;
 
-        let epoch = NaiveDate::from_ymd_opt(1970, 1, 1)
+        let epoch = NaiveDate::from_epoch_days(0)
             .ok_or_else(|| exec_datafusion_err!("cannot create epoch date"))?;
 
         let days_since_epoch = date.signed_duration_since(epoch).num_days();

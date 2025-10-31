@@ -144,7 +144,7 @@ def foo(x: time) -> time:
             )),
         })
         .unwrap_err();
-    // The error message will contain the actual datetime, so we just check it contains the expected type info
+
     assert!(err.to_string().contains("expected `time` but got"));
     assert!(err.to_string().contains("of type `datetime`"));
 }

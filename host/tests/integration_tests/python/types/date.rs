@@ -70,12 +70,12 @@ def foo(x: date) -> date:
             args: vec![ColumnarValue::Array(Arc::new(Date32Array::from_iter([
                 Some(0),
             ])))],
-            arg_fields: vec![Arc::new(Field::new("a1", DataType::Date32, true))],
+            arg_fields: vec![Arc::new(Field::new("time", DataType::Date32, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Date32, true)),
         })
         .unwrap_err();
-    // The error message will contain the actual datetime, so we just check it contains the expected type info
+
     assert!(err.to_string().contains("expected `date` but got"));
     assert!(err.to_string().contains("of type `datetime`"));
 }
