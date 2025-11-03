@@ -8,7 +8,7 @@ use datafusion_sql::parser::{DFParserBuilder, Statement};
 use sqlparser::ast::{CreateFunctionBody, Expr, Statement as SqlStatement, Value};
 use sqlparser::dialect::dialect_from_str;
 
-use crate::{WasmComponentPrecompiled, WasmScalarUdf};
+use crate::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
 
 /// A [ParsedQuery] contains the extracted UDFs and SQL query string
 #[derive(Debug)]
@@ -48,6 +48,7 @@ impl<'a> UdfQueryParser<'a> {
     pub async fn parse(
         &self,
         udf_query: &str,
+        permissions: &WasmPermissions,
         task_ctx: &TaskContext,
     ) -> DataFusionResult<ParsedQuery> {
         let (code, sql, lang) = self.parse_inner(udf_query, task_ctx)?;
@@ -59,7 +60,7 @@ impl<'a> UdfQueryParser<'a> {
             ))
         })?;
 
-        let udfs = WasmScalarUdf::new(component, code).await?;
+        let udfs = WasmScalarUdf::new(component, permissions, code).await?;
         Ok(ParsedQuery { udfs, sql })
     }
 

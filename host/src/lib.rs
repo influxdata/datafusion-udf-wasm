@@ -289,7 +289,7 @@ impl WasmScalarUdf {
         };
         let (bindings, mut store) = link(engine, component, state)
             .await
-            .context("link WASM components")?;
+            .context("link WASM components", None)?;
 
         // Populate VFS from tar archive
         let root_data = bindings
