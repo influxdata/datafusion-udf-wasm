@@ -17,12 +17,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        with:
+          fetch-depth: 1
 
       - name: Install `yamllint`
         run: pip install --requirement=.github/workflows/requirements.txt
 
       - name: Install `cargo-deny` & `just`
-        uses: taiki-e/install-action@80466ef8efa80486cdfbddf929453a4f3565c791  # v2
+        uses: taiki-e/install-action@81ee1d48d9194cdcab880cbdc7d36e87d39874cb  # v2
         with:
           tool: cargo-deny,just
 
@@ -38,9 +40,15 @@ jobs:
 
       - name: just check
         run: just check
+        env:
+          # Disable incremental compilation to avoid overhead.
+          CARGO_INCREMENTAL: "0"
+          # Disable full debug symbol generation to speed up CI build
+          # "1" means line tables only, which is useful for panic tracebacks.
+          CARGO_PROFILE_DEV_DEBUG: "1"
 
       - name: upload docs
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
         with:
           name: docs
           path: target/doc

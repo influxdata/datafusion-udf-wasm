@@ -15,7 +15,9 @@ async fn test_add_one() {
     let component = WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_EXAMPLE.into())
         .await
         .unwrap();
-    let mut udfs = WasmScalarUdf::new(&component, "".to_owned()).await.unwrap();
+    let mut udfs = WasmScalarUdf::new(&component, &Default::default(), "".to_owned())
+        .await
+        .unwrap();
     assert_eq!(udfs.len(), 1);
     let udf = udfs.pop().unwrap();
 

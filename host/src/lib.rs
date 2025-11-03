@@ -2,28 +2,32 @@
 //!
 //!
 //! [DataFusion]: https://datafusion.apache.org/
-//!
-use std::{any::Any, io::Cursor, ops::DerefMut, sync::Arc};
+use std::{any::Any, ops::DerefMut, sync::Arc};
 
 use arrow::datatypes::DataType;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature};
-use tempfile::TempDir;
 use tokio::sync::Mutex;
 use wasmtime::{
     Engine, Store,
-    component::{Component, Linker, ResourceAny},
+    component::{Component, ResourceAny},
 };
-use wasmtime_wasi::{
-    DirPerms, FilePerms, ResourceTable, WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe,
+use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe};
+use wasmtime_wasi_http::{
+    HttpResult, WasiHttpCtx, WasiHttpView,
+    bindings::http::types::ErrorCode as HttpErrorCode,
+    body::HyperOutgoingBody,
+    types::{HostFutureIncomingResponse, OutgoingRequestConfig, default_send_request_handler},
 };
-use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 
 use crate::{
-    bindings::exports::datafusion_udf_wasm::udf::types as wit_types, error::DataFusionResultExt,
+    bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
+    error::{DataFusionResultExt, WasmToDataFusionResultExt},
+    http::{HttpRequestValidator, RejectAllHttpRequests},
+    linker::link,
     tokio_helpers::async_in_sync_context,
+    vfs::{VfsCtxView, VfsState, VfsView},
 };
-use crate::{error::WasmToDataFusionResultExt, tokio_helpers::blocking_io};
 
 // unused-crate-dependencies false positives
 #[cfg(test)]
@@ -36,15 +40,18 @@ use wiremock as _;
 mod bindings;
 mod conversion;
 mod error;
+pub mod http;
+mod linker;
 mod tokio_helpers;
 pub mod udf_query;
+mod vfs;
 
 /// State of the WASM payload.
 struct WasmStateImpl {
-    /// Temporary directory that holds the root filesystem.
+    /// Virtual filesystem for the WASM payload.
     ///
-    /// This filesystem is provided to the payload as read-only.
-    root: TempDir,
+    /// This filesystem is provided to the payload in memory with read-write support.
+    vfs_state: VfsState,
 
     /// A limited buffer for stderr.
     ///
@@ -59,22 +66,27 @@ struct WasmStateImpl {
 
     /// Resource tables.
     resource_table: ResourceTable,
+
+    /// HTTP request validator.
+    http_validator: Arc<dyn HttpRequestValidator>,
 }
 
 impl std::fmt::Debug for WasmStateImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self {
-            root,
+            vfs_state,
             stderr,
             wasi_ctx: _,
             wasi_http_ctx: _,
             resource_table,
+            http_validator,
         } = self;
         f.debug_struct("WasmStateImpl")
-            .field("root", root)
+            .field("vfs_state", vfs_state)
             .field("stderr", stderr)
             .field("wasi_ctx", &"<WASI_CTX>")
             .field("resource_table", resource_table)
+            .field("http_validator", http_validator)
             .finish()
     }
 }
@@ -95,6 +107,40 @@ impl WasiHttpView for WasmStateImpl {
 
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.resource_table
+    }
+
+    fn send_request(
+        &mut self,
+        request: hyper::Request<HyperOutgoingBody>,
+        config: OutgoingRequestConfig,
+    ) -> HttpResult<HostFutureIncomingResponse> {
+        // technically we could return an error straight away, but `urllib3` doesn't handle that super well, so we
+        // create a future and validate the error in there (before actually starting the request of course)
+
+        let validator = Arc::clone(&self.http_validator);
+        let handle = wasmtime_wasi::runtime::spawn(async move {
+            // yes, that's another layer of futures. The WASI interface is somewhat nested.
+            let fut = async {
+                validator
+                    .validate(&request, config.use_tls)
+                    .map_err(|_| HttpErrorCode::HttpRequestDenied)?;
+
+                default_send_request_handler(request, config).await
+            };
+
+            Ok(fut.await)
+        });
+
+        Ok(HostFutureIncomingResponse::pending(handle))
+    }
+}
+
+impl VfsView for WasmStateImpl {
+    fn vfs(&mut self) -> VfsCtxView<'_> {
+        VfsCtxView {
+            table: &mut self.resource_table,
+            vfs_state: &mut self.vfs_state,
+        }
     }
 }
 
@@ -155,6 +201,40 @@ impl std::fmt::Debug for WasmComponentPrecompiled {
     }
 }
 
+/// Permissions for a WASM component.
+#[derive(Debug)]
+pub struct WasmPermissions {
+    /// Validator for HTTP requests.
+    http: Arc<dyn HttpRequestValidator>,
+}
+
+impl WasmPermissions {
+    /// Create default permissions.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl Default for WasmPermissions {
+    fn default() -> Self {
+        Self {
+            http: Arc::new(RejectAllHttpRequests),
+        }
+    }
+}
+
+impl WasmPermissions {
+    /// Set HTTP validator.
+    pub fn with_http<V>(self, http: V) -> Self
+    where
+        V: HttpRequestValidator,
+    {
+        Self {
+            http: Arc::new(http),
+        }
+    }
+}
+
 /// A [`ScalarUDFImpl`] that wraps a WebAssembly payload.
 pub struct WasmScalarUdf {
     /// Mutable state.
@@ -189,44 +269,29 @@ impl WasmScalarUdf {
     /// UDFs bound to the same VM share state, however calling this method multiple times will yield independent WASM VMs.
     pub async fn new(
         component: &WasmComponentPrecompiled,
+        permissions: &WasmPermissions,
         source: String,
     ) -> DataFusionResult<Vec<Self>> {
         let WasmComponentPrecompiled { engine, component } = component;
 
-        // TODO: we need an in-mem file system for this, see
-        //       - https://github.com/bytecodealliance/wasmtime/issues/8963
-        //       - https://github.com/Timmmm/wasmtime_fs_demo
-        let root = blocking_io(TempDir::new)
-            .await
-            .map_err(DataFusionError::IoError)?;
+        // Create in-memory VFS
+        let vfs_state = VfsState::new();
 
         let stderr = MemoryOutputPipe::new(1024);
-        let wasi_ctx = WasiCtx::builder()
-            .stderr(stderr.clone())
-            .preopened_dir(root.path(), "/", DirPerms::READ, FilePerms::READ)
-            .context("pre-open root dir", None)?
-            .build();
+        let wasi_ctx = WasiCtx::builder().stderr(stderr.clone()).build();
         let state = WasmStateImpl {
-            root,
+            vfs_state,
             stderr,
             wasi_ctx,
             wasi_http_ctx: WasiHttpCtx::new(),
             resource_table: ResourceTable::new(),
+            http_validator: Arc::clone(&permissions.http),
         };
-        let mut store = Store::new(engine, state);
+        let (bindings, mut store) = link(engine, component, state)
+            .await
+            .context("link WASM components")?;
 
-        let mut linker = Linker::new(engine);
-        wasmtime_wasi::p2::add_to_linker_async(&mut linker).context("link WASI p2", None)?;
-        wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)
-            .context("link WASI p2 HTTP", None)?;
-
-        let bindings = Arc::new(
-            bindings::Datafusion::instantiate_async(&mut store, component, &linker)
-                .await
-                .context("initialize bindings", Some(&store.data().stderr.contents()))?,
-        );
-
-        // fill root FS
+        // Populate VFS from tar archive
         let root_data = bindings
             .datafusion_udf_wasm_udf_types()
             .call_root_fs_tar(&mut store)
@@ -236,13 +301,11 @@ impl WasmScalarUdf {
                 Some(&store.data().stderr.contents()),
             )?;
         if let Some(root_data) = root_data {
-            let root_path = store.data().root.path().to_owned();
-            blocking_io(move || {
-                let mut a = tar::Archive::new(Cursor::new(root_data));
-                a.unpack(root_path)
-            })
-            .await
-            .map_err(DataFusionError::IoError)?;
+            store
+                .data_mut()
+                .vfs_state
+                .populate_from_tar(&root_data)
+                .map_err(DataFusionError::IoError)?;
         }
 
         let udf_resources = bindings
