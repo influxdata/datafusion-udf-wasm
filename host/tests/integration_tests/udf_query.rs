@@ -45,9 +45,7 @@ SELECT add_one(1);
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]))
-        .await
-        .unwrap();
+    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
     let parsed_query = parser
         .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
         .await
@@ -91,9 +89,7 @@ SELECT add_one(1), multiply_two(3);
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]))
-        .await
-        .unwrap();
+    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
     let parsed_query = parser
         .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
         .await
@@ -133,9 +129,7 @@ SELECT add_one(1), multiply_two(3);
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]))
-        .await
-        .unwrap();
+    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
     let parsed_query = parser
         .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
         .await
@@ -169,9 +163,7 @@ SELECT add_one(1)
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]))
-        .await
-        .unwrap();
+    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
     let parsed_query = parser
         .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
         .await
