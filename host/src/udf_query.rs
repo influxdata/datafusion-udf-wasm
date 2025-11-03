@@ -10,24 +10,6 @@ use sqlparser::dialect::dialect_from_str;
 
 use crate::{WasmComponentPrecompiled, WasmScalarUdf};
 
-/// Supported UDF languages
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub enum UDFLanguage {
-    /// The Python programming language
-    Python,
-    /// An unsupported UDF language
-    Unsupported,
-}
-
-impl From<String> for UDFLanguage {
-    fn from(value: String) -> Self {
-        match value.to_lowercase().as_str() {
-            "python" => Self::Python,
-            _ => Self::Unsupported,
-        }
-    }
-}
-
 /// A [ParsedQuery] contains the extracted UDFs and SQL query string
 #[derive(Debug)]
 pub struct ParsedQuery {
@@ -42,7 +24,7 @@ pub struct ParsedQuery {
 pub struct UdfQueryParser<'a> {
     /// Pre-compiled WASM component.
     /// Necessary to create UDFs.
-    components: HashMap<UDFLanguage, &'a WasmComponentPrecompiled>,
+    components: HashMap<String, &'a WasmComponentPrecompiled>,
 }
 
 impl std::fmt::Debug for UdfQueryParser<'_> {
@@ -57,7 +39,7 @@ impl std::fmt::Debug for UdfQueryParser<'_> {
 impl<'a> UdfQueryParser<'a> {
     /// Registers the UDF query in DataFusion.
     pub async fn new(
-        components: HashMap<UDFLanguage, &'a WasmComponentPrecompiled>,
+        components: HashMap<String, &'a WasmComponentPrecompiled>,
     ) -> DataFusionResult<Self> {
         Ok(Self { components })
     }
@@ -87,7 +69,7 @@ impl<'a> UdfQueryParser<'a> {
         &self,
         query: &str,
         task_ctx: &TaskContext,
-    ) -> DataFusionResult<(String, String, UDFLanguage)> {
+    ) -> DataFusionResult<(String, String, String)> {
         let options = task_ctx.session_config().options();
 
         let dialect = dialect_from_str(options.sql_parser.dialect.clone()).expect("valid dialect");
@@ -102,8 +84,7 @@ impl<'a> UdfQueryParser<'a> {
         let mut udf_code = String::new();
         let mut sql = String::new();
 
-        // Python is the only supported UDF language at this time.
-        let udf_language = UDFLanguage::Python;
+        let mut udf_language = String::new();
         for s in statements {
             let Statement::Statement(stmt) = s else {
                 continue;
@@ -111,14 +92,9 @@ impl<'a> UdfQueryParser<'a> {
 
             match parse_udf(*stmt)? {
                 Parsed::Udf { code, language } => {
+                    udf_language = language;
                     udf_code.push_str(&code);
                     udf_code.push('\n');
-                    // FIXME: handle multiple languages in a single query
-                    if language != udf_language {
-                        return Err(DataFusionError::Plan(
-                            "only Python UDFs are supported at this time".to_string(),
-                        ));
-                    }
                 }
                 Parsed::Other(statement) => {
                     sql.push_str(&statement);
@@ -148,7 +124,7 @@ enum Parsed {
         /// UDF code
         code: String,
         /// UDF language
-        language: UDFLanguage,
+        language: String,
     },
     /// Any other SQL statement
     Other(String),
@@ -161,7 +137,7 @@ fn parse_udf(stmt: SqlStatement) -> DataFusionResult<Parsed> {
             let function_body = cf.function_body.as_ref();
 
             let language = if let Some(lang) = cf.language.as_ref() {
-                UDFLanguage::from(lang.to_string())
+                lang.to_string()
             } else {
                 return Err(DataFusionError::Plan(
                     "function language is required for UDFs".to_string(),
