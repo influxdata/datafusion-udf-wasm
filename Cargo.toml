@@ -1,6 +1,5 @@
 [workspace.package]
 version = "0.1.0"
-authors = ["IOx Project Developers"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 

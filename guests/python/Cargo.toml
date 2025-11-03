@@ -1,7 +1,6 @@
 [package]
 name = "datafusion-udf-wasm-python"
 version.workspace = true
-authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
