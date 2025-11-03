@@ -24,7 +24,7 @@ jobs:
         run: pip install --requirement=.github/workflows/requirements.txt
 
       - name: Install `cargo-deny` & `just`
-        uses: taiki-e/install-action@41ef8c65f4034ff24ab1cc2cef52f3000bcf9523  # v2
+        uses: taiki-e/install-action@81ee1d48d9194cdcab880cbdc7d36e87d39874cb  # v2
         with:
           tool: cargo-deny,just
 
