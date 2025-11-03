@@ -5,7 +5,10 @@ use datafusion::{
     prelude::{DataFrame, SessionContext},
 };
 use datafusion_common::Result as DataFusionResult;
-use datafusion_udf_wasm_host::udf_query::{ParsedQuery, UdfQueryParser};
+use datafusion_udf_wasm_host::{
+    WasmPermissions,
+    udf_query::{ParsedQuery, UdfQueryParser},
+};
 
 use crate::integration_tests::python::test_utils::python_component;
 
@@ -42,10 +45,13 @@ SELECT add_one(1);
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python", component)]))
+    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]))
         .await
         .unwrap();
-    let parsed_query = parser.parse(query, ctx.task_ctx().as_ref()).await.unwrap();
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
 
     let df = UdfQueryInvocator::invoke(&ctx, parsed_query).await.unwrap();
     let batch = df.collect().await.unwrap();
@@ -85,10 +91,13 @@ SELECT add_one(1), multiply_two(3);
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python", component)]))
+    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]))
         .await
         .unwrap();
-    let parsed_query = parser.parse(query, ctx.task_ctx().as_ref()).await.unwrap();
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
 
     let df = UdfQueryInvocator::invoke(&ctx, parsed_query).await.unwrap();
     let batch = df.collect().await.unwrap();
@@ -124,10 +133,13 @@ SELECT add_one(1), multiply_two(3);
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python", component)]))
+    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]))
         .await
         .unwrap();
-    let parsed_query = parser.parse(query, ctx.task_ctx().as_ref()).await.unwrap();
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
 
     let df = UdfQueryInvocator::invoke(&ctx, parsed_query).await.unwrap();
     let batch = df.collect().await.unwrap();
@@ -157,10 +169,13 @@ SELECT add_one(1)
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python", component)]))
+    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]))
         .await
         .unwrap();
-    let parsed_query = parser.parse(query, ctx.task_ctx().as_ref()).await.unwrap();
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
 
     let r = UdfQueryInvocator::invoke(&ctx, parsed_query).await;
     assert!(r.is_err());
