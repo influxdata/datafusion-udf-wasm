@@ -11,12 +11,6 @@ use sqlparser::dialect::dialect_from_str;
 
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
 
-use crate::format::UdfCodeFormatter;
-
-/// Trait for formatting UDF code before compilation allows for
-/// language-specific formatting or preprocessing.
-pub mod format;
-
 /// A [ParsedQuery] contains the extracted UDFs and SQL query string
 #[derive(Debug)]
 pub struct ParsedQuery {
@@ -28,15 +22,13 @@ pub struct ParsedQuery {
 
 /// Handles the registration and invocation of UDF queries in DataFusion with a
 /// pre-compiled WASM component.
-pub struct UdfQueryParser<'a, F: UdfCodeFormatter> {
+pub struct UdfQueryParser<'a> {
     /// Pre-compiled WASM component.
     /// Necessary to create UDFs.
     components: HashMap<String, &'a WasmComponentPrecompiled>,
-    /// Code formatter for UDF code
-    formatter: F,
 }
 
-impl<F: UdfCodeFormatter> std::fmt::Debug for UdfQueryParser<'_, F> {
+impl std::fmt::Debug for UdfQueryParser<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UdfQueryParser")
             .field("session_ctx", &"SessionContext { ... }")
@@ -45,13 +37,10 @@ impl<F: UdfCodeFormatter> std::fmt::Debug for UdfQueryParser<'_, F> {
     }
 }
 
-impl<'a, F: UdfCodeFormatter> UdfQueryParser<'a, F> {
+impl<'a> UdfQueryParser<'a> {
     /// Registers the UDF query in DataFusion.
-    pub fn new(components: HashMap<String, &'a WasmComponentPrecompiled>, formatter: F) -> Self {
-        Self {
-            components,
-            formatter,
-        }
+    pub fn new(components: HashMap<String, &'a WasmComponentPrecompiled>) -> Self {
+        Self { components }
     }
 
     /// Parses a SQL query that defines & uses UDFs into a [ParsedQuery].
@@ -73,8 +62,7 @@ impl<'a, F: UdfCodeFormatter> UdfQueryParser<'a, F> {
             })?;
 
             for code in blocks {
-                let formatted_code = self.formatter.format(code);
-                udfs.extend(WasmScalarUdf::new(component, permissions, formatted_code).await?);
+                udfs.extend(WasmScalarUdf::new(component, permissions, code).await?);
             }
         }
 

@@ -5,14 +5,14 @@
 
 use std::sync::Arc;
 
+use crate::integration_tests::{
+    python::test_utils::python_scalar_udfs, test_utils::ColumnarValueExt,
+};
 use arrow::{
     array::{Array, ArrayRef, Int64Array},
     datatypes::{DataType, Field},
 };
 use datafusion_expr::{ScalarFunctionArgs, ScalarUDFImpl};
-use datafusion_udf_wasm_host::test_utils::python::python_scalar_udfs;
-
-use crate::integration_tests::test_utils::ColumnarValueExt;
 
 const CODE: &str = "
 # Use system module to store our state.

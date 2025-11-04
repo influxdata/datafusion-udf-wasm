@@ -42,8 +42,6 @@ mod conversion;
 mod error;
 pub mod http;
 mod linker;
-/// Utilities for testing.
-pub mod test_utils;
 mod tokio_helpers;
 mod vfs;
 

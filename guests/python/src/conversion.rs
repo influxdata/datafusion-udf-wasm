@@ -3,7 +3,8 @@ use std::{ops::ControlFlow, sync::Arc};
 
 use arrow::{
     array::{
-        Array, ArrayRef, BooleanBuilder, Float64Builder, Int64Builder, StringBuilder,
+        Array, ArrayRef, BinaryBuilder, BooleanBuilder, Date32Builder, DurationMicrosecondBuilder,
+        Float64Builder, Int64Builder, StringBuilder, Time64MicrosecondBuilder,
         TimestampMicrosecondBuilder,
     },
     datatypes::{DataType, TimeUnit},
@@ -11,7 +12,8 @@ use arrow::{
 use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Timelike, Utc};
 use datafusion_common::{
     cast::{
-        as_boolean_array, as_float64_array, as_int64_array, as_string_array,
+        as_binary_array, as_boolean_array, as_date32_array, as_duration_microsecond_array,
+        as_float64_array, as_int64_array, as_string_array, as_time64_microsecond_array,
         as_timestamp_microsecond_array,
     },
     error::Result as DataFusionResult,
@@ -20,8 +22,8 @@ use datafusion_common::{
 use pyo3::{
     Bound, BoundObject, IntoPyObjectExt, PyAny, Python,
     types::{
-        PyAnyMethods, PyDateAccess, PyDateTime, PyInt, PyNone, PyStringMethods, PyTimeAccess,
-        PyTzInfoAccess,
+        PyAnyMethods, PyBytes, PyDate, PyDateAccess, PyDateTime, PyDelta, PyInt, PyNone,
+        PyStringMethods, PyTime, PyTimeAccess, PyTzInfoAccess,
     },
 };
 
@@ -52,6 +54,10 @@ impl PythonType {
             Self::Float => DataType::Float64,
             Self::Int => DataType::Int64,
             Self::Str => DataType::Utf8,
+            Self::Bytes => DataType::Binary,
+            Self::Date => DataType::Date32,
+            Self::Time => DataType::Time64(TimeUnit::Microsecond),
+            Self::Timedelta => DataType::Duration(TimeUnit::Microsecond),
         }
     }
 
@@ -177,6 +183,105 @@ impl PythonType {
 
                 Ok(Box::new(it))
             }
+            Self::Bytes => {
+                let array = as_binary_array(array)?;
+
+                let it = array.into_iter().map(move |maybe_val| {
+                    maybe_val
+                        .map(|val| {
+                            PyBytes::new(py, val).into_bound_py_any(py).map_err(|e| {
+                                exec_datafusion_err!(
+                                    "cannot convert Rust `&[u8]` value to Python bytes: {e}"
+                                )
+                            })
+                        })
+                        .transpose()
+                });
+
+                Ok(Box::new(it))
+            }
+            Self::Date => {
+                let array = as_date32_array(array)?;
+
+                let it = array.into_iter().map(move |maybe_val| {
+                    maybe_val
+                        .map(|val| {
+                            let days_since_epoch = val;
+                            let epoch = NaiveDate::from_epoch_days(0)
+                                .ok_or_else(|| exec_datafusion_err!("cannot create epoch date"))?;
+                            let date = epoch + chrono::Duration::days(days_since_epoch as i64);
+
+                            PyDate::new(
+                                py,
+                                date.year(),
+                                date.month()
+                                    .try_into()
+                                    .map_err(|e| exec_datafusion_err!("month out of range: {e}"))?,
+                                date.day()
+                                    .try_into()
+                                    .map_err(|e| exec_datafusion_err!("day out of range: {e}"))?,
+                            )
+                            .map_err(|e| exec_datafusion_err!("cannot create PyDate: {e}"))?
+                            .into_bound_py_any(py)
+                            .map_err(|e| exec_datafusion_err!("cannot convert PyDate to any: {e}"))
+                        })
+                        .transpose()
+                });
+
+                Ok(Box::new(it))
+            }
+            Self::Time => {
+                let array = as_time64_microsecond_array(array)?;
+
+                let it = array.into_iter().map(move |maybe_val| {
+                    maybe_val
+                        .map(|val| {
+                            let microseconds = val;
+                            let total_seconds = microseconds / 1_000_000;
+                            let remaining_microseconds = (microseconds % 1_000_000) as u32;
+
+                            let hours = (total_seconds / 3600) as u8;
+                            let minutes = ((total_seconds % 3600) / 60) as u8;
+                            let seconds = (total_seconds % 60) as u8;
+
+                            PyTime::new(py, hours, minutes, seconds, remaining_microseconds, None)
+                                .map_err(|e| exec_datafusion_err!("cannot create PyTime: {e}"))?
+                                .into_bound_py_any(py)
+                                .map_err(|e| {
+                                    exec_datafusion_err!("cannot convert PyTime to any: {e}")
+                                })
+                        })
+                        .transpose()
+                });
+
+                Ok(Box::new(it))
+            }
+            Self::Timedelta => {
+                let array = as_duration_microsecond_array(array)?;
+
+                let it = array.into_iter().map(move |maybe_val| {
+                    maybe_val
+                        .map(|val| {
+                            let microseconds = val;
+                            let total_seconds = microseconds / 1_000_000;
+                            let remaining_microseconds = microseconds % 1_000_000;
+
+                            PyDelta::new(
+                                py,
+                                (total_seconds / 86400) as i32, // days
+                                (total_seconds % 86400) as i32, // seconds
+                                remaining_microseconds as i32,  // microseconds
+                                false,
+                            )
+                            .map_err(|e| exec_datafusion_err!("cannot create PyDelta: {e}"))?
+                            .into_bound_py_any(py)
+                            .map_err(|e| exec_datafusion_err!("cannot convert PyDelta to any: {e}"))
+                        })
+                        .transpose()
+                });
+
+                Ok(Box::new(it))
+            }
         }
     }
 
@@ -190,6 +295,10 @@ impl PythonType {
             Self::Float => Box::new(Float64Builder::with_capacity(num_rows)),
             Self::Int => Box::new(Int64Builder::with_capacity(num_rows)),
             Self::Str => Box::new(StringBuilder::with_capacity(num_rows, 1024)),
+            Self::Bytes => Box::new(BinaryBuilder::with_capacity(num_rows, 1024)),
+            Self::Date => Box::new(Date32Builder::with_capacity(num_rows)),
+            Self::Time => Box::new(Time64MicrosecondBuilder::with_capacity(num_rows)),
+            Self::Timedelta => Box::new(DurationMicrosecondBuilder::with_capacity(num_rows)),
         }
     }
 }
@@ -411,6 +520,143 @@ impl<'py> ArrayBuilder<'py> for TimestampMicrosecondBuilder {
         let val = Utc.from_utc_datetime(&val);
         let val = val.timestamp_micros();
         self.append_value(val);
+        Ok(())
+    }
+
+    fn skip(&mut self) {
+        self.append_null();
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        Arc::new(self.finish())
+    }
+}
+
+impl<'py> ArrayBuilder<'py> for BinaryBuilder {
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        let val = val.cast_exact::<PyBytes>().map_err(|_| {
+            exec_datafusion_err!("expected `bytes` but got {}", py_representation(&val))
+        })?;
+        let val: &[u8] = val.extract().map_err(|_| {
+            exec_datafusion_err!("cannot extract bytes from {}", py_representation(val))
+        })?;
+        self.append_value(val);
+        Ok(())
+    }
+
+    fn skip(&mut self) {
+        self.append_null();
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        Arc::new(self.finish())
+    }
+}
+
+impl<'py> ArrayBuilder<'py> for Date32Builder {
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        let val = val.cast_exact::<PyDate>().map_err(|_| {
+            exec_datafusion_err!("expected `date` but got {}", py_representation(&val))
+        })?;
+
+        let date =
+            NaiveDate::from_ymd_opt(val.get_year(), val.get_month().into(), val.get_day().into())
+                .ok_or_else(|| {
+                exec_datafusion_err!(
+                    "cannot create NaiveDate based on year-month-day of {}",
+                    py_representation(val)
+                )
+            })?;
+
+        let epoch = NaiveDate::from_epoch_days(0)
+            .ok_or_else(|| exec_datafusion_err!("cannot create epoch date"))?;
+
+        let days_since_epoch = date.signed_duration_since(epoch).num_days();
+        let days_since_epoch_i32: i32 = days_since_epoch.try_into().map_err(|_| {
+            exec_datafusion_err!(
+                "date is out of range for Date32: {} days since epoch",
+                days_since_epoch
+            )
+        })?;
+
+        self.append_value(days_since_epoch_i32);
+        Ok(())
+    }
+
+    fn skip(&mut self) {
+        self.append_null();
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        Arc::new(self.finish())
+    }
+}
+
+impl<'py> ArrayBuilder<'py> for Time64MicrosecondBuilder {
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        let val = val.cast_exact::<PyTime>().map_err(|_| {
+            exec_datafusion_err!("expected `time` but got {}", py_representation(&val))
+        })?;
+
+        if let Some(tzinfo) = val.get_tzinfo() {
+            let s = tzinfo
+                .str()
+                .and_then(|name| name.to_str().map(|s| s.to_owned()))
+                .unwrap_or_else(|_| "<unknown>".to_owned());
+            return exec_err!("expected no tzinfo, got {s}");
+        }
+
+        let hours = val.get_hour() as i64;
+        let minutes = val.get_minute() as i64;
+        let seconds = val.get_second() as i64;
+        let microseconds = val.get_microsecond() as i64;
+
+        let total_microseconds = hours * 3600 * 1_000_000
+            + minutes * 60 * 1_000_000
+            + seconds * 1_000_000
+            + microseconds;
+
+        self.append_value(total_microseconds);
+        Ok(())
+    }
+
+    fn skip(&mut self) {
+        self.append_null();
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        Arc::new(self.finish())
+    }
+}
+
+impl<'py> ArrayBuilder<'py> for DurationMicrosecondBuilder {
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        let val = val.cast_exact::<PyDelta>().map_err(|_| {
+            exec_datafusion_err!("expected `timedelta` but got {}", py_representation(&val))
+        })?;
+
+        // Extract the timedelta components using the standard methods
+        let days: i64 = val
+            .getattr("days")
+            .map_err(|_| exec_datafusion_err!("cannot get days from timedelta"))?
+            .extract()
+            .map_err(|_| exec_datafusion_err!("cannot extract days as i64"))?;
+
+        let seconds: i64 = val
+            .getattr("seconds")
+            .map_err(|_| exec_datafusion_err!("cannot get seconds from timedelta"))?
+            .extract()
+            .map_err(|_| exec_datafusion_err!("cannot extract seconds as i64"))?;
+
+        let microseconds: i64 = val
+            .getattr("microseconds")
+            .map_err(|_| exec_datafusion_err!("cannot get microseconds from timedelta"))?
+            .extract()
+            .map_err(|_| exec_datafusion_err!("cannot extract microseconds as i64"))?;
+
+        let total_microseconds = days * 86400 * 1_000_000 + seconds * 1_000_000 + microseconds;
+
+        self.append_value(total_microseconds);
         Ok(())
     }
 
