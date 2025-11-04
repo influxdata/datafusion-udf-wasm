@@ -89,11 +89,7 @@ impl<'a> UdfQueryParser<'a> {
         let mut sql = String::new();
         let mut udf_blocks: HashMap<String, Vec<String>> = HashMap::new();
         for s in statements {
-            let Statement::Statement(stmt) = s else {
-                continue;
-            };
-
-            match parse_udf(*stmt)? {
+            match parse_udf(s)? {
                 Parsed::Udf { code, language } => {
                     if let Some(existing) = udf_blocks.get_mut(&language) {
                         existing.push(code);
@@ -130,31 +126,34 @@ enum Parsed {
 }
 
 /// Parse a single SQL statement to extract a UDF
-fn parse_udf(stmt: SqlStatement) -> DataFusionResult<Parsed> {
+fn parse_udf(stmt: Statement) -> DataFusionResult<Parsed> {
     match stmt {
-        SqlStatement::CreateFunction(cf) => {
-            let function_body = cf.function_body.as_ref();
+        Statement::Statement(stmt) => match *stmt {
+            SqlStatement::CreateFunction(cf) => {
+                let function_body = cf.function_body.as_ref();
 
-            let language = if let Some(lang) = cf.language.as_ref() {
-                lang.to_string()
-            } else {
-                return Err(DataFusionError::Plan(
-                    "function language is required for UDFs".to_string(),
-                ));
-            };
+                let language = if let Some(lang) = cf.language.as_ref() {
+                    lang.to_string()
+                } else {
+                    return Err(DataFusionError::Plan(
+                        "function language is required for UDFs".to_string(),
+                    ));
+                };
 
-            let code = match function_body {
-                Some(body) => extract_function_body(body),
-                None => Err(DataFusionError::Plan(
-                    "function body is required for UDFs".to_string(),
-                )),
-            }?;
+                let code = match function_body {
+                    Some(body) => extract_function_body(body),
+                    None => Err(DataFusionError::Plan(
+                        "function body is required for UDFs".to_string(),
+                    )),
+                }?;
 
-            Ok(Parsed::Udf {
-                code: code.to_string(),
-                language,
-            })
-        }
+                Ok(Parsed::Udf {
+                    code: code.to_string(),
+                    language,
+                })
+            }
+            _ => Ok(Parsed::Other(stmt.to_string())),
+        },
         _ => Ok(Parsed::Other(stmt.to_string())),
     }
 }
