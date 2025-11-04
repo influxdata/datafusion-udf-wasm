@@ -1278,10 +1278,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrow",
- "datafusion",
  "datafusion-common",
  "datafusion-expr",
- "datafusion-sql",
  "datafusion-udf-wasm-arrow2bytes",
  "datafusion-udf-wasm-bundle",
  "http",
@@ -1289,7 +1287,6 @@ dependencies = [
  "insta",
  "rand 0.9.2",
  "siphasher",
- "sqlparser",
  "tar",
  "tokio",
  "wasmtime",
@@ -1312,6 +1309,20 @@ dependencies = [
  "tar",
  "walkdir",
  "wasip2",
+]
+
+[[package]]
+name = "datafusion-udf-wasm-query"
+version = "0.1.0"
+dependencies = [
+ "datafusion",
+ "datafusion-common",
+ "datafusion-expr",
+ "datafusion-sql",
+ "datafusion-udf-wasm-host",
+ "insta",
+ "sqlparser",
+ "tokio",
 ]
 
 [[package]]

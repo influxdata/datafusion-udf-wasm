@@ -1,3 +1,10 @@
+#![expect(
+    // Docs are not strictly required for tests.
+    missing_docs,
+    // unused-crate-dependencies false positives
+    unused_crate_dependencies,
+)]
+
 use std::collections::HashMap;
 
 use datafusion::{
@@ -5,12 +12,11 @@ use datafusion::{
     prelude::{DataFrame, SessionContext},
 };
 use datafusion_common::{Result as DataFusionResult, test_util::batches_to_string};
-use datafusion_udf_wasm_host::{
-    WasmPermissions,
-    udf_query::{ParsedQuery, UdfQueryParser},
+use datafusion_udf_wasm_host::{WasmPermissions, test_utils::python::python_component};
+use datafusion_udf_wasm_query::{
+    ParsedQuery, UdfQueryParser,
+    format::{NoOpFormatter, python::PythonCodeFormatter},
 };
-
-use crate::integration_tests::python::test_utils::python_component;
 
 /// A helper struct for invoking UDF queries and validating their results.
 struct UdfQueryInvocator;
@@ -45,7 +51,10 @@ SELECT add_one(1);
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parser = UdfQueryParser::new(
+        HashMap::from_iter([("python".to_string(), component)]),
+        NoOpFormatter,
+    );
     let parsed_query = parser
         .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
         .await
@@ -89,7 +98,10 @@ SELECT add_one(1), multiply_two(3);
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parser = UdfQueryParser::new(
+        HashMap::from_iter([("python".to_string(), component)]),
+        NoOpFormatter,
+    );
     let parsed_query = parser
         .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
         .await
@@ -129,7 +141,10 @@ SELECT add_one(1), multiply_two(3);
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parser = UdfQueryParser::new(
+        HashMap::from_iter([("python".to_string(), component)]),
+        NoOpFormatter,
+    );
     let parsed_query = parser
         .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
         .await
@@ -163,7 +178,10 @@ SELECT add_one(1)
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parser = UdfQueryParser::new(
+        HashMap::from_iter([("python".to_string(), component)]),
+        NoOpFormatter,
+    );
     let parsed_query = parser
         .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
         .await
@@ -192,7 +210,10 @@ EXPLAIN SELECT add_one(1);
     let ctx = SessionContext::new();
     let component = python_component().await;
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parser = UdfQueryParser::new(
+        HashMap::from_iter([("python".to_string(), component)]),
+        NoOpFormatter,
+    );
     let parsed_query = parser
         .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
         .await
@@ -214,4 +235,125 @@ EXPLAIN SELECT add_one(1);
     |               |                                                        |
     +---------------+--------------------------------------------------------+
     ");
+}
+
+// Tests for PythonCodeFormatter with various indentation cases
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_python_formatter_everything_indented() {
+    // Case: Everything indented (including SQL)
+    let query = r#"  CREATE FUNCTION add_one()
+  LANGUAGE python
+  AS '
+  def add_one(x: int) -> int:
+      
+      return x + 1
+  ';
+  
+  SELECT add_one(1);"#;
+
+    let ctx = SessionContext::new();
+    let component = python_component().await;
+
+    let parser = UdfQueryParser::new(
+        HashMap::from_iter([("python".to_string(), component)]),
+        PythonCodeFormatter,
+    );
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
+
+    let df = UdfQueryInvocator::invoke(&ctx, parsed_query).await.unwrap();
+    let batch = df.collect().await.unwrap();
+
+    assert_batches_eq!(
+        [
+            "+-------------------+",
+            "| add_one(Int64(1)) |",
+            "+-------------------+",
+            "| 2                 |",
+            "+-------------------+",
+        ],
+        &batch
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_python_formatter_empty_lines_not_indented() {
+    // Case: Empty lines not indented
+    let query = r#"  CREATE FUNCTION add_one()
+  LANGUAGE python
+  AS '
+  def add_one(x: int) -> int:
+
+      return x + 1
+  ';
+
+  SELECT add_one(1);"#;
+
+    let ctx = SessionContext::new();
+    let component = python_component().await;
+
+    let parser = UdfQueryParser::new(
+        HashMap::from_iter([("python".to_string(), component)]),
+        PythonCodeFormatter,
+    );
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
+
+    let df = UdfQueryInvocator::invoke(&ctx, parsed_query).await.unwrap();
+    let batch = df.collect().await.unwrap();
+
+    assert_batches_eq!(
+        [
+            "+-------------------+",
+            "| add_one(Int64(1)) |",
+            "+-------------------+",
+            "| 2                 |",
+            "+-------------------+",
+        ],
+        &batch
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_python_formatter_python_further_indented() {
+    // Case: Python code further indented than SQL
+    let query = r#"  CREATE FUNCTION add_one()
+  LANGUAGE python
+  AS '
+      def add_one(x: int) -> int:
+          return x + 1
+      ';
+  
+  SELECT add_one(1);"#;
+
+    let ctx = SessionContext::new();
+    let component = python_component().await;
+
+    let parser = UdfQueryParser::new(
+        HashMap::from_iter([("python".to_string(), component)]),
+        PythonCodeFormatter,
+    );
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
+
+    let df = UdfQueryInvocator::invoke(&ctx, parsed_query).await.unwrap();
+    let batch = df.collect().await.unwrap();
+
+    assert_batches_eq!(
+        [
+            "+-------------------+",
+            "| add_one(Int64(1)) |",
+            "+-------------------+",
+            "| 2                 |",
+            "+-------------------+",
+        ],
+        &batch
+    );
 }

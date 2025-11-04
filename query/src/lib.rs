@@ -1,4 +1,5 @@
 //! Embedded SQL approach for executing UDFs within SQL queries.
+#![allow(unused_crate_dependencies)]
 
 use std::collections::HashMap;
 
@@ -8,7 +9,13 @@ use datafusion_sql::parser::{DFParserBuilder, Statement};
 use sqlparser::ast::{CreateFunctionBody, Expr, Statement as SqlStatement, Value};
 use sqlparser::dialect::dialect_from_str;
 
-use crate::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
+use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
+
+use crate::format::UdfCodeFormatter;
+
+/// Trait for formatting UDF code before compilation allows for
+/// language-specific formatting or preprocessing.
+pub mod format;
 
 /// A [ParsedQuery] contains the extracted UDFs and SQL query string
 #[derive(Debug)]
@@ -21,13 +28,15 @@ pub struct ParsedQuery {
 
 /// Handles the registration and invocation of UDF queries in DataFusion with a
 /// pre-compiled WASM component.
-pub struct UdfQueryParser<'a> {
+pub struct UdfQueryParser<'a, F: UdfCodeFormatter> {
     /// Pre-compiled WASM component.
     /// Necessary to create UDFs.
     components: HashMap<String, &'a WasmComponentPrecompiled>,
+    /// Code formatter for UDF code
+    formatter: F,
 }
 
-impl std::fmt::Debug for UdfQueryParser<'_> {
+impl<F: UdfCodeFormatter> std::fmt::Debug for UdfQueryParser<'_, F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UdfQueryParser")
             .field("session_ctx", &"SessionContext { ... }")
@@ -36,10 +45,13 @@ impl std::fmt::Debug for UdfQueryParser<'_> {
     }
 }
 
-impl<'a> UdfQueryParser<'a> {
+impl<'a, F: UdfCodeFormatter> UdfQueryParser<'a, F> {
     /// Registers the UDF query in DataFusion.
-    pub fn new(components: HashMap<String, &'a WasmComponentPrecompiled>) -> Self {
-        Self { components }
+    pub fn new(components: HashMap<String, &'a WasmComponentPrecompiled>, formatter: F) -> Self {
+        Self {
+            components,
+            formatter,
+        }
     }
 
     /// Parses a SQL query that defines & uses UDFs into a [ParsedQuery].
@@ -61,7 +73,8 @@ impl<'a> UdfQueryParser<'a> {
             })?;
 
             for code in blocks {
-                udfs.extend(WasmScalarUdf::new(component, permissions, code).await?);
+                let formatted_code = self.formatter.format(code);
+                udfs.extend(WasmScalarUdf::new(component, permissions, formatted_code).await?);
             }
         }
 

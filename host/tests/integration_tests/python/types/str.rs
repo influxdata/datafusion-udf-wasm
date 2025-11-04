@@ -5,10 +5,9 @@ use arrow::{
     datatypes::{DataType, Field},
 };
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
+use datafusion_udf_wasm_host::test_utils::python::python_scalar_udf;
 
-use crate::integration_tests::{
-    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
-};
+use crate::integration_tests::test_utils::ColumnarValueExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_ok() {

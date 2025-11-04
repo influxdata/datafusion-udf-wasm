@@ -6,8 +6,7 @@ use arrow::{
 };
 use datafusion_common::DataFusionError;
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
-
-use crate::integration_tests::python::test_utils::python_scalar_udf;
+use datafusion_udf_wasm_host::test_utils::python::python_scalar_udf;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_return_type_param_mismatch() {
