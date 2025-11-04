@@ -4,8 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[lints]
-workspace = true
+[[example]]
+crate-type = ["cdylib"]
+name = "add_one"
 
 [dependencies]
 arrow.workspace = true
@@ -14,6 +15,5 @@ datafusion-expr.workspace = true
 datafusion-udf-wasm-arrow2bytes.workspace = true
 wit-bindgen.workspace = true
 
-[[example]]
-name = "add_one"
-crate-type = ["cdylib"]
+[lints]
+workspace = true

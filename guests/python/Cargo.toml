@@ -4,9 +4,6 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[lints]
-workspace = true
-
 [lib]
 crate-type = ["cdylib"]
 
@@ -22,3 +19,6 @@ wasip2.workspace = true
 [build-dependencies]
 tar.workspace = true
 walkdir = "2.5.0"
+
+[lints]
+workspace = true

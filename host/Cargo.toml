@@ -4,22 +4,19 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[lints]
-workspace = true
-
 [dependencies]
 anyhow.workspace = true
 arrow.workspace = true
 datafusion.workspace = true
 datafusion-common.workspace = true
 datafusion-expr.workspace = true
-datafusion-udf-wasm-arrow2bytes.workspace = true
 datafusion-sql.workspace = true
-sqlparser.workspace = true
+datafusion-udf-wasm-arrow2bytes.workspace = true
 http.workspace = true
 hyper.workspace = true
 rand = { version = "0.9" }
 siphasher = { version = "1", default-features = false }
+sqlparser.workspace = true
 tar.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync"] }
 wasmtime.workspace = true
@@ -28,7 +25,13 @@ wasmtime-wasi-http.workspace = true
 wasmtime-wasi-io.workspace = true
 
 [dev-dependencies]
-datafusion-udf-wasm-bundle = { workspace = true, features = ["example", "python"] }
+datafusion-udf-wasm-bundle = { workspace = true, features = [
+  "example",
+  "python"
+] }
 insta = "1.43.2"
 tokio = { workspace = true, features = ["fs", "macros"] }
 wiremock = "0.6.5"
+
+[lints]
+workspace = true
