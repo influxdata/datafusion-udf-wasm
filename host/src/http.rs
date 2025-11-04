@@ -2,7 +2,7 @@
 
 use std::{borrow::Cow, collections::HashSet, fmt};
 
-use http::Method;
+pub use http::Method;
 use wasmtime_wasi_http::body::HyperOutgoingBody;
 
 /// Validates if an outgoing HTTP interaction is allowed.
