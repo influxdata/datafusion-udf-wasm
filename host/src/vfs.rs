@@ -214,6 +214,11 @@ impl Allocation {
         }
     }
 
+    /// Get current allocation size.
+    fn get(&self) -> u64 {
+        self.n.load(Ordering::SeqCst)
+    }
+
     /// Increase allocation by given amount.
     fn inc(&self, n: u64) -> Result<(), FailedAllocation> {
         self.n
@@ -403,6 +408,13 @@ impl VfsState {
                 }
             }
         }
+
+        log::info!(
+            "unpacked WASM guest root filesystem from {} bytes TAR, consuming {} bytes and {} inodes",
+            tar_data.len(),
+            self.allocation.bytes.get(),
+            self.allocation.inodes.get()
+        );
 
         Ok(())
     }

@@ -131,6 +131,11 @@ impl WasiHttpView for WasmStateImpl {
                     .validate(&request, config.use_tls)
                     .map_err(|_| HttpErrorCode::HttpRequestDenied)?;
 
+                log::debug!(
+                    "UDF HTTP request: {} {}",
+                    request.method().as_str(),
+                    request.uri(),
+                );
                 default_send_request_handler(request, config).await
             };
 
@@ -190,6 +195,12 @@ impl WasmComponentPrecompiled {
             let compiled_component = engine
                 .precompile_component(&wasm_binary)
                 .context("pre-compile component", None)?;
+
+            log::debug!(
+                "Pre-compiled {} bytes of WASM bytecode into {} bytes",
+                wasm_binary.len(),
+                compiled_component.len()
+            );
 
             // SAFETY: the compiled version was produced by us with the same engine. This is NOT external/untrusted input.
             let component_res = unsafe { Component::deserialize(&engine, compiled_component) };
