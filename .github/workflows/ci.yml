@@ -28,6 +28,9 @@ jobs:
         with:
           tool: cargo-deny,just
 
+      - name: Install `tombi`
+        uses: tombi-toml/setup-tombi@a9378ac9fe5c29df7d26263deacea4ac642af9c2  # v1
+
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9  # master
         with:

@@ -52,6 +52,21 @@ check-rust-deny:
 # run ALL Rust checks
 check-rust: check-rust-fmt check-rust-check check-rust-build check-rust-clippy check-rust-test check-rust-doc check-rust-bench check-rust-deny
 
+# check TOML formatting
+check-toml-fmt:
+    @echo ::group::check-toml-fmt
+    tombi format --check
+    @echo ::endgroup::
+
+# lint TOML files with taplo
+check-toml-lint:
+    @echo ::group::check-toml-lint
+    tombi lint
+    @echo ::endgroup::
+
+# check TOML files
+check-toml: check-toml-fmt check-toml-lint
+
 # lint YAML files
 check-yaml:
     @echo ::group::check-yaml
@@ -59,7 +74,7 @@ check-yaml:
     @echo ::endgroup::
 
 # run ALL checks
-check: check-rust check-yaml
+check: check-rust check-toml check-yaml
 
 # clean Rust build artifacts
 clean-rust:
@@ -91,5 +106,14 @@ fix-rust-fmt:
 # fix common Rust issues automatically
 fix-rust: fix-rust-clippy fix-rust-check fix-rust-fmt
 
+# fix TOML formatting
+fix-toml-fmt:
+    @echo ::group::fix-toml-fmt
+    tombi format
+    @echo ::endgroup::
+
+# fix common TOML issues
+fix-toml: fix-toml-fmt
+
 # fix common issues automatically
-fix: fix-rust
+fix: fix-rust fix-toml

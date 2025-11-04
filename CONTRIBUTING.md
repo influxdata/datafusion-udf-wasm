@@ -25,6 +25,9 @@ Install [just] to easily run all the tests/scripts.
 ### Python
 Install [Python] to set up the environment for the [Python] guest.
 
+### Tombi
+Install [tombi] to format and lint [TOML] files.
+
 
 ## Checks
 There is one "run everything" [just] recipe:
@@ -107,4 +110,6 @@ Then the [Python Standard Library] was not found or not bundled correctly. You m
 [Python Standard Library]: https://docs.python.org/3/library/index.html
 [Rust]: https://www.rust-lang.org/
 [rustup]: https://rustup.rs/
+[tombi]: https://tombi-toml.github.io/tombi
+[TOML]: https://toml.io/
 [yamllint]: https://github.com/adrienverge/yamllint
