@@ -8,7 +8,7 @@ use ::http::HeaderName;
 use arrow::datatypes::DataType;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature};
-use tokio::sync::Mutex;
+use tokio::{runtime::Handle, sync::Mutex};
 use wasmtime::{
     Engine, Store,
     component::{Component, ResourceAny},
@@ -72,6 +72,9 @@ struct WasmStateImpl {
 
     /// HTTP request validator.
     http_validator: Arc<dyn HttpRequestValidator>,
+
+    /// Handle to tokio I/O runtime.
+    io_rt: Handle,
 }
 
 impl std::fmt::Debug for WasmStateImpl {
@@ -83,6 +86,7 @@ impl std::fmt::Debug for WasmStateImpl {
             wasi_http_ctx: _,
             resource_table,
             http_validator,
+            io_rt,
         } = self;
         f.debug_struct("WasmStateImpl")
             .field("vfs_state", vfs_state)
@@ -90,6 +94,7 @@ impl std::fmt::Debug for WasmStateImpl {
             .field("wasi_ctx", &"<WASI_CTX>")
             .field("resource_table", resource_table)
             .field("http_validator", http_validator)
+            .field("io_rt", io_rt)
             .finish()
     }
 }
@@ -117,6 +122,8 @@ impl WasiHttpView for WasmStateImpl {
         mut request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
     ) -> HttpResult<HostFutureIncomingResponse> {
+        let _guard = self.io_rt.enter();
+
         // Python `requests` sends this so we allow it but later drop it from the actual request.
         request.headers_mut().remove(hyper::header::CONNECTION);
 
@@ -298,6 +305,7 @@ impl WasmScalarUdf {
     pub async fn new(
         component: &WasmComponentPrecompiled,
         permissions: &WasmPermissions,
+        io_rt: Handle,
         source: String,
     ) -> DataFusionResult<Vec<Self>> {
         let WasmComponentPrecompiled { engine, component } = component;
@@ -314,6 +322,7 @@ impl WasmScalarUdf {
             wasi_http_ctx: WasiHttpCtx::new(),
             resource_table: ResourceTable::new(),
             http_validator: Arc::clone(&permissions.http),
+            io_rt,
         };
         let (bindings, mut store) = link(engine, component, state)
             .await

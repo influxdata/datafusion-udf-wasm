@@ -10,6 +10,7 @@ use sqlparser::ast::{CreateFunctionBody, Expr, Statement as SqlStatement, Value}
 use sqlparser::dialect::dialect_from_str;
 
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
+use tokio::runtime::Handle;
 
 /// A [ParsedQuery] contains the extracted UDFs and SQL query string
 #[derive(Debug)]
@@ -48,6 +49,7 @@ impl<'a> UdfQueryParser<'a> {
         &self,
         udf_query: &str,
         permissions: &WasmPermissions,
+        io_rt: Handle,
         task_ctx: &TaskContext,
     ) -> DataFusionResult<ParsedQuery> {
         let (code, sql) = self.parse_inner(udf_query, task_ctx)?;
@@ -62,7 +64,7 @@ impl<'a> UdfQueryParser<'a> {
             })?;
 
             for code in blocks {
-                udfs.extend(WasmScalarUdf::new(component, permissions, code).await?);
+                udfs.extend(WasmScalarUdf::new(component, permissions, io_rt.clone(), code).await?);
             }
         }
 

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use arrow::{
     array::{Array, StringArray, StringBuilder},
@@ -10,6 +10,7 @@ use datafusion_udf_wasm_host::{
     WasmPermissions, WasmScalarUdf,
     http::{AllowCertainHttpRequests, HttpRequestValidator, Matcher},
 };
+use tokio::runtime::Handle;
 use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
 
@@ -568,6 +569,7 @@ where
     WasmScalarUdf::new(
         python_component().await,
         &WasmPermissions::new().with_http(permissions),
+        Handle::current(),
         code.to_owned(),
     )
     .await
@@ -581,4 +583,80 @@ where
     let udfs = python_udfs_with_permissions(code, permissions).await;
     assert_eq!(udfs.len(), 1);
     udfs.into_iter().next().unwrap()
+}
+
+#[test]
+fn test_io_runtime() {
+    const CODE: &str = r#"
+import urllib3
+
+def perform_request(url: str) -> str:
+    resp = urllib3.request("GET", url)
+    return resp.data.decode("utf-8")
+"#;
+
+    let rt_tmp = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    let rt_cpu = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        // It would be nice if all the timeouts-related timers would also run within the within the I/O runtime, but
+        // that requires some larger intervention (either upstream or with a custom WASI HTTP implementation).
+        // Hence, we don't do that yet.
+        .enable_time()
+        .build()
+        .unwrap();
+    let rt_io = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap();
+
+    let server = rt_io.block_on(async {
+        let server = MockServer::start().await;
+        Mock::given(matchers::any())
+            .respond_with(ResponseTemplate::new(200).set_body_string("hello world!"))
+            .expect(1)
+            .mount(&server)
+            .await;
+        server
+    });
+
+    // deliberately use a runtime what we are going to throw away later to prevent tricks like `Handle::current`
+    let udf = rt_tmp.block_on(async {
+        let mut permissions = AllowCertainHttpRequests::new();
+        permissions.allow(Matcher {
+            method: http::Method::GET,
+            host: server.address().ip().to_string().into(),
+            port: server.address().port(),
+        });
+
+        let udfs = WasmScalarUdf::new(
+            python_component().await,
+            &WasmPermissions::new().with_http(permissions),
+            rt_io.handle().clone(),
+            CODE.to_owned(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(udfs.len(), 1);
+        udfs.into_iter().next().unwrap()
+    });
+    rt_tmp.shutdown_timeout(Duration::from_secs(1));
+
+    let array = rt_cpu.block_on(async {
+        udf.invoke_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+        })
+        .unwrap()
+        .unwrap_array()
+    });
+
+    assert_eq!(
+        array.as_ref(),
+        &StringArray::from_iter([Some("hello world!".to_owned()),]) as &dyn Array,
+    );
 }

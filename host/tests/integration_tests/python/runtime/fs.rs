@@ -6,6 +6,7 @@ use arrow::{
 };
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
 use datafusion_udf_wasm_host::{WasmPermissions, WasmScalarUdf, vfs::VfsLimits};
+use tokio::runtime::Handle;
 
 use crate::integration_tests::{
     python::test_utils::{python_component, python_scalar_udf},
@@ -239,6 +240,7 @@ async fn test_limit_inodes() {
             inodes: 42,
             ..Default::default()
         }),
+        Handle::current(),
         "".to_owned(),
     )
     .await
@@ -260,6 +262,7 @@ async fn test_limit_bytes() {
             bytes: 1337,
             ..Default::default()
         }),
+        Handle::current(),
         "".to_owned(),
     )
     .await
