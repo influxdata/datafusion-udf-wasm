@@ -2,7 +2,7 @@
 //!
 //! This provides a very crude, read-only in-mem virtual file system for the WASM guests.
 //!
-//! The data gets [populated via a TAR container](VfsState::populate_from_tar).
+//! The data gets populated via a TAR container.
 //!
 //! While this implementation has rather limited functionality, it is sufficient to get a Python guest interpreter
 //! running.
@@ -11,7 +11,10 @@ use std::{
     collections::HashMap,
     hash::Hash,
     io::{Cursor, Read},
-    sync::{Arc, RwLock, Weak},
+    sync::{
+        Arc, RwLock, Weak,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use rand::Rng;
@@ -58,7 +61,7 @@ enum VfsNodeKind {
     /// A directory containing child nodes.
     Directory {
         /// Child nodes indexed by name.
-        children: HashMap<String, SharedVfsNode>,
+        children: HashMap<Box<str>, SharedVfsNode>,
     },
 }
 
@@ -188,6 +191,125 @@ impl VfsNode {
     }
 }
 
+/// Tracked allocation of some resource.
+#[derive(Debug)]
+struct Allocation {
+    /// Current amount of allocation.
+    n: AtomicU64,
+
+    /// Name of the resource.
+    name: &'static str,
+
+    /// Allocation limit.
+    limit: u64,
+}
+
+impl Allocation {
+    /// Create new allocation tracker for given resource.
+    fn new(name: &'static str, limit: u64) -> Self {
+        Self {
+            n: AtomicU64::new(0),
+            name,
+            limit,
+        }
+    }
+
+    /// Increase allocation by given amount.
+    fn inc(&self, n: u64) -> Result<(), FailedAllocation> {
+        self.n
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |old| {
+                let new = old.checked_add(n)?;
+                (new <= self.limit).then_some(new)
+            })
+            .map(|_| ())
+            .map_err(|current| FailedAllocation {
+                name: self.name,
+                limit: self.limit,
+                current,
+                requested: n,
+            })
+    }
+}
+
+/// Failed allocation error.
+#[derive(Debug)]
+struct FailedAllocation {
+    /// Name of the allocation type/resource.
+    name: &'static str,
+
+    /// Allocation limit.
+    limit: u64,
+
+    /// Current allocation size.
+    current: u64,
+
+    /// Requested/additional allocation.
+    requested: u64,
+}
+
+impl std::fmt::Display for FailedAllocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            name,
+            limit,
+            current,
+            requested,
+        } = self;
+
+        write!(
+            f,
+            "{name} limit reached: limit<={limit} current=={current} requested+={requested}"
+        )
+    }
+}
+
+impl From<FailedAllocation> for std::io::Error {
+    fn from(e: FailedAllocation) -> Self {
+        Self::new(std::io::ErrorKind::QuotaExceeded, e.to_string())
+    }
+}
+
+/// Limits for virtual filesystems.
+#[derive(Debug, Clone)]
+#[expect(missing_copy_implementations, reason = "allow later extensions")]
+pub struct VfsLimits {
+    /// Maximum number of inodes.
+    pub inodes: u64,
+
+    /// Maximum number of bytes in size.
+    pub bytes: u64,
+}
+
+impl Default for VfsLimits {
+    fn default() -> Self {
+        Self {
+            inodes: 10_000,
+            // 100MB
+            bytes: 100 * 1024 * 1024,
+        }
+    }
+}
+
+/// Current virtual filesystem allocation.
+#[derive(Debug)]
+struct VfsAllocation {
+    /// Number of inodes.
+    inodes: Allocation,
+
+    /// Number of bytes.
+    bytes: Allocation,
+}
+
+impl VfsAllocation {
+    /// Create new empty allocation tracker.
+    fn new(limits: &VfsLimits) -> Self {
+        Self {
+            inodes: Allocation::new("inodes", limits.inodes),
+            bytes: Allocation::new("bytes", limits.bytes),
+        }
+    }
+}
+
 /// State for the virtual filesystem.
 #[derive(Debug)]
 pub(crate) struct VfsState {
@@ -196,11 +318,14 @@ pub(crate) struct VfsState {
 
     /// Hash key for metadata hashes.
     metadata_hash_key: [u8; 16],
+
+    /// Current allocation.
+    allocation: VfsAllocation,
 }
 
 impl VfsState {
     /// Create a new empty VFS.
-    pub(crate) fn new() -> Self {
+    pub(crate) fn new(limits: &VfsLimits) -> Self {
         Self {
             root: Arc::new(RwLock::new(VfsNode {
                 kind: VfsNodeKind::Directory {
@@ -209,6 +334,7 @@ impl VfsState {
                 parent: None,
             })),
             metadata_hash_key: rand::rng().random(),
+            allocation: VfsAllocation::new(limits),
         }
     }
 
@@ -228,6 +354,8 @@ impl VfsState {
                 tar::EntryType::Regular => {
                     let mut content = Vec::new();
                     entry.read_to_end(&mut content)?;
+                    content.shrink_to_fit();
+                    self.allocation.bytes.inc(content.capacity() as u64)?;
                     VfsNodeKind::File { content }
                 }
                 other => {
@@ -252,6 +380,17 @@ impl VfsState {
                 VfsNode::resolve_path(Arc::clone(&self.root), Arc::clone(&self.root), path_str)
                     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
+            let child = Arc::new(RwLock::new(VfsNode {
+                kind,
+                parent: Some(Arc::downgrade(&node)),
+            }));
+
+            self.allocation.inodes.inc(1)?;
+            self.allocation.bytes.inc(name.len() as u64)?;
+            self.allocation
+                .bytes
+                .inc(std::mem::size_of_val(&child) as u64)?;
+
             match &mut node.write().unwrap().kind {
                 VfsNodeKind::File { .. } => {
                     return Err(std::io::Error::new(
@@ -260,13 +399,7 @@ impl VfsState {
                     ));
                 }
                 VfsNodeKind::Directory { children } => {
-                    children.insert(
-                        name.to_owned(),
-                        Arc::new(RwLock::new(VfsNode {
-                            kind,
-                            parent: Some(Arc::downgrade(&node)),
-                        })),
-                    );
+                    children.insert(name.into(), child);
                 }
             }
         }
@@ -461,7 +594,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                         };
 
                         DirectoryEntry {
-                            name: name.clone(),
+                            name: name.as_ref().to_owned(),
                             type_,
                         }
                     })

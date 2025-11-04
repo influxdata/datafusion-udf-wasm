@@ -5,9 +5,11 @@ use arrow::{
     datatypes::{DataType, Field},
 };
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
+use datafusion_udf_wasm_host::{WasmPermissions, WasmScalarUdf, vfs::VfsLimits};
 
 use crate::integration_tests::{
-    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+    python::test_utils::{python_component, python_scalar_udf},
+    test_utils::ColumnarValueExt,
 };
 
 #[tokio::test(flavor = "multi_thread")]
@@ -224,4 +226,46 @@ def write(path: str) -> str:
         &StringArray::from_iter(CASES.iter().map(|c| Some(format!("ERR: {}", c.err))))
             as &dyn Array,
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_limit_inodes() {
+    let component = python_component().await;
+
+    // since the VFS is immutable, we have to use the limit that is too small for the root FS
+    let err = WasmScalarUdf::new(
+        component,
+        &WasmPermissions::new().with_vfs_limits(VfsLimits {
+            inodes: 42,
+            ..Default::default()
+        }),
+        "".to_owned(),
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @"IO error: inodes limit reached: limit<=42 current==42 requested+=1");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_limit_bytes() {
+    let component = python_component().await;
+
+    // since the VFS is immutable, we have to use the limit that is too small for the root FS
+    let err = WasmScalarUdf::new(
+        component,
+        &WasmPermissions::new().with_vfs_limits(VfsLimits {
+            bytes: 1337,
+            ..Default::default()
+        }),
+        "".to_owned(),
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @"IO error: bytes limit reached: limit<=1337 current==1021 requested+=12355");
 }
