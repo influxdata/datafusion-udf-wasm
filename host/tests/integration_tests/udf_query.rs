@@ -4,7 +4,7 @@ use datafusion::{
     assert_batches_eq,
     prelude::{DataFrame, SessionContext},
 };
-use datafusion_common::Result as DataFusionResult;
+use datafusion_common::{Result as DataFusionResult, test_util::batches_to_string};
 use datafusion_udf_wasm_host::{
     WasmPermissions,
     udf_query::{ParsedQuery, UdfQueryParser},
@@ -77,7 +77,7 @@ def add_one(x: int) -> int:
 ';
 
 CREATE FUNCTION multiply_two()
-LANGUAGE python  
+LANGUAGE python
 AS '
 def multiply_two(x: int) -> int:
     return x * 2
@@ -174,4 +174,44 @@ SELECT add_one(1)
 
     let err = r.err().unwrap();
     assert!(err.message().contains("Invalid function 'add_one'"));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_explain() {
+    let query = r#"
+CREATE FUNCTION add_one()
+LANGUAGE python
+AS '
+def add_one(x: int) -> int:
+    return x + 1
+';
+
+EXPLAIN SELECT add_one(1);
+"#;
+
+    let ctx = SessionContext::new();
+    let component = python_component().await;
+
+    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
+
+    let df = UdfQueryInvocator::invoke(&ctx, parsed_query).await.unwrap();
+    let batch = df.collect().await.unwrap();
+
+    insta::assert_snapshot!(
+        batches_to_string(&batch),
+        @r"
+    +---------------+--------------------------------------------------------+
+    | plan_type     | plan                                                   |
+    +---------------+--------------------------------------------------------+
+    | logical_plan  | Projection: add_one(Int64(1))                          |
+    |               |   EmptyRelation                                        |
+    | physical_plan | ProjectionExec: expr=[add_one(1) as add_one(Int64(1))] |
+    |               |   PlaceholderRowExec                                   |
+    |               |                                                        |
+    +---------------+--------------------------------------------------------+
+    ");
 }
