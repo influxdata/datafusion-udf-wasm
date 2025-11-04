@@ -22,6 +22,30 @@ pub(crate) enum PythonType {
     /// We map this to [`Boolean`](arrow::datatypes::DataType::Boolean).
     Bool,
 
+    /// Binary data (bytes).
+    ///
+    /// # Python
+    /// The type is called `bytes`, documentation can be found here:
+    ///
+    /// - <https://docs.python.org/3/library/stdtypes.html#bytes-objects>
+    /// - <https://docs.python.org/3/library/functions.html#bytes>
+    ///
+    /// # Arrow
+    /// We map this to [`Binary`](arrow::datatypes::DataType::Binary).
+    Bytes,
+
+    /// Date (year, month, day).
+    ///
+    /// # Python
+    /// The type is called `date`, documentation can be found here:
+    ///
+    /// - <https://docs.python.org/3/library/datetime.html#datetime.date>
+    ///
+    /// # Arrow
+    /// We map this to [`Date32`](arrow::datatypes::DataType::Date32) which represents
+    /// the number of days since the Unix epoch (1970-01-01).
+    Date,
+
     /// Timestamp (date + time on that day).
     ///
     /// # Python
@@ -68,6 +92,30 @@ pub(crate) enum PythonType {
     /// # Arrow
     /// We map this to [`Utf8`](arrow::datatypes::DataType::Utf8).
     Str,
+
+    /// Time (hour, minute, second, microsecond).
+    ///
+    /// # Python
+    /// The type is called `time`, documentation can be found here:
+    ///
+    /// - <https://docs.python.org/3/library/datetime.html#datetime.time>
+    ///
+    /// # Arrow
+    /// We map this to [`Time64`](arrow::datatypes::DataType::Time64) with
+    /// [`Microsecond`](arrow::datatypes::TimeUnit::Microsecond) resolution (same as Python) and no time zone.
+    Time,
+
+    /// Timedelta (duration).
+    ///
+    /// # Python
+    /// The type is called `timedelta`, documentation can be found here:
+    ///
+    /// - <https://docs.python.org/3/library/datetime.html#datetime.timedelta>
+    ///
+    /// # Arrow
+    /// We map this to [`Duration`](arrow::datatypes::DataType::Duration) with
+    /// [`Microsecond`](arrow::datatypes::TimeUnit::Microsecond) resolution (same as Python).
+    Timedelta,
 }
 
 /// [`PythonType`] plus "nullable" flag.

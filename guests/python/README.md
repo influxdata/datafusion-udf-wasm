@@ -58,10 +58,14 @@ Types are mapped to/from [Apache Arrow] as follows:
 | Python       | Arrow       |
 | ------------ | ----------- |
 | [`bool`]     | [`Boolean`] |
+| [`bytes`]    | [`Binary`]  |
+| [`date`]     | [`Date32`]  |
 | [`datetime`] | [`Timestamp`] w/ [`Microsecond`] and NO timezone |
 | [`float`]    | [`Float64`] |
 | [`int`]      | [`Int64`]   |
 | [`str`]      | [`Utf8`]    |
+| [`time`]     | [`Time64`] w/ [`Microsecond`] and NO timezone |
+| [`timedelta`]| [`Duration`]      |
 
 Additional types may be supported in the future.
 
@@ -192,12 +196,20 @@ There is NO I/O available that escapes the sandbox. The [Python Standard Library
 [Apache DataFusion]: https://datafusion.apache.org/
 [`bool`]: https://docs.python.org/3/library/stdtypes.html#boolean-type-bool
 [`Boolean`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Boolean
+[`bytes`]: https://docs.python.org/3/library/stdtypes.html#bytes
+[`Binary`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Binary
+[`date`]: https://docs.python.org/3/library/datetime.html#datetime.date
+[`Date32`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Date32
 [`datetime`]: https://docs.python.org/3/library/datetime.html#datetime.datetime
 [`float`]: https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex
 [`Float64`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Float64
 [`functools.cache`]: https://docs.python.org/3/library/functools.html#functools.cache
 [`int`]: https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex
 [`Int64`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Int64
+[`time`]: https://docs.python.org/3/library/datetime.html#datetime.time
+[`Time64`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Time64
+[`timedelta`]: https://docs.python.org/3/library/datetime.html#datetime.timedelta
+[`Duration`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Duration
 [`Microsecond`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.TimeUnit.html#variant.Microsecond
 [Python 3.14.0]: https://www.python.org/downloads/release/python-3140
 [Python Standard Library]: https://docs.python.org/3/library/index.html
