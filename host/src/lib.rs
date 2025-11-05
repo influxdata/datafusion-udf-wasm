@@ -4,6 +4,7 @@
 //! [DataFusion]: https://datafusion.apache.org/
 use std::{any::Any, ops::DerefMut, sync::Arc};
 
+use ::http::HeaderName;
 use arrow::datatypes::DataType;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature};
@@ -17,7 +18,10 @@ use wasmtime_wasi_http::{
     HttpResult, WasiHttpCtx, WasiHttpView,
     bindings::http::types::ErrorCode as HttpErrorCode,
     body::HyperOutgoingBody,
-    types::{HostFutureIncomingResponse, OutgoingRequestConfig, default_send_request_handler},
+    types::{
+        DEFAULT_FORBIDDEN_HEADERS, HostFutureIncomingResponse, OutgoingRequestConfig,
+        default_send_request_handler,
+    },
 };
 
 use crate::{
@@ -26,7 +30,7 @@ use crate::{
     http::{HttpRequestValidator, RejectAllHttpRequests},
     linker::link,
     tokio_helpers::async_in_sync_context,
-    vfs::{VfsCtxView, VfsState, VfsView},
+    vfs::{VfsCtxView, VfsLimits, VfsState, VfsView},
 };
 
 // unused-crate-dependencies false positives
@@ -43,7 +47,7 @@ mod error;
 pub mod http;
 mod linker;
 mod tokio_helpers;
-mod vfs;
+pub mod vfs;
 
 /// State of the WASM payload.
 struct WasmStateImpl {
@@ -110,9 +114,12 @@ impl WasiHttpView for WasmStateImpl {
 
     fn send_request(
         &mut self,
-        request: hyper::Request<HyperOutgoingBody>,
+        mut request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
     ) -> HttpResult<HostFutureIncomingResponse> {
+        // Python `requests` sends this so we allow it but later drop it from the actual request.
+        request.headers_mut().remove(hyper::header::CONNECTION);
+
         // technically we could return an error straight away, but `urllib3` doesn't handle that super well, so we
         // create a future and validate the error in there (before actually starting the request of course)
 
@@ -131,6 +138,15 @@ impl WasiHttpView for WasmStateImpl {
         });
 
         Ok(HostFutureIncomingResponse::pending(handle))
+    }
+
+    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
+        // Python `requests` sends this so we allow it but later drop it from the actual request.
+        if name == hyper::header::CONNECTION {
+            return false;
+        }
+
+        DEFAULT_FORBIDDEN_HEADERS.contains(name)
     }
 }
 
@@ -205,6 +221,9 @@ impl std::fmt::Debug for WasmComponentPrecompiled {
 pub struct WasmPermissions {
     /// Validator for HTTP requests.
     http: Arc<dyn HttpRequestValidator>,
+
+    /// Virtual file system limits.
+    vfs: VfsLimits,
 }
 
 impl WasmPermissions {
@@ -218,6 +237,7 @@ impl Default for WasmPermissions {
     fn default() -> Self {
         Self {
             http: Arc::new(RejectAllHttpRequests),
+            vfs: VfsLimits::default(),
         }
     }
 }
@@ -230,6 +250,15 @@ impl WasmPermissions {
     {
         Self {
             http: Arc::new(http),
+            ..self
+        }
+    }
+
+    /// Set virtual filesystem limits.
+    pub fn with_vfs_limits(self, limits: VfsLimits) -> Self {
+        Self {
+            vfs: limits,
+            ..self
         }
     }
 }
@@ -274,7 +303,7 @@ impl WasmScalarUdf {
         let WasmComponentPrecompiled { engine, component } = component;
 
         // Create in-memory VFS
-        let vfs_state = VfsState::new();
+        let vfs_state = VfsState::new(&permissions.vfs);
 
         let stderr = MemoryOutputPipe::new(1024);
         let wasi_ctx = WasiCtx::builder().stderr(stderr.clone()).build();

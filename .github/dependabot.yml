@@ -8,12 +8,13 @@ updates:
     open-pull-requests-limit: 10
     # NOTE: groups are "match first", and "unmatched dependencies have individual PRs"
     groups:
-      arrow-and-datafusion:
+      apache:
         patterns:
           - "arrow"
           - "arrow-*"
           - "datafusion"
           - "datafusion-*"
+          - "sqlparser"
       wasmtime:
         patterns:
           - "wasmtime"

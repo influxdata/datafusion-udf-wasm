@@ -1,2 +1,7 @@
-# That's https://github.com/urllib3/urllib3/pull/3593 as a wheel.
-urllib3 @ https://github.com/crepererum/urllib3/releases/download/2.5.100/urllib3-2.5.100-py3-none-any.whl --hash=sha256:b48be99c923c989e8db2a41a21f2511d830a7b7e99bfde24ae7214baadf7daaf
+certifi==2025.10.5 --hash=sha256:0f212c2744a9bb6de0c56639a6f68afe01ecd92d91f14ae897c4fe7bbeeef0de
+charset_normalizer==3.4.4 --hash=sha256:7a32c560861a02ff789ad905a2fe94e3f840803362c84fecf1851cb4cf3dc37f
+idna==3.11 --hash=sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea
+requests==2.32.5 --hash=sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6
+
+# That's https://github.com/urllib3/urllib3/pull/3593 + https://github.com/golemcloud/urllib3/pull/2 as a wheel.
+urllib3 @ https://github.com/crepererum/urllib3/releases/download/2.5.101/urllib3-2.5.101-py3-none-any.whl --hash=sha256:2b2dcd0944a3b5d6ce7517cf068c232c1963a6702146695147454c46b4da71f1
