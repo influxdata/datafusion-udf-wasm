@@ -39,8 +39,8 @@ pub struct ParsedQuery {
 /// Handles the registration and invocation of UDF queries in DataFusion with a
 /// pre-compiled WASM component.
 pub struct UdfQueryParser<'a> {
-    /// Pre-compiled WASM component.
-    /// Necessary to create UDFs.
+    /// Map of strings (eg "python") to supported UDF languages and their WASM
+    /// components
     components: HashMap<String, Lang<'a>>,
 }
 
