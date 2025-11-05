@@ -12,6 +12,21 @@ use sqlparser::dialect::dialect_from_str;
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
 use tokio::runtime::Handle;
 
+use crate::format::UdfCodeFormatter;
+
+/// Module for UDF code formatting implementations
+pub mod format;
+
+/// Represents a supported UDF language with its associated WASM component
+/// and code formatter.
+#[derive(Debug)]
+pub struct Lang<'a> {
+    /// Pre-compiled WASM component for the language
+    pub component: &'a WasmComponentPrecompiled,
+    /// Code formatter for the language
+    pub formatter: Box<dyn UdfCodeFormatter>,
+}
+
 /// A [ParsedQuery] contains the extracted UDFs and SQL query string
 #[derive(Debug)]
 pub struct ParsedQuery {
@@ -26,7 +41,7 @@ pub struct ParsedQuery {
 pub struct UdfQueryParser<'a> {
     /// Pre-compiled WASM component.
     /// Necessary to create UDFs.
-    components: HashMap<String, &'a WasmComponentPrecompiled>,
+    components: HashMap<String, Lang<'a>>,
 }
 
 impl std::fmt::Debug for UdfQueryParser<'_> {
@@ -40,7 +55,7 @@ impl std::fmt::Debug for UdfQueryParser<'_> {
 
 impl<'a> UdfQueryParser<'a> {
     /// Registers the UDF query in DataFusion.
-    pub fn new(components: HashMap<String, &'a WasmComponentPrecompiled>) -> Self {
+    pub fn new(components: HashMap<String, Lang<'a>>) -> Self {
         Self { components }
     }
 
@@ -56,7 +71,7 @@ impl<'a> UdfQueryParser<'a> {
 
         let mut udfs = vec![];
         for (lang, blocks) in code {
-            let component = self.components.get(&lang).ok_or_else(|| {
+            let lang = self.components.get(&lang).ok_or_else(|| {
                 DataFusionError::Plan(format!(
                     "no WASM component registered for language: {:?}",
                     lang
@@ -64,7 +79,8 @@ impl<'a> UdfQueryParser<'a> {
             })?;
 
             for code in blocks {
-                udfs.extend(WasmScalarUdf::new(component, permissions, io_rt.clone(), code).await?);
+                let code = lang.formatter.format(code);
+                udfs.extend(WasmScalarUdf::new(lang.component, permissions, io_rt.clone(), code).await?);
             }
         }
 

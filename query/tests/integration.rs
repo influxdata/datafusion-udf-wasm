@@ -13,7 +13,10 @@ use datafusion::{
 };
 use datafusion_common::{Result as DataFusionResult, test_util::batches_to_string};
 use datafusion_udf_wasm_host::WasmPermissions;
-use datafusion_udf_wasm_query::{ParsedQuery, UdfQueryParser};
+use datafusion_udf_wasm_query::{
+    Lang, ParsedQuery, UdfQueryParser,
+    format::{NoOpFormatter, StripIndentationFormatter},
+};
 use tokio::runtime::Handle;
 
 mod integration_tests;
@@ -52,8 +55,15 @@ SELECT add_one(1);
 
     let ctx = SessionContext::new();
     let component = python_component().await;
+    let formatter = Box::new(NoOpFormatter);
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parser = UdfQueryParser::new(HashMap::from_iter([(
+        "python".to_string(),
+        Lang {
+            component,
+            formatter,
+        },
+    )]));
     let parsed_query = parser
         .parse(
             query,
@@ -101,8 +111,15 @@ SELECT add_one(1), multiply_two(3);
 
     let ctx = SessionContext::new();
     let component = python_component().await;
+    let formatter = Box::new(NoOpFormatter);
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parser = UdfQueryParser::new(HashMap::from_iter([(
+        "python".to_string(),
+        Lang {
+            component,
+            formatter,
+        },
+    )]));
     let parsed_query = parser
         .parse(
             query,
@@ -146,8 +163,15 @@ SELECT add_one(1), multiply_two(3);
 
     let ctx = SessionContext::new();
     let component = python_component().await;
+    let formatter = Box::new(NoOpFormatter);
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parser = UdfQueryParser::new(HashMap::from_iter([(
+        "python".to_string(),
+        Lang {
+            component,
+            formatter,
+        },
+    )]));
     let parsed_query = parser
         .parse(
             query,
@@ -185,8 +209,15 @@ SELECT add_one(1)
 
     let ctx = SessionContext::new();
     let component = python_component().await;
+    let formatter = Box::new(NoOpFormatter);
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parser = UdfQueryParser::new(HashMap::from_iter([(
+        "python".to_string(),
+        Lang {
+            component,
+            formatter,
+        },
+    )]));
     let parsed_query = parser
         .parse(
             query,
@@ -219,8 +250,15 @@ EXPLAIN SELECT add_one(1);
 
     let ctx = SessionContext::new();
     let component = python_component().await;
+    let formatter = Box::new(NoOpFormatter);
 
-    let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
+    let parser = UdfQueryParser::new(HashMap::from_iter([(
+        "python".to_string(),
+        Lang {
+            component,
+            formatter,
+        },
+    )]));
     let parsed_query = parser
         .parse(
             query,
@@ -247,4 +285,138 @@ EXPLAIN SELECT add_one(1);
     |               |                                                        |
     +---------------+--------------------------------------------------------+
     ");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_strip_indentation_everything_indented() {
+    let query = r#"
+  CREATE FUNCTION add_one()
+  LANGUAGE python
+  AS '
+  def add_one(x: int) -> int:
+    
+    return x + 1
+  ';
+  
+  SELECT add_one(1);
+"#;
+
+    let ctx = SessionContext::new();
+    let component = python_component().await;
+    let formatter = Box::new(StripIndentationFormatter);
+
+    let parser = UdfQueryParser::new(HashMap::from_iter([(
+        "python".to_string(),
+        Lang {
+            component,
+            formatter,
+        },
+    )]));
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), Handle::current(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
+
+    let df = UdfQueryInvocator::invoke(&ctx, parsed_query).await.unwrap();
+    let batch = df.collect().await.unwrap();
+
+    assert_batches_eq!(
+        [
+            "+-------------------+",
+            "| add_one(Int64(1)) |",
+            "+-------------------+",
+            "| 2                 |",
+            "+-------------------+",
+        ],
+        &batch
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_strip_indentation_empty_lines_not_indented() {
+    let query = r#"
+  CREATE FUNCTION add_one()
+  LANGUAGE python
+  AS '
+  def add_one(x: int) -> int:
+
+    return x + 1
+  ';
+
+  SELECT add_one(1);
+"#;
+
+    let ctx = SessionContext::new();
+    let component = python_component().await;
+    let formatter = Box::new(StripIndentationFormatter);
+
+    let parser = UdfQueryParser::new(HashMap::from_iter([(
+        "python".to_string(),
+        Lang {
+            component,
+            formatter,
+        },
+    )]));
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), Handle::current(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
+
+    let df = UdfQueryInvocator::invoke(&ctx, parsed_query).await.unwrap();
+    let batch = df.collect().await.unwrap();
+
+    assert_batches_eq!(
+        [
+            "+-------------------+",
+            "| add_one(Int64(1)) |",
+            "+-------------------+",
+            "| 2                 |",
+            "+-------------------+",
+        ],
+        &batch
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_strip_indentation_python_further_indented() {
+    let query = r#"
+  CREATE FUNCTION add_one()
+  LANGUAGE python
+  AS '
+    def add_one(x: int) -> int:
+      return x + 1
+    ';
+  
+  SELECT add_one(1);
+"#;
+
+    let ctx = SessionContext::new();
+    let component = python_component().await;
+    let formatter = Box::new(StripIndentationFormatter);
+
+    let parser = UdfQueryParser::new(HashMap::from_iter([(
+        "python".to_string(),
+        Lang {
+            component,
+            formatter,
+        },
+    )]));
+    let parsed_query = parser
+        .parse(query, &WasmPermissions::new(), Handle::current(), ctx.task_ctx().as_ref())
+        .await
+        .unwrap();
+
+    let df = UdfQueryInvocator::invoke(&ctx, parsed_query).await.unwrap();
+    let batch = df.collect().await.unwrap();
+
+    assert_batches_eq!(
+        [
+            "+-------------------+",
+            "| add_one(Int64(1)) |",
+            "+-------------------+",
+            "| 2                 |",
+            "+-------------------+",
+        ],
+        &batch
+    );
 }
