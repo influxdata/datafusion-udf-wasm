@@ -1,4 +1,5 @@
 //! Embedded SQL approach for executing UDFs within SQL queries.
+#![allow(unused_crate_dependencies)]
 
 use std::collections::HashMap;
 
@@ -8,7 +9,7 @@ use datafusion_sql::parser::{DFParserBuilder, Statement};
 use sqlparser::ast::{CreateFunctionBody, Expr, Statement as SqlStatement, Value};
 use sqlparser::dialect::dialect_from_str;
 
-use crate::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
+use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
 
 /// A [ParsedQuery] contains the extracted UDFs and SQL query string
 #[derive(Debug)]

@@ -1,6 +1,5 @@
-use datafusion_expr::ScalarUDFImpl;
-
 use crate::integration_tests::python::test_utils::python_scalar_udfs;
+use datafusion_expr::ScalarUDFImpl;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_underscore() {

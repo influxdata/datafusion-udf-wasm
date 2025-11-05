@@ -47,7 +47,6 @@ mod error;
 pub mod http;
 mod linker;
 mod tokio_helpers;
-pub mod udf_query;
 pub mod vfs;
 
 /// State of the WASM payload.

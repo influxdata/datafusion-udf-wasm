@@ -1,3 +1,10 @@
+#![expect(
+    // Docs are not strictly required for tests.
+    missing_docs,
+    // unused-crate-dependencies false positives
+    unused_crate_dependencies,
+)]
+
 use std::collections::HashMap;
 
 use datafusion::{
@@ -5,10 +12,10 @@ use datafusion::{
     prelude::{DataFrame, SessionContext},
 };
 use datafusion_common::{Result as DataFusionResult, test_util::batches_to_string};
-use datafusion_udf_wasm_host::{
-    WasmPermissions,
-    udf_query::{ParsedQuery, UdfQueryParser},
-};
+use datafusion_udf_wasm_host::WasmPermissions;
+use datafusion_udf_wasm_query::{ParsedQuery, UdfQueryParser};
+
+mod integration_tests;
 
 use crate::integration_tests::python::test_utils::python_component;
 

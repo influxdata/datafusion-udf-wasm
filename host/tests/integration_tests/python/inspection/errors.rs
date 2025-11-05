@@ -1,6 +1,5 @@
-use datafusion_common::DataFusionError;
-
 use crate::integration_tests::python::test_utils::python_scalar_udfs;
+use datafusion_common::DataFusionError;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_invalid_syntax() {
