@@ -1147,6 +1147,12 @@ mod wit_world {
                     self.inner.take();
                 }
 
+                fn finish(&mut self) -> PyResult<FutureTrailers> {
+                    let body = self.inner.take().require_resource()?;
+                    let trailers = wasip2::http::types::IncomingBody::finish(body);
+                    Ok(FutureTrailers { inner: trailers })
+                }
+
                 fn stream(&self) -> PyResult<InputStream> {
                     let stream = self.inner()?.stream().to_pyres()?;
                     Ok(InputStream {
