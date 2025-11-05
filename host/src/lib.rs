@@ -26,7 +26,7 @@ use crate::{
     http::{HttpRequestValidator, RejectAllHttpRequests},
     linker::link,
     tokio_helpers::async_in_sync_context,
-    vfs::{VfsCtxView, VfsState, VfsView},
+    vfs::{VfsCtxView, VfsLimits, VfsState, VfsView},
 };
 
 // unused-crate-dependencies false positives
@@ -44,7 +44,7 @@ pub mod http;
 mod linker;
 mod tokio_helpers;
 pub mod udf_query;
-mod vfs;
+pub mod vfs;
 
 /// State of the WASM payload.
 struct WasmStateImpl {
@@ -206,6 +206,9 @@ impl std::fmt::Debug for WasmComponentPrecompiled {
 pub struct WasmPermissions {
     /// Validator for HTTP requests.
     http: Arc<dyn HttpRequestValidator>,
+
+    /// Virtual file system limits.
+    vfs: VfsLimits,
 }
 
 impl WasmPermissions {
@@ -219,6 +222,7 @@ impl Default for WasmPermissions {
     fn default() -> Self {
         Self {
             http: Arc::new(RejectAllHttpRequests),
+            vfs: VfsLimits::default(),
         }
     }
 }
@@ -231,6 +235,15 @@ impl WasmPermissions {
     {
         Self {
             http: Arc::new(http),
+            ..self
+        }
+    }
+
+    /// Set virtual filesystem limits.
+    pub fn with_vfs_limits(self, limits: VfsLimits) -> Self {
+        Self {
+            vfs: limits,
+            ..self
         }
     }
 }
@@ -275,7 +288,7 @@ impl WasmScalarUdf {
         let WasmComponentPrecompiled { engine, component } = component;
 
         // Create in-memory VFS
-        let vfs_state = VfsState::new();
+        let vfs_state = VfsState::new(&permissions.vfs);
 
         let stderr = MemoryOutputPipe::new(1024);
         let wasi_ctx = WasiCtx::builder().stderr(stderr.clone()).build();
