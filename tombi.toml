@@ -1,2 +1,9 @@
 [files]
 exclude = [".jj/**/*.toml", "target/**/*.toml"]
+
+[schema]
+catalog = {
+  paths = [
+    "https://www.schemastore.org/api/json/catalog.json",
+  ],
+}
