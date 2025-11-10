@@ -3,12 +3,15 @@
 
 use std::{
     collections::HashMap,
+    fs::File,
+    io::Write,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
 };
 
 fn main() {
+    let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     let profile: Profile = std::env::var("PROFILE").unwrap().parse().unwrap();
     let package_locations = package_locations();
 
@@ -28,10 +31,16 @@ fn main() {
         || std::env::var("DOCS_RS").is_ok()
         || std::env::var("JUSTCHECK").is_ok();
 
+    let mut gen_file = File::create(out_dir.join("gen.rs")).unwrap();
+
     for feature in FEATURES {
         println!("processing {}", feature.name);
-        feature.build_or_stub(stub, profile, &package_locations);
+        feature.build_or_stub(stub, profile, &package_locations, &out_dir, &mut gen_file);
     }
+
+    gen_file.flush().unwrap();
+
+    println!("cargo::rerun-if-changed=build.rs");
 }
 
 /// Get locations for all packages in the dependency tree.
@@ -151,6 +160,27 @@ impl std::fmt::Display for Profile {
     }
 }
 
+/// Artifact type.
+enum ArtifactType {
+    /// Library.
+    Lib,
+
+    /// Example.
+    Example(&'static str),
+}
+
+/// Just(file) command.
+struct JustCmd {
+    /// Artifact type.
+    artifact_type: ArtifactType,
+
+    /// Name of the resulting constant.
+    const_name: &'static str,
+
+    /// Documentation for the created constant.
+    doc: &'static str,
+}
+
 /// Feature description.
 struct Feature {
     /// Lowercase feature name.
@@ -159,15 +189,8 @@ struct Feature {
     /// Package that contains the feature code.
     package: &'static str,
 
-    /// `just` command prefix that compiles the feature.
-    ///
-    /// This will call `just prefix{profile}` within the package directory.
-    just_cmd_prefix: &'static str,
-
-    /// Path components to file in target directory.
-    ///
-    /// So `["foo", "bar.bin"]` will resolve to `CARGO_TARGET_DIR/wasm32-wasip2/foo/bar.bin`.
-    just_out_file: &'static [&'static str],
+    /// Just commands.
+    just_cmds: &'static [JustCmd],
 }
 
 impl Feature {
@@ -177,12 +200,13 @@ impl Feature {
         stub: bool,
         profile: Profile,
         package_locations: &HashMap<String, PathBuf>,
+        out_dir: &Path,
+        gen_file: &mut File,
     ) {
         let Self {
             name,
             package,
-            just_cmd_prefix,
-            just_out_file,
+            just_cmds,
         } = self;
 
         let name_upper = name.to_uppercase();
@@ -191,32 +215,61 @@ impl Feature {
             return;
         }
 
-        let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+        let cwd = package_locations.get(*package).unwrap();
+        let target_dir = out_dir.join(name);
 
-        let out_file = if stub {
-            let out_file = out_dir.join(format!("{name}.wasm"));
-            // write empty stub file
-            std::fs::write(&out_file, b"").unwrap();
-            out_file
-        } else {
-            let target_dir = out_dir.join(name);
+        for just_cmd in *just_cmds {
+            let JustCmd {
+                artifact_type,
+                const_name,
+                doc,
+            } = just_cmd;
+            let out_file = if stub {
+                let out_file = out_dir.join(format!("{name}.wasm"));
+                // write empty stub file
+                std::fs::write(&out_file, b"").unwrap();
+                out_file
+            } else {
+                let mut just_cmd = "build-".to_owned();
+                match artifact_type {
+                    ArtifactType::Lib => {}
+                    ArtifactType::Example(example) => {
+                        just_cmd.push_str(example);
+                        just_cmd.push('-');
+                    }
+                }
+                just_cmd.push_str(profile.as_str());
 
-            just_build(
-                package_locations.get(*package).unwrap(),
-                &format!("{just_cmd_prefix}{profile}"),
-                &target_dir,
+                just_build(cwd, &just_cmd, &target_dir);
+
+                let out = target_dir.join("wasm32-wasip2").join(profile.as_str());
+                match artifact_type {
+                    ArtifactType::Lib => out.join(format!("{}.wasm", package.replace("-", "_"))),
+                    ArtifactType::Example(example) => out
+                        .join("examples")
+                        .join(format!("{}.wasm", example.replace("-", "_"))),
+                }
+            };
+
+            println!(
+                "cargo::rustc-env=BIN_PATH_{const_name}={}",
+                out_file.display(),
             );
 
-            just_out_file.iter().fold(
-                target_dir.join("wasm32-wasip2").join(profile.as_str()),
-                |path, part| path.join(part),
-            )
-        };
+            writeln!(gen_file, "/// {doc}").unwrap();
+            writeln!(gen_file, r#"#[cfg(feature = "{name}")]"#).unwrap();
+            writeln!(gen_file, r#"pub static BIN_{const_name}: &[u8] = include_bytes!(env!("BIN_PATH_{const_name}"));"#).unwrap();
 
-        println!(
-            "cargo::rustc-env=BIN_PATH_{name_upper}={}",
-            out_file.display(),
-        );
+            // we cannot really depend directly on examples, so we need to tell Cargo about it
+            if let ArtifactType::Example(example) = artifact_type {
+                println!(
+                    "cargo::rerun-if-changed={}",
+                    cwd.join("examples")
+                        .join(format!("{}.rs", example.replace("-", "_")))
+                        .display(),
+                );
+            }
+        }
     }
 }
 
@@ -232,18 +285,24 @@ fn just_build(cwd: &Path, just_cmd: &str, cargo_target_dir: &Path) {
 
 /// All supported features.
 ///
-/// This must be in-sync with the feature list in `Cargo.toml` and the imports in `src/lib.rs`.
+/// This must be in-sync with the feature list in `Cargo.toml`.
 const FEATURES: &[Feature] = &[
     Feature {
         name: "example",
         package: "datafusion-udf-wasm-guest",
-        just_cmd_prefix: "build-add-one-",
-        just_out_file: &["examples", "add_one.wasm"],
+        just_cmds: &[JustCmd {
+            artifact_type: ArtifactType::Example("add-one"),
+            const_name: "EXAMPLE",
+            doc: r#""add-one" example."#,
+        }],
     },
     Feature {
         name: "python",
         package: "datafusion-udf-wasm-python",
-        just_cmd_prefix: "",
-        just_out_file: &["datafusion_udf_wasm_python.wasm"],
+        just_cmds: &[JustCmd {
+            artifact_type: ArtifactType::Lib,
+            const_name: "PYTHON",
+            doc: "Python UDF.",
+        }],
     },
 ];

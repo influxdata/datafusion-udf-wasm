@@ -4,13 +4,13 @@
 Use:
 
 ```console
-just debug
+just build-debug
 ```
 
 or
 
 ```console
-just release
+just build-release
 ```
 
 ## Python Version
