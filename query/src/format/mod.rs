@@ -8,7 +8,7 @@ pub trait UdfCodeFormatter: std::fmt::Debug + Send + Sync {
 }
 
 /// Default implementation that returns code unchanged
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct NoOpFormatter;
 
 impl UdfCodeFormatter for NoOpFormatter {
@@ -18,7 +18,7 @@ impl UdfCodeFormatter for NoOpFormatter {
 }
 
 /// Code formatter that strips leading indentation
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct StripIndentationFormatter;
 
 impl UdfCodeFormatter for StripIndentationFormatter {
