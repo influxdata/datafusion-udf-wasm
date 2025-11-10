@@ -289,17 +289,18 @@ EXPLAIN SELECT add_one(1);
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_strip_indentation_everything_indented() {
-    let query = r#"
-  CREATE FUNCTION add_one()
-  LANGUAGE python
-  AS '
-  def add_one(x: int) -> int:
-    
-    return x + 1
-  ';
-  
-  SELECT add_one(1);
-"#;
+    let query_lines = &[
+        "  CREATE FUNCTION add_one()",
+        "  LANGUAGE python",
+        "  AS '",
+        "  def add_one(x: int) -> int:",
+        "    ",
+        "    return x + 1",
+        "  ';",
+        "  ",
+        "  SELECT add_one(1);",
+    ];
+    let query = query_lines.join("\n");
 
     let ctx = SessionContext::new();
     let component = python_component().await;
@@ -334,17 +335,18 @@ async fn test_strip_indentation_everything_indented() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_strip_indentation_empty_lines_not_indented() {
-    let query = r#"
-  CREATE FUNCTION add_one()
-  LANGUAGE python
-  AS '
-  def add_one(x: int) -> int:
-
-    return x + 1
-  ';
-
-  SELECT add_one(1);
-"#;
+    let query_lines = &[
+        "  CREATE FUNCTION add_one()",
+        "  LANGUAGE python",
+        "  AS '",
+        "  def add_one(x: int) -> int:",
+        "",
+        "    return x + 1",
+        "  ';",
+        "",
+        "  SELECT add_one(1);",
+    ];
+    let query = query_lines.join("\n");
 
     let ctx = SessionContext::new();
     let component = python_component().await;
@@ -379,16 +381,17 @@ async fn test_strip_indentation_empty_lines_not_indented() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_strip_indentation_python_further_indented() {
-    let query = r#"
-  CREATE FUNCTION add_one()
-  LANGUAGE python
-  AS '
-    def add_one(x: int) -> int:
-      return x + 1
-    ';
-  
-  SELECT add_one(1);
-"#;
+    let query_lines = &[
+        "  CREATE FUNCTION add_one()",
+        "  LANGUAGE python",
+        "  AS '",
+        "    def add_one(x: int) -> int:",
+        "      return x + 1",
+        "    ';",
+        "  ",
+        "  SELECT add_one(1);",
+    ];
+    let query = query_lines.join("\n");
 
     let ctx = SessionContext::new();
     let component = python_component().await;
