@@ -80,7 +80,82 @@ def add_one(x: int | str) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: only unions with None are supported
+    Error during planning: TypeError: only unions of form `T | None` are suppored, but got a union of 2 distinct none-NULL types
+
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect parameter 1
+
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `add_one`
+    ",
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_union_type_2_and_none() {
+    const CODE: &str = "
+def add_one(x: int | str | None) -> int:
+    return x + 1
+";
+
+    insta::assert_snapshot!(
+        err(CODE).await,
+        @r"
+    scalar_udfs
+    caused by
+    Error during planning: TypeError: only unions of form `T | None` are suppored, but got a union of 2 distinct none-NULL types
+
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect parameter 1
+
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `add_one`
+    ",
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_union_type_2_identical() {
+    const CODE: &str = "
+def add_one(x: int | str | int) -> int:
+    return x + 1
+";
+
+    insta::assert_snapshot!(
+        err(CODE).await,
+        @r"
+    scalar_udfs
+    caused by
+    Error during planning: TypeError: only unions of form `T | None` are suppored, but got a union of 2 distinct none-NULL types
+
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect parameter 1
+
+    The above exception was the direct cause of the following exception:
+
+    TypeError: inspect type of `add_one`
+    ",
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_union_type_2_identical_and_none() {
+    const CODE: &str = "
+def add_one(x: int | None | str | int) -> int:
+    return x + 1
+";
+
+    insta::assert_snapshot!(
+        err(CODE).await,
+        @r"
+    scalar_udfs
+    caused by
+    Error during planning: TypeError: only unions of form `T | None` are suppored, but got a union of 2 distinct none-NULL types
 
     The above exception was the direct cause of the following exception:
 
@@ -96,7 +171,7 @@ def add_one(x: int | str) -> int:
 #[tokio::test(flavor = "multi_thread")]
 async fn test_union_type_3() {
     const CODE: &str = "
-def add_one(x: int | str | None) -> int:
+def add_one(x: int | str | float) -> int:
     return x + 1
 ";
 
@@ -105,7 +180,7 @@ def add_one(x: int | str | None) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: only unions of length 2 are supported, got 3
+    Error during planning: TypeError: only unions of form `T | None` are suppored, but got a union of 3 distinct none-NULL types
 
     The above exception was the direct cause of the following exception:
 

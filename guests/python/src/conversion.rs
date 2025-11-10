@@ -4,7 +4,7 @@ use std::{ops::ControlFlow, sync::Arc};
 use arrow::{
     array::{
         Array, ArrayRef, BinaryBuilder, BooleanBuilder, Date32Builder, DurationMicrosecondBuilder,
-        Float64Builder, Int64Builder, StringBuilder, Time64MicrosecondBuilder,
+        Float64Builder, Int64Builder, NullBuilder, StringBuilder, Time64MicrosecondBuilder,
         TimestampMicrosecondBuilder,
     },
     datatypes::{DataType, TimeUnit},
@@ -13,8 +13,8 @@ use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Timelike, Utc};
 use datafusion_common::{
     cast::{
         as_binary_array, as_boolean_array, as_date32_array, as_duration_microsecond_array,
-        as_float64_array, as_int64_array, as_string_array, as_time64_microsecond_array,
-        as_timestamp_microsecond_array,
+        as_float64_array, as_int64_array, as_null_array, as_string_array,
+        as_time64_microsecond_array, as_timestamp_microsecond_array,
     },
     error::Result as DataFusionResult,
     exec_datafusion_err, exec_err,
@@ -53,6 +53,7 @@ impl PythonType {
             Self::DateTime => DataType::Timestamp(TimeUnit::Microsecond, None),
             Self::Float => DataType::Float64,
             Self::Int => DataType::Int64,
+            Self::None => DataType::Null,
             Self::Str => DataType::Utf8,
             Self::Bytes => DataType::Binary,
             Self::Date => DataType::Date32,
@@ -163,6 +164,16 @@ impl PythonType {
                         })
                         .transpose()
                 });
+
+                Ok(Box::new(it))
+            }
+            Self::None => {
+                let array = as_null_array(array)?;
+
+                let val = PyNone::get(py)
+                    .into_bound_py_any(py)
+                    .map_err(|e| exec_datafusion_err!("cannot build Python None value: {e}"))?;
+                let it = std::iter::repeat_n(Some(val), array.len()).map(Ok);
 
                 Ok(Box::new(it))
             }
@@ -294,6 +305,7 @@ impl PythonType {
             Self::DateTime => Box::new(TimestampMicrosecondBuilder::with_capacity(num_rows)),
             Self::Float => Box::new(Float64Builder::with_capacity(num_rows)),
             Self::Int => Box::new(Int64Builder::with_capacity(num_rows)),
+            Self::None => Box::new(NullBuilder::new()),
             Self::Str => Box::new(StringBuilder::with_capacity(num_rows, 1024)),
             Self::Bytes => Box::new(BinaryBuilder::with_capacity(num_rows, 1024)),
             Self::Date => Box::new(Date32Builder::with_capacity(num_rows)),
@@ -460,6 +472,24 @@ impl<'py> ArrayBuilder<'py> for Int64Builder {
 
     fn skip(&mut self) {
         self.append_null();
+    }
+
+    fn finish(&mut self) -> ArrayRef {
+        Arc::new(self.finish())
+    }
+}
+
+impl<'py> ArrayBuilder<'py> for NullBuilder {
+    fn push(&mut self, val: Bound<'py, PyAny>) -> DataFusionResult<()> {
+        val.cast_exact::<PyNone>().map_err(|_| {
+            exec_datafusion_err!("expected `None` but got {}", py_representation(&val))
+        })?;
+        self.append_empty_value();
+        Ok(())
+    }
+
+    fn skip(&mut self) {
+        self.append_empty_value();
     }
 
     fn finish(&mut self) -> ArrayRef {

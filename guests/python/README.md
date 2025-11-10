@@ -63,6 +63,7 @@ Types are mapped to/from [Apache Arrow] as follows:
 | [`datetime`] | [`Timestamp`] w/ [`Microsecond`] and NO timezone |
 | [`float`]    | [`Float64`] |
 | [`int`]      | [`Int64`]   |
+| [`None`]     | [`Null`]   |
 | [`str`]      | [`Utf8`]    |
 | [`time`]     | [`Time64`] w/ [`Microsecond`] and NO timezone |
 | [`timedelta`]| [`Duration`]      |
@@ -206,6 +207,8 @@ There is NO I/O available that escapes the sandbox. The [Python Standard Library
 [`functools.cache`]: https://docs.python.org/3/library/functools.html#functools.cache
 [`int`]: https://docs.python.org/3/library/stdtypes.html#numeric-types-int-float-complex
 [`Int64`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Int64
+[`None`]: https://docs.python.org/3/library/constants.html#None
+[`Null`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Null
 [`time`]: https://docs.python.org/3/library/datetime.html#datetime.time
 [`Time64`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Time64
 [`timedelta`]: https://docs.python.org/3/library/datetime.html#datetime.timedelta
