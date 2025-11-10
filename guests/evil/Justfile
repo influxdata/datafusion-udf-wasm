@@ -1,0 +1,14 @@
+[private]
+build profile:
+    @echo ::group::guests::evil::build-{{profile}}
+    cargo build --target=wasm32-wasip2 --profile={{replace(profile, "debug", "dev")}}
+    @echo ::endgroup::
+
+# build library in debug mode
+build-debug: (build "debug")
+
+# build library in release mode
+build-release: (build "release")
+
+# checks build
+check-build: build-debug
