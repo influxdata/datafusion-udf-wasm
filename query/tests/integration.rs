@@ -14,6 +14,7 @@ use datafusion::{
 use datafusion_common::{Result as DataFusionResult, test_util::batches_to_string};
 use datafusion_udf_wasm_host::WasmPermissions;
 use datafusion_udf_wasm_query::{ParsedQuery, UdfQueryParser};
+use tokio::runtime::Handle;
 
 mod integration_tests;
 
@@ -54,7 +55,12 @@ SELECT add_one(1);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
     let parsed_query = parser
-        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .parse(
+            query,
+            &WasmPermissions::new(),
+            Handle::current(),
+            ctx.task_ctx().as_ref(),
+        )
         .await
         .unwrap();
 
@@ -98,7 +104,12 @@ SELECT add_one(1), multiply_two(3);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
     let parsed_query = parser
-        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .parse(
+            query,
+            &WasmPermissions::new(),
+            Handle::current(),
+            ctx.task_ctx().as_ref(),
+        )
         .await
         .unwrap();
 
@@ -138,7 +149,12 @@ SELECT add_one(1), multiply_two(3);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
     let parsed_query = parser
-        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .parse(
+            query,
+            &WasmPermissions::new(),
+            Handle::current(),
+            ctx.task_ctx().as_ref(),
+        )
         .await
         .unwrap();
 
@@ -172,7 +188,12 @@ SELECT add_one(1)
 
     let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
     let parsed_query = parser
-        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .parse(
+            query,
+            &WasmPermissions::new(),
+            Handle::current(),
+            ctx.task_ctx().as_ref(),
+        )
         .await
         .unwrap();
 
@@ -201,7 +222,12 @@ EXPLAIN SELECT add_one(1);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([("python".to_string(), component)]));
     let parsed_query = parser
-        .parse(query, &WasmPermissions::new(), ctx.task_ctx().as_ref())
+        .parse(
+            query,
+            &WasmPermissions::new(),
+            Handle::current(),
+            ctx.task_ctx().as_ref(),
+        )
         .await
         .unwrap();
 

@@ -1,6 +1,6 @@
 use datafusion_common::DataFusionError;
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmScalarUdf};
-use tokio::sync::OnceCell;
+use tokio::{runtime::Handle, sync::OnceCell};
 
 /// Static precompiled Python WASM component for tests
 static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
@@ -20,7 +20,13 @@ pub(crate) async fn python_component() -> &'static WasmComponentPrecompiled {
 pub(crate) async fn python_scalar_udfs(code: &str) -> Result<Vec<WasmScalarUdf>, DataFusionError> {
     let component = python_component().await;
 
-    WasmScalarUdf::new(component, &Default::default(), code.to_owned()).await
+    WasmScalarUdf::new(
+        component,
+        &Default::default(),
+        Handle::current(),
+        code.to_owned(),
+    )
+    .await
 }
 
 /// Compiles the provided Python UDF code into a single WasmScalarUdf instance.
