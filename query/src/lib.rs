@@ -80,7 +80,9 @@ impl<'a> UdfQueryParser<'a> {
 
             for code in blocks {
                 let code = lang.formatter.format(code);
-                udfs.extend(WasmScalarUdf::new(lang.component, permissions, io_rt.clone(), code).await?);
+                udfs.extend(
+                    WasmScalarUdf::new(lang.component, permissions, io_rt.clone(), code).await?,
+                );
             }
         }
 
