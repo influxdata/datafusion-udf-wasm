@@ -3,6 +3,7 @@ use datafusion_common::ScalarValue;
 use datafusion_expr::ColumnarValue;
 
 /// Extension trait for [`ColumnarValue`] for easier testing.
+#[expect(dead_code)]
 pub(crate) trait ColumnarValueExt {
     /// Extracts [`ColumnarValue::Array`] variant.
     ///

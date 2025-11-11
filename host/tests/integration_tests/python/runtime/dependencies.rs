@@ -4,11 +4,10 @@ use arrow::{
     array::{Array, Int64Array},
     datatypes::{DataType, Field},
 };
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
+use datafusion_common::config::ConfigOptions;
+use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, async_udf::AsyncScalarUDFImpl};
 
-use crate::integration_tests::{
-    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
-};
+use crate::integration_tests::python::test_utils::python_scalar_udf;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn call_other_function() {
@@ -25,18 +24,21 @@ def foo(x: int) -> int:
 
     let udf = python_scalar_udf(CODE).await.unwrap();
     let array = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
-                Some(1),
-                Some(2),
-                Some(3),
-            ])))],
-            arg_fields: vec![Arc::new(Field::new("a1", DataType::Int64, true))],
-            number_rows: 3,
-            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        })
-        .unwrap()
-        .unwrap_array();
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                    Some(1),
+                    Some(2),
+                    Some(3),
+                ])))],
+                arg_fields: vec![Arc::new(Field::new("a1", DataType::Int64, true))],
+                number_rows: 3,
+                return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
+        .unwrap();
     assert_eq!(
         array.as_ref(),
         &Int64Array::from_iter([Some(12), Some(23), Some(34)]) as &dyn Array,
@@ -59,18 +61,21 @@ def foo(x: int) -> int:
 
     let udf = python_scalar_udf(CODE).await.unwrap();
     let array = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
-                Some(10),
-                Some(20),
-                Some(10),
-            ])))],
-            arg_fields: vec![Arc::new(Field::new("a1", DataType::Int64, true))],
-            number_rows: 3,
-            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        })
-        .unwrap()
-        .unwrap_array();
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                    Some(10),
+                    Some(20),
+                    Some(10),
+                ])))],
+                arg_fields: vec![Arc::new(Field::new("a1", DataType::Int64, true))],
+                number_rows: 3,
+                return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
+        .unwrap();
     assert_eq!(
         array.as_ref(),
         &Int64Array::from_iter([Some(11), Some(22), Some(11)]) as &dyn Array,

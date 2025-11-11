@@ -4,11 +4,10 @@ use arrow::{
     array::{Array, ArrayRef, Int64Array},
     datatypes::{DataType, Field},
 };
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
+use datafusion_common::config::ConfigOptions;
+use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, async_udf::AsyncScalarUDFImpl};
 
-use crate::integration_tests::{
-    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
-};
+use crate::integration_tests::python::test_utils::python_scalar_udf;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_no_optionals() {
@@ -211,28 +210,31 @@ def add(x: Optional[int], y: Optional[int]) -> Optional[int]:
 
 async fn xy_null_test(code: &str) -> ArrayRef {
     let udf = python_scalar_udf(code).await.unwrap();
-    udf.invoke_with_args(ScalarFunctionArgs {
-        args: vec![
-            ColumnarValue::Array(Arc::new(Int64Array::from_iter([
-                None,
-                None,
-                Some(3),
-                Some(4),
-            ]))),
-            ColumnarValue::Array(Arc::new(Int64Array::from_iter([
-                None,
-                Some(20),
-                None,
-                Some(40),
-            ]))),
-        ],
-        arg_fields: vec![
-            Arc::new(Field::new("x", DataType::Int64, true)),
-            Arc::new(Field::new("y", DataType::Int64, true)),
-        ],
-        number_rows: 4,
-        return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-    })
+    udf.invoke_async_with_args(
+        ScalarFunctionArgs {
+            args: vec![
+                ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                    None,
+                    None,
+                    Some(3),
+                    Some(4),
+                ]))),
+                ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                    None,
+                    Some(20),
+                    None,
+                    Some(40),
+                ]))),
+            ],
+            arg_fields: vec![
+                Arc::new(Field::new("x", DataType::Int64, true)),
+                Arc::new(Field::new("y", DataType::Int64, true)),
+            ],
+            number_rows: 4,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        },
+        &ConfigOptions::default(),
+    )
+    .await
     .unwrap()
-    .unwrap_array()
 }

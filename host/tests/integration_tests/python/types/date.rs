@@ -4,11 +4,13 @@ use arrow::{
     array::Date32Array,
     datatypes::{DataType, Field},
 };
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
-
-use crate::integration_tests::{
-    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+use datafusion_common::config::ConfigOptions;
+use datafusion_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility,
+    async_udf::AsyncScalarUDFImpl,
 };
+
+use crate::integration_tests::python::test_utils::python_scalar_udf;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_ok() {
@@ -31,19 +33,22 @@ def foo(x: date) -> date:
     );
 
     let array = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(Date32Array::from_iter([
-                Some(0), // 1970-01-01
-                None,
-                Some(19000), // 2022-01-04
-                Some(-365),  // 1968-12-31
-            ])))],
-            arg_fields: vec![Arc::new(Field::new("a1", DataType::Date32, true))],
-            number_rows: 4,
-            return_field: Arc::new(Field::new("r", DataType::Date32, true)),
-        })
-        .unwrap()
-        .unwrap_array();
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Array(Arc::new(Date32Array::from_iter([
+                    Some(0), // 1970-01-01
+                    None,
+                    Some(19000), // 2022-01-04
+                    Some(-365),  // 1968-12-31
+                ])))],
+                arg_fields: vec![Arc::new(Field::new("a1", DataType::Date32, true))],
+                number_rows: 4,
+                return_field: Arc::new(Field::new("r", DataType::Date32, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
+        .unwrap();
     assert_eq!(
         array.as_ref(),
         &Date32Array::from_iter([
@@ -66,14 +71,18 @@ def foo(x: date) -> date:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(Date32Array::from_iter([
-                Some(0),
-            ])))],
-            arg_fields: vec![Arc::new(Field::new("time", DataType::Date32, true))],
-            number_rows: 1,
-            return_field: Arc::new(Field::new("r", DataType::Date32, true)),
-        })
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Array(Arc::new(Date32Array::from_iter([
+                    Some(0),
+                ])))],
+                arg_fields: vec![Arc::new(Field::new("time", DataType::Date32, true))],
+                number_rows: 1,
+                return_field: Arc::new(Field::new("r", DataType::Date32, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
         .unwrap_err();
 
     assert!(err.to_string().contains("expected `date` but got"));
@@ -91,14 +100,18 @@ def foo(x: date) -> date:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(Date32Array::from_iter([
-                Some(0),
-            ])))],
-            arg_fields: vec![Arc::new(Field::new("a1", DataType::Date32, true))],
-            number_rows: 1,
-            return_field: Arc::new(Field::new("r", DataType::Date32, true)),
-        })
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Array(Arc::new(Date32Array::from_iter([
+                    Some(0),
+                ])))],
+                arg_fields: vec![Arc::new(Field::new("a1", DataType::Date32, true))],
+                number_rows: 1,
+                return_field: Arc::new(Field::new("r", DataType::Date32, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
         .unwrap_err();
     insta::assert_snapshot!(
         err,

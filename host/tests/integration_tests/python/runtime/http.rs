@@ -5,7 +5,10 @@ use arrow::{
     datatypes::{DataType, Field},
 };
 use datafusion_common::ScalarValue;
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
+use datafusion_common::config::ConfigOptions;
+use datafusion_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl,
+};
 use datafusion_udf_wasm_host::{
     WasmPermissions, WasmScalarUdf,
     http::{AllowCertainHttpRequests, HttpRequestValidator, Matcher},
@@ -14,10 +17,7 @@ use tokio::runtime::Handle;
 use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
 
-use crate::integration_tests::{
-    python::test_utils::{python_component, python_scalar_udf},
-    test_utils::ColumnarValueExt,
-};
+use crate::integration_tests::python::test_utils::{python_component, python_scalar_udf};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_requests_simple() {
@@ -44,14 +44,17 @@ def perform_request(url: str) -> str:
     let udf = python_udf_with_permissions(CODE, permissions).await;
 
     let array = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
-            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
-            number_rows: 1,
-            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-        })
-        .unwrap()
-        .unwrap_array();
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+                arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+                number_rows: 1,
+                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(
         array.as_ref(),
@@ -78,12 +81,16 @@ def perform_request(url: str) -> str:
         .await;
 
     let err = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
-            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
-            number_rows: 1,
-            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-        })
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+                arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+                number_rows: 1,
+                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
         .unwrap_err();
 
     // the port number is part of the error message and not deterministic, so we replace it with a placeholder
@@ -416,7 +423,10 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
     for udf in udfs {
         println!("{}", udf.name());
 
-        let array = udf.invoke_with_args(args.clone()).unwrap().unwrap_array();
+        let array = udf
+            .invoke_async_with_args(args.clone(), &ConfigOptions::default())
+            .await
+            .unwrap();
         assert_eq!(array.as_ref(), &array_result as &dyn Array);
     }
 }
