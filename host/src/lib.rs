@@ -496,7 +496,11 @@ impl AsyncScalarUDFImpl for WasmScalarUdf {
         let columnar_value: ColumnarValue = return_type.try_into()?;
         match columnar_value {
             ColumnarValue::Array(v) => Ok(v),
+<<<<<<< HEAD
             ColumnarValue::Scalar(v) => v.to_array_of_size(args.number_rows as usize),
+=======
+            ColumnarValue::Scalar(v) => v.to_array_of_size(1),
+>>>>>>> c980278 (feat: use AsyncScalarUDFImpl instead of ScalarUDFImpl)
         }
     }
 }

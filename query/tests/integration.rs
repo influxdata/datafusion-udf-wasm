@@ -20,6 +20,7 @@ use datafusion_udf_wasm_query::{
 use tokio::runtime::Handle;
 
 mod integration_tests;
+use datafusion_expr::async_udf::AsyncScalarUDF;
 
 use crate::integration_tests::python::test_utils::python_component;
 
