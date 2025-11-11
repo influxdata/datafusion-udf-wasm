@@ -314,7 +314,7 @@ async fn test_strip_indentation_everything_indented() {
         },
     )]));
     let parsed_query = parser
-        .parse(query, &WasmPermissions::new(), Handle::current(), ctx.task_ctx().as_ref())
+        .parse(&query, &WasmPermissions::new(), Handle::current(), ctx.task_ctx().as_ref())
         .await
         .unwrap();
 
@@ -360,7 +360,7 @@ async fn test_strip_indentation_empty_lines_not_indented() {
         },
     )]));
     let parsed_query = parser
-        .parse(query, &WasmPermissions::new(), Handle::current(), ctx.task_ctx().as_ref())
+        .parse(&query, &WasmPermissions::new(), Handle::current(), ctx.task_ctx().as_ref())
         .await
         .unwrap();
 
@@ -405,7 +405,7 @@ async fn test_strip_indentation_python_further_indented() {
         },
     )]));
     let parsed_query = parser
-        .parse(query, &WasmPermissions::new(), Handle::current(), ctx.task_ctx().as_ref())
+        .parse(&query, &WasmPermissions::new(), Handle::current(), ctx.task_ctx().as_ref())
         .await
         .unwrap();
 
