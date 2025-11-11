@@ -14,7 +14,7 @@ just release
 ```
 
 ## Python Version
-We currently bundle [Python 3.14.0].
+We currently bundle [Python 3.14.0], [build for WASI](https://docs.python.org/3/library/intro.html#webassembly-platforms).
 
 ## Python Standard Library
 In contrast to a normal Python installation there are a few notable public[^public] modules **missing** from the [Python Standard Library]:
@@ -40,7 +40,14 @@ In contrast to a normal Python installation there are a few notable public[^publ
 Some modules low level modules like [`os`](https://docs.python.org/3/library/os.html) may not offer all methods, types, and constants.
 
 ## Dependencies
-We do not bundle any additional libraries at the moment. It is currently NOT possible to install your own dependencies.
+Currently we bundle the following libraries:
+
+- [`certifi`] (not really used though, see ["I/O > HTTP"](#http))
+- [`charset-normalizer`]
+- [`requests`]
+- [`urllib3`]
+
+It is currently NOT possible to install your own dependencies.
 
 ## Methods
 Currently we only support [Scalar UDF]s. One can write it using a simple Python function:
@@ -187,7 +194,18 @@ def compute(x: int) -> int:
 ```
 
 ## I/O
-There is NO I/O available that escapes the sandbox. The [Python Standard Library] is mounted as a read-only filesystem.
+All I/O operations go through the host, there is no direct interaction with the host operating system.
+
+### Filesystem
+The [Python Standard Library] is mounted as a read-only filesystem. The host file system (incl. special paths like `/proc`) are NOT exposed to the guest.
+
+### HTTP
+Using [`requests`] or [`urllib3`] you can issue HTTP requests to destinations that are allowed by the host. This is done by [WASI HTTP] and the host is in full control of the HTTP connection including TLS encryption.
+
+Note though that the network functionality included in the [Python Standard Library] -- e.g. [`urllib`] and [`socket`] -- are NOT supported.
+
+### Other
+There is NO other I/O available that escapes the sandbox.
 
 
 [^public]: Modules not starting with a `_`.
@@ -198,6 +216,8 @@ There is NO I/O available that escapes the sandbox. The [Python Standard Library
 [`Boolean`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Boolean
 [`bytes`]: https://docs.python.org/3/library/stdtypes.html#bytes
 [`Binary`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Binary
+[`certifi`]: https://pypi.org/project/certifi/
+[`charset-normalizer`]: https://pypi.org/project/charset-normalizer/
 [`date`]: https://docs.python.org/3/library/datetime.html#datetime.date
 [`Date32`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Date32
 [`datetime`]: https://docs.python.org/3/library/datetime.html#datetime.datetime
@@ -213,7 +233,12 @@ There is NO I/O available that escapes the sandbox. The [Python Standard Library
 [`Microsecond`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.TimeUnit.html#variant.Microsecond
 [Python 3.14.0]: https://www.python.org/downloads/release/python-3140
 [Python Standard Library]: https://docs.python.org/3/library/index.html
+[`requests`]: https://pypi.org/project/requests/
 [Scalar UDF]: https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.ScalarUDF.html
+[`socket`]: https://docs.python.org/3/library/socket.html
 [`str`]: https://docs.python.org/3/library/stdtypes.html#text-sequence-type-str
 [`Timestamp`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Timestamp
+[`urllib`]: https://docs.python.org/3/library/urllib.html
+[`urllib3`]: https://pypi.org/project/urllib3/
 [`Utf8`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Utf8
+[WASI HTTP]: https://github.com/WebAssembly/wasi-http
