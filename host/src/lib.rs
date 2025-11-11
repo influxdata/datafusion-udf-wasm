@@ -292,21 +292,31 @@ pub struct WasmScalarUdf {
 
     /// Name of the UDF.
     ///
-    /// This was pre-fetched during UDF generation because [`ScalarUDFImpl::name`] is sync and requires us to return a
-    /// reference.
+    /// This was pre-fetched during UDF generation because
+    /// [`ScalarUDFImpl::name`] is sync and requires us to return a reference.
     name: String,
 
     /// Signature of the UDF.
     ///
-    /// This was pre-fetched during UDF generation because [`ScalarUDFImpl::signature`] is sync and requires us to return a
+    /// This was pre-fetched during UDF generation because
+    /// [`ScalarUDFImpl::signature`] is sync and requires us to return a
     /// reference.
     signature: Signature,
+
+    /// Return type of the UDF.
+    ///
+    /// This was pre-fetched during UDF generation because
+    /// [`ScalarUDFImpl::return_type`] is sync and requires us to return a
+    /// reference. We can only compute the return type if the underlying
+    /// [TypeSignature] is [Exact](TypeSignature::Exact).
+    return_type: Option<DataType>,
 }
 
 impl WasmScalarUdf {
     /// Create multiple UDFs from a single WASM VM.
     ///
-    /// UDFs bound to the same VM share state, however calling this method multiple times will yield independent WASM VMs.
+    /// UDFs bound to the same VM share state, however calling this method
+    /// multiple times will yield independent WASM VMs.
     pub async fn new(
         component: &WasmComponentPrecompiled,
         permissions: &WasmPermissions,
@@ -377,16 +387,41 @@ impl WasmScalarUdf {
                 )?;
 
             let store2: &mut Store<WasmStateImpl> = &mut store_guard;
-            let signature = bindings
-                .datafusion_udf_wasm_udf_types()
-                .scalar_udf()
-                .call_signature(store2, resource)
-                .await
-                .context(
-                    "call ScalarUdf::signature",
-                    Some(&store_guard.data().stderr.contents()),
-                )?
-                .try_into()?;
+            let (signature, return_type) = {
+                let s: Signature = bindings
+                    .datafusion_udf_wasm_udf_types()
+                    .scalar_udf()
+                    .call_signature(store2, resource)
+                    .await
+                    .context(
+                        "call ScalarUdf::signature",
+                        Some(&store_guard.data().stderr.contents()),
+                    )?
+                    .try_into()?;
+
+                match &s.type_signature {
+                    TypeSignature::Exact(t) => {
+                        let store2: &mut Store<WasmStateImpl> = &mut store_guard;
+                        let r = bindings
+                            .datafusion_udf_wasm_udf_types()
+                            .scalar_udf()
+                            .call_return_type(
+                                store2,
+                                resource,
+                                &t.iter()
+                                    .map(|dt| wit_types::DataType::from(dt.clone()))
+                                    .collect::<Vec<_>>(),
+                            )
+                            .await
+                            .context(
+                                "call ScalarUdf::return_type",
+                                Some(&store_guard.data().stderr.contents()),
+                            )??;
+                        (s, Some(r.try_into()?))
+                    }
+                    _ => (s, None),
+                }
+            };
 
             udfs.push(Self {
                 store: Arc::clone(&store),
@@ -394,6 +429,7 @@ impl WasmScalarUdf {
                 resource,
                 name,
                 signature,
+                return_type,
             });
         }
 
@@ -414,6 +450,7 @@ impl std::fmt::Debug for WasmScalarUdf {
             resource,
             name,
             signature,
+            return_type,
         } = self;
 
         f.debug_struct("WasmScalarUdf")
@@ -422,6 +459,7 @@ impl std::fmt::Debug for WasmScalarUdf {
             .field("resource", resource)
             .field("name", name)
             .field("signature", signature)
+            .field("return_type", return_type)
             .finish()
     }
 }
@@ -440,6 +478,10 @@ impl ScalarUDFImpl for WasmScalarUdf {
     }
 
     fn return_type(&self, arg_types: &[DataType]) -> DataFusionResult<DataType> {
+        if let Some(return_type) = &self.return_type {
+            return Ok(return_type.clone());
+        }
+
         async_in_sync_context(async {
             let arg_types = arg_types
                 .iter()
