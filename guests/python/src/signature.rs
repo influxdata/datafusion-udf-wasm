@@ -8,7 +8,7 @@ use pyo3::{Py, PyAny};
 /// # Naming
 /// Since Python and Arrow use different names for the same type, we have to settle on some consistency. We chose to
 /// use the Python name in CamelCase style, so Python's `datetime` will become `DateTime`.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub(crate) enum PythonType {
     /// Boolean.
     ///
@@ -81,6 +81,18 @@ pub(crate) enum PythonType {
     /// # Arrow
     /// We map this to [`Int64`](arrow::datatypes::DataType::Int64).
     Int,
+
+    /// None/Null.
+    ///
+    /// # Python
+    /// The type is called `None`, documentation can be found here:
+    ///
+    /// - <https://docs.python.org/3/library/constants.html#None>
+    /// - <https://docs.python.org/3/library/types.html#types.NoneType>
+    ///
+    /// # Arrow
+    /// We map this to [`Null`](https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Null).
+    None,
 
     /// String.
     ///

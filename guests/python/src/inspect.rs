@@ -1,5 +1,5 @@
 //! Inspection of Python code to extract [signature](crate::signature) information.
-use std::ffi::CString;
+use std::{collections::HashSet, ffi::CString};
 
 use datafusion_common::{DataFusionError, error::Result as DataFusionResult};
 use pyo3::{
@@ -35,6 +35,10 @@ impl<'a, 'py> FromPyObject<'a, 'py> for PythonType {
         let type_time = mod_datetime.getattr(intern!(py, "time"))?;
         let type_timedelta = mod_datetime.getattr(intern!(py, "timedelta"))?;
 
+        // https://docs.python.org/3/library/types.html
+        let mod_types = py.import(intern!(py, "types"))?;
+        let type_none = mod_types.getattr(intern!(py, "NoneType"))?;
+
         if ob.is(type_bool) {
             Ok(Self::Bool)
         } else if ob.is(type_bytes) {
@@ -45,6 +49,8 @@ impl<'a, 'py> FromPyObject<'a, 'py> for PythonType {
             Ok(Self::DateTime)
         } else if ob.is(type_float) {
             Ok(Self::Float)
+        } else if ob.is(&type_none) || ob.is_instance(&type_none).unwrap_or_default() {
+            Ok(Self::None)
         } else if ob.is(type_int) {
             Ok(Self::Int)
         } else if ob.is(type_str) {
@@ -85,38 +91,34 @@ impl<'a, 'py> FromPyObject<'a, 'py> for PythonNullableType {
         // https://docs.python.org/3/library/types.html
         let mod_types = py.import(intern!(py, "types"))?;
         let type_union = mod_types.getattr(intern!(py, "UnionType"))?;
-        let type_none = mod_types.getattr(intern!(py, "NoneType"))?;
 
         if ob.is_instance(&type_union)? {
             let args = ob.getattr(intern!(py, "__args__"))?;
 
-            let n_args = args.len()?;
-            if n_args != 2 {
+            let mut args = args
+                .try_iter()?
+                .map(|arg| {
+                    let arg = arg?;
+                    arg.extract::<PythonType>()
+                })
+                .collect::<PyResult<HashSet<_>>>()?;
+
+            let nullable = args.len() > 1 && args.remove(&PythonType::None);
+
+            if args.len() != 1 {
                 return Err(PyErr::new::<PyTypeError, _>(format!(
-                    "only unions of length 2 are supported, got {n_args}"
+                    "only unions of form `T | None` are suppored, but got a union of {} distinct none-NULL types",
+                    args.len()
                 )));
             }
-            let (arg1, arg2): (Bound<'py, PyAny>, Bound<'py, PyAny>) = args.extract()?;
+            let t = args.into_iter().next().expect("just checked length");
 
-            let inner_type = if arg1.is(&type_none) {
-                arg2
-            } else if arg2.is(&type_none) {
-                arg1
-            } else {
-                return Err(PyErr::new::<PyTypeError, _>(
-                    "only unions with None are supported",
-                ));
-            };
-
-            Ok(Self {
-                t: inner_type.extract()?,
-                nullable: true,
-            })
+            Ok(Self { t, nullable })
         } else {
-            Ok(Self {
-                t: ob.extract()?,
-                nullable: false,
-            })
+            let t = ob.extract()?;
+            let nullable = t == PythonType::None;
+
+            Ok(Self { t, nullable })
         }
     }
 }
