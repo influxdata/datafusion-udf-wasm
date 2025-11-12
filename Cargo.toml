@@ -40,12 +40,12 @@ tar = { version = "0.4.44", default-features = false }
 tempfile = { version = "3.23.0", default-features = false }
 tokio = { version = "1.48.0", default-features = false }
 wasip2 = { version = "1" }
-wasmtime = { version = "38.0.3", default-features = false, features = [
+wasmtime = { version = "38.0.4", default-features = false, features = [
   "async",
   "cranelift"
 ] }
-wasmtime-wasi = { version = "38.0.3", default-features = false }
-wasmtime-wasi-http = { version = "38.0.3", default-features = false, features = [
+wasmtime-wasi = { version = "38.0.4", default-features = false }
+wasmtime-wasi-http = { version = "38.0.4", default-features = false, features = [
   "default-send-request"
 ] }
 wasmtime-wasi-io = { version = "38.0.3", default-features = false }
