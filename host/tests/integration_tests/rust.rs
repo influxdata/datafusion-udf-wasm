@@ -82,3 +82,30 @@ async fn test_add_one() {
         &Int32Array::from_iter([Some(4), Some(4), Some(4)]) as &dyn Array,
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_invoke_with_args_returns_error() {
+    let component = WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_EXAMPLE.into())
+        .await
+        .unwrap();
+    let mut udfs = WasmScalarUdf::new(
+        &component,
+        &Default::default(),
+        Handle::current(),
+        "".to_owned(),
+    )
+    .await
+    .unwrap();
+    let udf = udfs.pop().unwrap();
+
+    let result = udf.invoke_with_args(ScalarFunctionArgs {
+        args: vec![ColumnarValue::Scalar(ScalarValue::Int32(Some(3)))],
+        arg_fields: vec![Arc::new(Field::new("a1", DataType::Int32, true))],
+        number_rows: 3,
+        return_field: Arc::new(Field::new("r", DataType::Int32, true)),
+    });
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+    assert!(error.to_string().contains("synchronous invocation of WasmScalarUdf is not supported, use invoke_async_with_args instead"));
+}
