@@ -387,40 +387,38 @@ impl WasmScalarUdf {
                 )?;
 
             let store2: &mut Store<WasmStateImpl> = &mut store_guard;
-            let (signature, return_type) = {
-                let s: Signature = bindings
-                    .datafusion_udf_wasm_udf_types()
-                    .scalar_udf()
-                    .call_signature(store2, resource)
-                    .await
-                    .context(
-                        "call ScalarUdf::signature",
-                        Some(&store_guard.data().stderr.contents()),
-                    )?
-                    .try_into()?;
+            let signature: Signature = bindings
+                .datafusion_udf_wasm_udf_types()
+                .scalar_udf()
+                .call_signature(store2, resource)
+                .await
+                .context(
+                    "call ScalarUdf::signature",
+                    Some(&store_guard.data().stderr.contents()),
+                )?
+                .try_into()?;
 
-                match &s.type_signature {
-                    TypeSignature::Exact(t) => {
-                        let store2: &mut Store<WasmStateImpl> = &mut store_guard;
-                        let r = bindings
-                            .datafusion_udf_wasm_udf_types()
-                            .scalar_udf()
-                            .call_return_type(
-                                store2,
-                                resource,
-                                &t.iter()
-                                    .map(|dt| wit_types::DataType::from(dt.clone()))
-                                    .collect::<Vec<_>>(),
-                            )
-                            .await
-                            .context(
-                                "call ScalarUdf::return_type",
-                                Some(&store_guard.data().stderr.contents()),
-                            )??;
-                        (s, Some(r.try_into()?))
-                    }
-                    _ => (s, None),
+            let return_type = match &signature.type_signature {
+                TypeSignature::Exact(t) => {
+                    let store2: &mut Store<WasmStateImpl> = &mut store_guard;
+                    let r = bindings
+                        .datafusion_udf_wasm_udf_types()
+                        .scalar_udf()
+                        .call_return_type(
+                            store2,
+                            resource,
+                            &t.iter()
+                                .map(|dt| wit_types::DataType::from(dt.clone()))
+                                .collect::<Vec<_>>(),
+                        )
+                        .await
+                        .context(
+                            "call ScalarUdf::return_type",
+                            Some(&store_guard.data().stderr.contents()),
+                        )??;
+                    Some(r.try_into()?)
                 }
+                _ => None,
             };
 
             udfs.push(Self {
