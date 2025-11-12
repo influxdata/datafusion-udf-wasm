@@ -15,7 +15,7 @@ use datafusion_expr::{
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_positional_or_keyword() {
     const CODE: &str = "
 def foo(x: int) -> int:
@@ -55,7 +55,7 @@ def foo(x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_positional_or_keyword_default() {
     const CODE: &str = "
 def foo(x: int = 1) -> int:
@@ -77,7 +77,7 @@ def foo(x: int = 1) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_positional_only() {
     const CODE: &str = "
 def foo(x: int, /) -> int:
@@ -117,7 +117,7 @@ def foo(x: int, /) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_positional_only_default() {
     const CODE: &str = "
 def foo(x: int = 1, /) -> int:
@@ -139,7 +139,7 @@ def foo(x: int = 1, /) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_positional_or_keyword_and_positional_only() {
     const CODE: &str = "
 def foo(x: int, /, y: int) -> int:
@@ -182,7 +182,7 @@ def foo(x: int, /, y: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_var_positional() {
     const CODE: &str = "
 def foo(*x: int) -> int:
@@ -204,7 +204,7 @@ def foo(*x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_keyword_only() {
     const CODE: &str = "
 def foo(*, x: int) -> int:
@@ -226,7 +226,7 @@ def foo(*, x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_var_keyword() {
     const CODE: &str = "
 def foo(**x: int) -> int:

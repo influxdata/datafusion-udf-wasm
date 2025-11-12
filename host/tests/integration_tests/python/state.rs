@@ -37,7 +37,7 @@ def f2() -> int:
     return -os._state
 ";
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_cross_batches() {
     let [f1, _f2] = udfs().await;
     assert_eq!(
@@ -50,7 +50,7 @@ async fn test_cross_batches() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_cross_functions() {
     let [f1, f2] = udfs().await;
     assert_eq!(
@@ -71,7 +71,7 @@ async fn test_cross_functions() {
 ///
 /// - the pre-compilation does not set up state
 /// - two instances of the same UDF do NOT share state
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_precompile_is_stateless() {
     let [f1_a, _f2_a] = udfs().await;
     assert_eq!(

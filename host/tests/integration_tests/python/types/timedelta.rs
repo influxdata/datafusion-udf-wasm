@@ -12,7 +12,7 @@ use datafusion_expr::{
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_ok() {
     const CODE: &str = "
 from datetime import timedelta
@@ -76,7 +76,7 @@ def foo(x: timedelta) -> timedelta:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_negative_duration() {
     const CODE: &str = "
 from datetime import timedelta
@@ -117,7 +117,7 @@ def foo(x: timedelta) -> timedelta:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_return_datetime() {
     const CODE: &str = "
 from datetime import timedelta, datetime
@@ -154,7 +154,7 @@ def foo(x: timedelta) -> timedelta:
     assert!(err.to_string().contains("of type `datetime`"));
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_return_int() {
     const CODE: &str = "
 from datetime import timedelta

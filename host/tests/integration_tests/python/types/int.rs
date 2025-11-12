@@ -12,7 +12,7 @@ use datafusion_expr::{
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_ok() {
     const CODE: &str = "
 def foo(x: int) -> int:
@@ -52,7 +52,7 @@ def foo(x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_return_bool() {
     const CODE: &str = "
 def foo(x: int) -> int:
@@ -81,7 +81,7 @@ def foo(x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_return_out_of_range() {
     const CODE: &str = "
 def foo(x: int) -> int:

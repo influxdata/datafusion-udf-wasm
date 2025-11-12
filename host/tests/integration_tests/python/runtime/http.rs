@@ -19,7 +19,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
 
 use crate::integration_tests::python::test_utils::{python_component, python_scalar_udf};
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_requests_simple() {
     const CODE: &str = r#"
 import requests
@@ -62,7 +62,7 @@ def perform_request(url: str) -> str:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_urllib3_unguarded_fail() {
     const CODE: &str = r#"
 import urllib3
@@ -176,7 +176,7 @@ def perform_request(url: str) -> str:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_integration() {
     const CODE: &str = r#"
 import requests

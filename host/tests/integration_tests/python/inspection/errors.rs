@@ -1,7 +1,7 @@
 use crate::integration_tests::python::test_utils::python_scalar_udfs;
 use datafusion_common::DataFusionError;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_invalid_syntax() {
     const CODE: &str = ")";
 
@@ -18,7 +18,7 @@ async fn test_invalid_syntax() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_missing_return_type() {
     const CODE: &str = "
 def add_one(x: int):
@@ -43,7 +43,7 @@ def add_one(x: int):
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_missing_arg_type() {
     const CODE: &str = "
 def add_one(x) -> int:
@@ -68,7 +68,7 @@ def add_one(x) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_union_type_2() {
     const CODE: &str = "
 def add_one(x: int | str) -> int:
@@ -93,7 +93,7 @@ def add_one(x: int | str) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_union_type_2_and_none() {
     const CODE: &str = "
 def add_one(x: int | str | None) -> int:
@@ -118,7 +118,7 @@ def add_one(x: int | str | None) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_union_type_2_identical() {
     const CODE: &str = "
 def add_one(x: int | str | int) -> int:
@@ -143,7 +143,7 @@ def add_one(x: int | str | int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_union_type_2_identical_and_none() {
     const CODE: &str = "
 def add_one(x: int | None | str | int) -> int:
@@ -168,7 +168,7 @@ def add_one(x: int | None | str | int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_union_type_3() {
     const CODE: &str = "
 def add_one(x: int | str | float) -> int:
@@ -193,7 +193,7 @@ def add_one(x: int | str | float) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_type_annotation_is_not_a_type() {
     const CODE: &str = "
 def add_one(x: 1337) -> int:
@@ -218,7 +218,7 @@ def add_one(x: 1337) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_unsupported_type() {
     const CODE: &str = "
 def add_one(x: list[int]) -> int:
@@ -243,7 +243,7 @@ def add_one(x: list[int]) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_custom_type() {
     const CODE: &str = "
 class C:
@@ -271,7 +271,7 @@ def add_one(x: C) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_exception() {
     const CODE: &str = "
 raise Exception('foo')

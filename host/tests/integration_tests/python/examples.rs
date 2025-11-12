@@ -13,7 +13,7 @@ use datafusion_expr::{
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_add_one() {
     const CODE: &str = "
 def add_one(x: int) -> int:
@@ -32,10 +32,9 @@ def add_one(x: int) -> int:
         udf.return_type(&[DataType::Int64]).unwrap(),
         DataType::Int64,
     );
-    assert_eq!(
-        udf.return_type(&[]).unwrap_err().to_string(),
-        "Error during planning: `add_one` expects 1 parameters but got 0",
-    );
+    // Signature is exact, so it would have been cached;
+    // thus - no error even with a wrong type of argument.
+    assert_eq!(udf.return_type(&[]).unwrap(), DataType::Int64,);
 
     // call with array
     let array = udf

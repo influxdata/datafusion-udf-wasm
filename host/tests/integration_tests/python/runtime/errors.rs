@@ -12,7 +12,7 @@ use datafusion_expr::{
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_return_type_param_mismatch() {
     const CODE: &str = "
 def foo(x: int) -> int:
@@ -21,23 +21,15 @@ def foo(x: int) -> int:
 
     let udf = python_scalar_udf(CODE).await.unwrap();
 
+    // Signature is exact, so it would have been cached;
+    // thus - no error even with a wrong type of argument.
     insta::assert_snapshot!(
-        udf.return_type(&[]).unwrap_err(),
-        @"Error during planning: `foo` expects 1 parameters but got 0",
-    );
-
-    insta::assert_snapshot!(
-        udf.return_type(&[DataType::Int64, DataType::Int64]).unwrap_err(),
-        @"Error during planning: `foo` expects 1 parameters but got 2",
-    );
-
-    insta::assert_snapshot!(
-        udf.return_type(&[DataType::Float64]).unwrap_err(),
-        @"Error during planning: argument 1 of `foo` should be Int64, got Float64",
+        udf.return_type(&[]).unwrap(),
+        @"Int64",
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_invoke_args_mismatch() {
     const CODE: &str = "
 def foo(x: int) -> int:
@@ -133,7 +125,7 @@ def foo(x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_invoke_arg_fields_mismatch() {
     const CODE: &str = "
 def foo(x: int) -> int:
@@ -188,7 +180,7 @@ def foo(x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_invoke_return_field_mismatch() {
     const CODE: &str = "
 def foo(x: int) -> int:
@@ -226,7 +218,7 @@ def foo(x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_should_not_return_none() {
     const CODE: &str = "
 def foo(x: int) -> int:
@@ -239,7 +231,7 @@ def foo(x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_exception_direct() {
     const CODE: &str = "
 def foo(x: int) -> int:
@@ -258,7 +250,7 @@ def foo(x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_exception_indirect() {
     const CODE: &str = "
 def _inner1() -> None:
@@ -308,7 +300,7 @@ def foo(x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_stack_overflow() {
     // borrowed from https://wiki.python.org/moin/CrashingPython
     const CODE: &str = "
