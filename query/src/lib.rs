@@ -2,11 +2,9 @@
 #![allow(unused_crate_dependencies)]
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use datafusion::execution::TaskContext;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
-use datafusion_expr::async_udf::AsyncScalarUDFImpl;
 use datafusion_sql::parser::{DFParserBuilder, Statement};
 use sqlparser::ast::{CreateFunctionBody, Expr, Statement as SqlStatement, Value};
 use sqlparser::dialect::dialect_from_str;
@@ -33,7 +31,7 @@ pub struct Lang<'a> {
 #[derive(Debug)]
 pub struct ParsedQuery {
     /// Extracted UDFs from the query
-    pub udfs: Vec<Arc<dyn AsyncScalarUDFImpl>>,
+    pub udfs: Vec<WasmScalarUdf>,
     /// SQL query string with UDF definitions removed
     pub sql: String,
 }
