@@ -17,7 +17,10 @@ use tokio::runtime::Handle;
 use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
 
-use crate::integration_tests::python::test_utils::{python_component, python_scalar_udf};
+use crate::integration_tests::{
+    python::test_utils::{python_component, python_scalar_udf},
+    test_utils::ColumnarValueExt,
+};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_requests_simple() {
