@@ -5,7 +5,10 @@ use arrow::{
     datatypes::{DataType, Field},
 };
 use datafusion_common::DataFusionError;
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
+use datafusion_common::config::ConfigOptions;
+use datafusion_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl,
+};
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
@@ -44,18 +47,18 @@ def foo(x: int) -> int:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     insta::assert_snapshot!(
-        udf.invoke_with_args(ScalarFunctionArgs {
+        udf.invoke_async_with_args(ScalarFunctionArgs {
             args: vec![],
             arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        })
-        .unwrap_err(),
+        }, &ConfigOptions::default())
+        .await.unwrap_err(),
         @"Execution error: `foo` expects 1 parameters (passed as args) but got 0",
     );
 
     insta::assert_snapshot!(
-        udf.invoke_with_args(ScalarFunctionArgs {
+        udf.invoke_async_with_args(ScalarFunctionArgs {
             args: vec![
                 ColumnarValue::Array(Arc::new(Int64Array::from_iter([
                     Some(1),
@@ -69,21 +72,23 @@ def foo(x: int) -> int:
             ],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        })
+        }, &ConfigOptions::default())
+        .await
         .unwrap_err(),
         @"Execution error: `foo` expects 1 parameters (passed as args) but got 2",
     );
 
     insta::assert_snapshot!(
-        udf.invoke_with_args(ScalarFunctionArgs {
+        udf.invoke_async_with_args(ScalarFunctionArgs {
             args: vec![ColumnarValue::Array(Arc::new(Float64Array::from_iter([
                 Some(1.0),
             ])))],
             arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        })
-        .unwrap_err(),
+        }, &ConfigOptions::default())
+        .await.
+        unwrap_err(),
         @r"
     Internal error: could not cast array of type Float64 to arrow_array::array::primitive_array::PrimitiveArray<arrow_array::types::Int64Type>.
     This issue was likely caused by a bug in DataFusion's code. Please help us to resolve this by filing a bug report in our issue tracker: https://github.com/apache/datafusion/issues
@@ -91,7 +96,7 @@ def foo(x: int) -> int:
     );
 
     insta::assert_snapshot!(
-        udf.invoke_with_args(ScalarFunctionArgs {
+        udf.invoke_async_with_args(ScalarFunctionArgs {
             args: vec![
                 ColumnarValue::Array(Arc::new(Int64Array::from_iter([
                     Some(1),
@@ -102,13 +107,14 @@ def foo(x: int) -> int:
             ],
             number_rows: 2,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        })
+        }, &ConfigOptions::default())
+        .await
         .unwrap_err(),
         @"Execution error: array passed for argument 1 should have 2 rows but has 1",
     );
 
     insta::assert_snapshot!(
-        udf.invoke_with_args(ScalarFunctionArgs {
+        udf.invoke_async_with_args(ScalarFunctionArgs {
             args: vec![
                 ColumnarValue::Array(Arc::new(Int64Array::from_iter([
                     Some(1),
@@ -120,7 +126,8 @@ def foo(x: int) -> int:
             ],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        })
+        }, &ConfigOptions::default())
+        .await
         .unwrap_err(),
         @"Execution error: array passed for argument 1 should have 1 rows but has 2",
     );
@@ -136,20 +143,21 @@ def foo(x: int) -> int:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     insta::assert_snapshot!(
-        udf.invoke_with_args(ScalarFunctionArgs {
+        udf.invoke_async_with_args(ScalarFunctionArgs {
             args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
                 Some(1),
             ])))],
             arg_fields: vec![],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        })
+        }, &ConfigOptions::default())
+        .await
         .unwrap_err(),
         @"Execution error: checking argument fields: `foo` expects 1 parameters but got 0",
     );
 
     insta::assert_snapshot!(
-        udf.invoke_with_args(ScalarFunctionArgs {
+        udf.invoke_async_with_args(ScalarFunctionArgs {
             args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
                 Some(1),
             ])))],
@@ -159,20 +167,22 @@ def foo(x: int) -> int:
             ],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        })
+        }, &ConfigOptions::default())
+        .await
         .unwrap_err(),
         @"Execution error: checking argument fields: `foo` expects 1 parameters but got 2",
     );
 
     insta::assert_snapshot!(
-        udf.invoke_with_args(ScalarFunctionArgs {
+        udf.invoke_async_with_args(ScalarFunctionArgs {
             args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
                 Some(1),
             ])))],
             arg_fields: vec![Arc::new(Field::new("x", DataType::Float64, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        })
+        }, &ConfigOptions::default())
+        .await
         .unwrap_err(),
         @"Execution error: checking argument fields: argument 1 of `foo` should be Int64, got Float64",
     );
@@ -188,27 +198,29 @@ def foo(x: int) -> int:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     insta::assert_snapshot!(
-        udf.invoke_with_args(ScalarFunctionArgs {
+        udf.invoke_async_with_args(ScalarFunctionArgs {
             args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
                 Some(1),
             ])))],
             arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Float64, true)),
-        })
+        }, &ConfigOptions::default())
+        .await
         .unwrap_err(),
         @"Execution error: `foo` returns Int64 but was asked to produce Float64",
     );
 
     insta::assert_snapshot!(
-        udf.invoke_with_args(ScalarFunctionArgs {
+        udf.invoke_async_with_args(ScalarFunctionArgs {
             args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
                 Some(1),
             ])))],
             arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, false)),
-        })
+        }, &ConfigOptions::default())
+        .await
         .unwrap_err(),
         @"Execution error: `foo` returns nullable data but was asked not to do so",
     );
@@ -317,13 +329,17 @@ def foo(x: int) -> int:
 
 async fn err(code: &str) -> DataFusionError {
     let udf = python_scalar_udf(code).await.unwrap();
-    udf.invoke_with_args(ScalarFunctionArgs {
-        args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
-            Some(1),
-        ])))],
-        arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
-        number_rows: 1,
-        return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-    })
+    udf.invoke_async_with_args(
+        ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                Some(1),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        },
+        &ConfigOptions::default(),
+    )
+    .await
     .unwrap_err()
 }

@@ -4,14 +4,12 @@ use arrow::{
     array::{Array, StringArray},
     datatypes::{DataType, Field},
 };
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl};
+use datafusion_common::config::ConfigOptions;
+use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, async_udf::AsyncScalarUDFImpl};
 use datafusion_udf_wasm_host::{WasmPermissions, WasmScalarUdf, vfs::VfsLimits};
 use tokio::runtime::Handle;
 
-use crate::integration_tests::{
-    python::test_utils::{python_component, python_scalar_udf},
-    test_utils::ColumnarValueExt,
-};
+use crate::integration_tests::python::test_utils::{python_component, python_scalar_udf};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_listdir() {
@@ -84,24 +82,27 @@ def listdir(cwd: str | None, dir: str) -> str:
     ];
 
     let array = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![
-                ColumnarValue::Array(Arc::new(StringArray::from_iter(
-                    CASES.iter().map(|c| c.cwd),
-                ))),
-                ColumnarValue::Array(Arc::new(StringArray::from_iter(
-                    CASES.iter().map(|c| Some(c.dir)),
-                ))),
-            ],
-            arg_fields: vec![
-                Arc::new(Field::new("cwd", DataType::Utf8, true)),
-                Arc::new(Field::new("dir", DataType::Utf8, true)),
-            ],
-            number_rows: CASES.len(),
-            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-        })
-        .unwrap()
-        .unwrap_array();
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![
+                    ColumnarValue::Array(Arc::new(StringArray::from_iter(
+                        CASES.iter().map(|c| c.cwd),
+                    ))),
+                    ColumnarValue::Array(Arc::new(StringArray::from_iter(
+                        CASES.iter().map(|c| Some(c.dir)),
+                    ))),
+                ],
+                arg_fields: vec![
+                    Arc::new(Field::new("cwd", DataType::Utf8, true)),
+                    Arc::new(Field::new("dir", DataType::Utf8, true)),
+                ],
+                number_rows: CASES.len(),
+                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(
         array.as_ref(),
@@ -154,16 +155,19 @@ if __name__ == '__main__':
     ];
 
     let array = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter(
-                CASES.iter().map(|c| Some(c.path)),
-            )))],
-            arg_fields: vec![Arc::new(Field::new("path", DataType::Utf8, true))],
-            number_rows: CASES.len(),
-            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-        })
-        .unwrap()
-        .unwrap_array();
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter(
+                    CASES.iter().map(|c| Some(c.path)),
+                )))],
+                arg_fields: vec![Arc::new(Field::new("path", DataType::Utf8, true))],
+                number_rows: CASES.len(),
+                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(
         array.as_ref(),
@@ -211,16 +215,19 @@ def write(path: str) -> str:
     ];
 
     let array = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter(
-                CASES.iter().map(|c| Some(c.path)),
-            )))],
-            arg_fields: vec![Arc::new(Field::new("path", DataType::Utf8, true))],
-            number_rows: CASES.len(),
-            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-        })
-        .unwrap()
-        .unwrap_array();
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter(
+                    CASES.iter().map(|c| Some(c.path)),
+                )))],
+                arg_fields: vec![Arc::new(Field::new("path", DataType::Utf8, true))],
+                number_rows: CASES.len(),
+                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(
         array.as_ref(),

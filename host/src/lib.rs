@@ -6,14 +6,19 @@ use std::{any::Any, ops::DerefMut, sync::Arc};
 
 use ::http::HeaderName;
 use arrow::datatypes::DataType;
-use datafusion_common::{DataFusionError, Result as DataFusionResult};
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature};
+use datafusion_common::{DataFusionError, Result as DataFusionResult, config::ConfigOptions};
+use datafusion_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature,
+    async_udf::{AsyncScalarUDF, AsyncScalarUDFImpl},
+};
 use tokio::{runtime::Handle, sync::Mutex};
 use wasmtime::{
     Engine, Store,
     component::{Component, ResourceAny},
 };
-use wasmtime_wasi::{ResourceTable, WasiCtx, WasiCtxView, WasiView, p2::pipe::MemoryOutputPipe};
+use wasmtime_wasi::{
+    ResourceTable, WasiCtx, WasiCtxView, WasiView, async_trait, p2::pipe::MemoryOutputPipe,
+};
 use wasmtime_wasi_http::{
     HttpResult, WasiHttpCtx, WasiHttpView,
     bindings::http::types::ErrorCode as HttpErrorCode,
@@ -394,6 +399,11 @@ impl WasmScalarUdf {
 
         Ok(udfs)
     }
+
+    /// Convert this [WasmScalarUdf] into an [AsyncScalarUDF].
+    pub fn as_async_udf(self) -> AsyncScalarUDF {
+        AsyncScalarUDF::new(Arc::new(self))
+    }
 }
 
 impl std::fmt::Debug for WasmScalarUdf {
@@ -450,21 +460,43 @@ impl ScalarUDFImpl for WasmScalarUdf {
         })
     }
 
-    fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
-        async_in_sync_context(async {
-            let args = args.try_into()?;
-            let mut store_guard = self.store.lock().await;
-            let return_type = self
-                .bindings
-                .datafusion_udf_wasm_udf_types()
-                .scalar_udf()
-                .call_invoke_with_args(store_guard.deref_mut(), self.resource, &args)
-                .await
-                .context(
-                    "call ScalarUdf::invoke_with_args",
-                    Some(&store_guard.data().stderr.contents()),
-                )??;
-            return_type.try_into()
-        })
+    fn invoke_with_args(&self, _args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
+        Err(DataFusionError::NotImplemented(
+            "synchronous invocation of WasmScalarUdf is not supported, use invoke_async_with_args instead".to_string(),
+        ))
+    }
+}
+
+#[async_trait]
+impl AsyncScalarUDFImpl for WasmScalarUdf {
+    fn ideal_batch_size(&self) -> Option<usize> {
+        None
+    }
+
+    async fn invoke_async_with_args(
+        &self,
+        args: ScalarFunctionArgs,
+        _option: &ConfigOptions,
+    ) -> DataFusionResult<arrow::array::ArrayRef> {
+        let args = args.try_into()?;
+        let mut store_guard = self.store.lock().await;
+        let return_type = self
+            .bindings
+            .datafusion_udf_wasm_udf_types()
+            .scalar_udf()
+            .call_invoke_with_args(store_guard.deref_mut(), self.resource, &args)
+            .await
+            .context(
+                "call ScalarUdf::invoke_with_args",
+                Some(&store_guard.data().stderr.contents()),
+            )??;
+
+        drop(store_guard);
+
+        let columnar_value: ColumnarValue = return_type.try_into()?;
+        match columnar_value {
+            ColumnarValue::Array(v) => Ok(v),
+            ColumnarValue::Scalar(v) => v.to_array_of_size(args.number_rows as usize),
+        }
     }
 }

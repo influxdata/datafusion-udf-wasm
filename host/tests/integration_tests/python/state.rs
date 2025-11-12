@@ -5,14 +5,13 @@
 
 use std::sync::Arc;
 
-use crate::integration_tests::{
-    python::test_utils::python_scalar_udfs, test_utils::ColumnarValueExt,
-};
+use crate::integration_tests::python::test_utils::python_scalar_udfs;
 use arrow::{
     array::{Array, ArrayRef, Int64Array},
     datatypes::{DataType, Field},
 };
-use datafusion_expr::{ScalarFunctionArgs, ScalarUDFImpl};
+use datafusion_common::config::ConfigOptions;
+use datafusion_expr::{ScalarFunctionArgs, async_udf::AsyncScalarUDFImpl};
 
 const CODE: &str = "
 # Use system module to store our state.
@@ -92,17 +91,20 @@ async fn test_precompile_is_stateless() {
     );
 }
 
-async fn udfs() -> [impl ScalarUDFImpl; 2] {
+async fn udfs() -> [impl AsyncScalarUDFImpl; 2] {
     python_scalar_udfs(CODE).await.unwrap().try_into().unwrap()
 }
 
-async fn call(udf: &impl ScalarUDFImpl) -> ArrayRef {
-    udf.invoke_with_args(ScalarFunctionArgs {
-        args: vec![],
-        arg_fields: vec![],
-        number_rows: 3,
-        return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-    })
+async fn call(udf: &impl AsyncScalarUDFImpl) -> ArrayRef {
+    udf.invoke_async_with_args(
+        ScalarFunctionArgs {
+            args: vec![],
+            arg_fields: vec![],
+            number_rows: 3,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        },
+        &ConfigOptions::default(),
+    )
+    .await
     .unwrap()
-    .unwrap_array()
 }

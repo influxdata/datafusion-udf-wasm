@@ -5,11 +5,13 @@ use arrow::{
     datatypes::{DataType, Field},
 };
 use datafusion_common::cast::as_float64_array;
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
-
-use crate::integration_tests::{
-    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+use datafusion_common::config::ConfigOptions;
+use datafusion_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility,
+    async_udf::AsyncScalarUDFImpl,
 };
+
+use crate::integration_tests::python::test_utils::python_scalar_udf;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_roundtrip() {
@@ -42,16 +44,19 @@ def foo(x: float) -> float:
     ];
 
     let array = udf
-        .invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(Float64Array::from_iter(
-                values.iter().copied(),
-            )))],
-            arg_fields: vec![Arc::new(Field::new("a1", DataType::Float64, true))],
-            number_rows: values.len(),
-            return_field: Arc::new(Field::new("r", DataType::Float64, true)),
-        })
-        .unwrap()
-        .unwrap_array();
+        .invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Array(Arc::new(Float64Array::from_iter(
+                    values.iter().copied(),
+                )))],
+                arg_fields: vec![Arc::new(Field::new("a1", DataType::Float64, true))],
+                number_rows: values.len(),
+                return_field: Arc::new(Field::new("r", DataType::Float64, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
+        .unwrap();
     assert_float_total_eq(&array, values);
 }
 
