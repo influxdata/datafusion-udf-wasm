@@ -17,10 +17,7 @@ use tokio::runtime::Handle;
 use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
 
-use crate::integration_tests::{
-    python::test_utils::{python_component, python_scalar_udf},
-    test_utils::ColumnarValueExt,
-};
+use crate::integration_tests::python::test_utils::{python_component, python_scalar_udf};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_requests_simple() {
@@ -658,14 +655,17 @@ def perform_request(url: str) -> str:
     rt_tmp.shutdown_timeout(Duration::from_secs(1));
 
     let array = rt_cpu.block_on(async {
-        udf.invoke_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
-            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
-            number_rows: 1,
-            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-        })
+        udf.invoke_async_with_args(
+            ScalarFunctionArgs {
+                args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+                arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+                number_rows: 1,
+                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            },
+            &ConfigOptions::default(),
+        )
+        .await
         .unwrap()
-        .unwrap_array()
     });
 
     assert_eq!(

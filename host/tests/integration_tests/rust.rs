@@ -79,6 +79,6 @@ async fn test_add_one() {
         .unwrap();
     assert_eq!(
         array.as_ref(),
-        &Int32Array::from_iter([Some(4)]) as &dyn Array,
+        &Int32Array::from_iter([Some(4), Some(4), Some(4)]) as &dyn Array,
     );
 }
