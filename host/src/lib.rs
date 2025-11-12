@@ -8,7 +8,8 @@ use ::http::HeaderName;
 use arrow::datatypes::DataType;
 use datafusion_common::{DataFusionError, Result as DataFusionResult, config::ConfigOptions};
 use datafusion_expr::{
-    ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, async_udf::AsyncScalarUDFImpl,
+    ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature,
+    async_udf::{AsyncScalarUDF, AsyncScalarUDFImpl},
 };
 use tokio::{runtime::Handle, sync::Mutex};
 use wasmtime::{
@@ -398,6 +399,11 @@ impl WasmScalarUdf {
 
         Ok(udfs)
     }
+
+    /// Convert this [WasmScalarUdf] into an [AsyncScalarUDF].
+    pub fn as_async_udf(self) -> AsyncScalarUDF {
+        AsyncScalarUDF::new(Arc::new(self))
+    }
 }
 
 impl std::fmt::Debug for WasmScalarUdf {
@@ -490,7 +496,7 @@ impl AsyncScalarUDFImpl for WasmScalarUdf {
         let columnar_value: ColumnarValue = return_type.try_into()?;
         match columnar_value {
             ColumnarValue::Array(v) => Ok(v),
-            ColumnarValue::Scalar(v) => v.to_array_of_size(1),
+            ColumnarValue::Scalar(v) => v.to_array_of_size(args.number_rows as usize),
         }
     }
 }
