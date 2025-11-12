@@ -20,7 +20,6 @@ use datafusion_udf_wasm_query::{
 use tokio::runtime::Handle;
 
 mod integration_tests;
-use datafusion_expr::async_udf::AsyncScalarUDF;
 
 use crate::integration_tests::python::test_utils::python_component;
 
@@ -33,8 +32,7 @@ impl UdfQueryInvocator {
         parsed_query: ParsedQuery,
     ) -> DataFusionResult<DataFrame> {
         for udf in parsed_query.udfs {
-            let scalar_udf = AsyncScalarUDF::new(udf);
-            ctx.register_udf(scalar_udf.into());
+            ctx.register_udf(udf.as_async_udf().into());
         }
 
         ctx.sql(&parsed_query.sql).await
