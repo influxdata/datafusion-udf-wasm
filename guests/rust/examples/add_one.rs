@@ -102,6 +102,7 @@ fn root() -> Option<Vec<u8>> {
 /// Returns our one example UDF.
 ///
 /// The passed `source` is ignored.
+#[expect(clippy::unnecessary_wraps, reason = "public API through export! macro")]
 fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
     Ok(vec![Arc::new(AddOne::default())])
 }

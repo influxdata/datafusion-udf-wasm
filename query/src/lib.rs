@@ -67,7 +67,7 @@ impl<'a> UdfQueryParser<'a> {
         io_rt: Handle,
         task_ctx: &TaskContext,
     ) -> DataFusionResult<ParsedQuery> {
-        let (code, sql) = self.parse_inner(udf_query, task_ctx)?;
+        let (code, sql) = Self::parse_inner(udf_query, task_ctx)?;
 
         let mut udfs = vec![];
         for (lang, blocks) in code {
@@ -92,7 +92,6 @@ impl<'a> UdfQueryParser<'a> {
     /// Parse the combined query to extract the chosen UDF language, UDF
     /// definitions, and SQL statements.
     fn parse_inner(
-        &self,
         query: &str,
         task_ctx: &TaskContext,
     ) -> DataFusionResult<(HashMap<String, Vec<String>>, String)> {
