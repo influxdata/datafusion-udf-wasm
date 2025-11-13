@@ -103,13 +103,6 @@ fn ackermann(m: u128, n: u128) -> u128 {
     }
 }
 
-/// Return root file system.
-///
-/// This always returns [`None`] because the example does not need any files.
-pub(crate) fn root() -> Option<Vec<u8>> {
-    None
-}
-
 /// Returns our evil UDFs.
 ///
 /// The passed `source` is ignored.

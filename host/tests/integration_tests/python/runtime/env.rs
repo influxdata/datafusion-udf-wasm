@@ -23,11 +23,14 @@ pub(crate) async fn assert_env_roundrip(env: &[(&'static str, &'static str)]) {
     const CODE: &str = r#"
 import os
 
-def env() -> str:
-    return ",".join((
-        f"{k}:{v}"
-        for k, v in os.environ.items()
-    ))
+def env() -> str | None:
+    if os.environ:
+        return ",".join((
+            f"{k}:{v}"
+            for k, v in os.environ.items()
+        ))
+    else:
+        return None
 "#;
 
     let component = python_component().await;
@@ -60,13 +63,17 @@ def env() -> str:
         .into_iter()
         .next()
         .unwrap()
-        .unwrap();
+        .map(|s| s.to_owned());
 
-    let expected = env
-        .iter()
-        .map(|(k, v)| format!("{k}:{v}"))
-        .collect::<Vec<_>>();
-    let expected = expected.join(",");
+    let expected = if env.is_empty() {
+        None
+    } else {
+        let expected = env
+            .iter()
+            .map(|(k, v)| format!("{k}:{v}"))
+            .collect::<Vec<_>>();
+        Some(expected.join(","))
+    };
 
     assert_eq!(actual, expected);
 }
