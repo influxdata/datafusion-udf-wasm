@@ -2,6 +2,7 @@
 #![allow(unused_crate_dependencies)]
 
 use std::collections::HashMap;
+use std::pin::Pin;
 
 use datafusion::execution::TaskContext;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
@@ -17,12 +18,74 @@ use crate::format::UdfCodeFormatter;
 /// Module for UDF code formatting implementations
 pub mod format;
 
+/// Inner type of [`ComponentFn`].
+///
+/// This is deliberately NOT exposed directly to the user because:
+///
+/// - it's a rather complex type
+/// - embedding it into a struct allows us to implement some convenience methods
+type ComponentFnInner<'a> = Box<
+    dyn Fn() -> Pin<Box<dyn Future<Output = &'a WasmComponentPrecompiled> + Send + 'a>> + Sync + 'a,
+>;
+
+/// A type-erased async function that returns a [`WasmComponentPrecompiled`].
+pub struct ComponentFn<'a>(ComponentFnInner<'a>);
+
+impl<'a> ComponentFn<'a> {
+    /// Create function from pre-compiled component.
+    pub fn eager(component: &'a WasmComponentPrecompiled) -> Self {
+        Self(Box::new(move || Box::pin(async move { component })))
+    }
+
+    /// Create function lazily.
+    ///
+    /// # Example
+    /// You can either use an async closure, in which case `'a` can be a local lifetime:
+    ///
+    /// ```
+    /// # use datafusion_udf_wasm_query::ComponentFn;
+    /// let component = ComponentFn::lazy(async || {
+    ///     todo!("create Arc<WasmComponentPrecompiled>")
+    /// });
+    /// ```
+    ///
+    /// or some existing async function, in which `'a` must be `'static`:
+    ///
+    /// ```
+    /// # use datafusion_udf_wasm_host::WasmComponentPrecompiled;
+    /// # use datafusion_udf_wasm_query::ComponentFn;
+    /// async fn get_component() -> &'static WasmComponentPrecompiled {
+    ///     todo!("create Arc<WasmComponentPrecompiled>")
+    /// }
+    ///
+    /// let component = ComponentFn::lazy(get_component);
+    /// ```
+    pub fn lazy<F, Fut>(f: F) -> Self
+    where
+        F: Fn() -> Fut + Sync + 'a,
+        Fut: Future<Output = &'a WasmComponentPrecompiled> + Send + 'a,
+    {
+        Self(Box::new(move || Box::pin(f())))
+    }
+
+    /// Get underlying component.
+    pub async fn get(&self) -> &'a WasmComponentPrecompiled {
+        (self.0)().await
+    }
+}
+
+impl<'a> std::fmt::Debug for ComponentFn<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ComponentFn").finish_non_exhaustive()
+    }
+}
+
 /// Represents a supported UDF language with its associated WASM component
 /// and code formatter.
 #[derive(Debug)]
 pub struct Lang<'a> {
     /// Pre-compiled WASM component for the language
-    pub component: &'a WasmComponentPrecompiled,
+    pub component: ComponentFn<'a>,
     /// Code formatter for the language
     pub formatter: Box<dyn UdfCodeFormatter>,
 }
@@ -81,7 +144,13 @@ impl<'a> UdfQueryParser<'a> {
             for code in blocks {
                 let code = lang.formatter.format(code);
                 udfs.extend(
-                    WasmScalarUdf::new(lang.component, permissions, io_rt.clone(), code).await?,
+                    WasmScalarUdf::new(
+                        lang.component.get().await,
+                        permissions,
+                        io_rt.clone(),
+                        code,
+                    )
+                    .await?,
                 );
             }
         }

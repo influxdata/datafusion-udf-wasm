@@ -14,7 +14,7 @@ use datafusion::{
 use datafusion_common::{Result as DataFusionResult, test_util::batches_to_string};
 use datafusion_udf_wasm_host::WasmPermissions;
 use datafusion_udf_wasm_query::{
-    Lang, ParsedQuery, UdfQueryParser,
+    ComponentFn, Lang, ParsedQuery, UdfQueryParser,
     format::{NoOpFormatter, StripIndentationFormatter},
 };
 use tokio::runtime::Handle;
@@ -53,13 +53,12 @@ SELECT add_one(1);
 "#;
 
     let ctx = SessionContext::new();
-    let component = python_component().await;
     let formatter = Box::new(NoOpFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
         "python".to_string(),
         Lang {
-            component,
+            component: ComponentFn::lazy(python_component),
             formatter,
         },
     )]));
@@ -109,13 +108,12 @@ SELECT add_one(1), multiply_two(3);
 "#;
 
     let ctx = SessionContext::new();
-    let component = python_component().await;
     let formatter = Box::new(NoOpFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
         "python".to_string(),
         Lang {
-            component,
+            component: ComponentFn::lazy(python_component),
             formatter,
         },
     )]));
@@ -161,13 +159,12 @@ SELECT add_one(1), multiply_two(3);
 "#;
 
     let ctx = SessionContext::new();
-    let component = python_component().await;
     let formatter = Box::new(NoOpFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
         "python".to_string(),
         Lang {
-            component,
+            component: ComponentFn::lazy(python_component),
             formatter,
         },
     )]));
@@ -207,13 +204,12 @@ SELECT add_one(1)
 "#;
 
     let ctx = SessionContext::new();
-    let component = python_component().await;
     let formatter = Box::new(NoOpFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
         "python".to_string(),
         Lang {
-            component,
+            component: ComponentFn::lazy(python_component),
             formatter,
         },
     )]));
@@ -248,13 +244,12 @@ EXPLAIN SELECT add_one(1);
 "#;
 
     let ctx = SessionContext::new();
-    let component = python_component().await;
     let formatter = Box::new(NoOpFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
         "python".to_string(),
         Lang {
-            component,
+            component: ComponentFn::lazy(python_component),
             formatter,
         },
     )]));
@@ -304,13 +299,12 @@ async fn test_strip_indentation_everything_indented() {
     let query = query_lines.join("\n");
 
     let ctx = SessionContext::new();
-    let component = python_component().await;
     let formatter = Box::new(StripIndentationFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
         "python".to_string(),
         Lang {
-            component,
+            component: ComponentFn::lazy(python_component),
             formatter,
         },
     )]));
@@ -355,13 +349,12 @@ async fn test_strip_indentation_empty_lines_not_indented() {
     let query = query_lines.join("\n");
 
     let ctx = SessionContext::new();
-    let component = python_component().await;
     let formatter = Box::new(StripIndentationFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
         "python".to_string(),
         Lang {
-            component,
+            component: ComponentFn::lazy(python_component),
             formatter,
         },
     )]));
@@ -405,13 +398,12 @@ async fn test_strip_indentation_python_further_indented() {
     let query = query_lines.join("\n");
 
     let ctx = SessionContext::new();
-    let component = python_component().await;
     let formatter = Box::new(StripIndentationFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
         "python".to_string(),
         Lang {
-            component,
+            component: ComponentFn::lazy(python_component),
             formatter,
         },
     )]));
