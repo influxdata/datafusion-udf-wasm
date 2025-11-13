@@ -21,11 +21,19 @@ def foo(x: int) -> int:
 
     let udf = python_scalar_udf(CODE).await.unwrap();
 
-    // Signature is exact, so it would have been cached;
-    // thus - no error even with a wrong type of argument.
     insta::assert_snapshot!(
-        udf.return_type(&[]).unwrap(),
-        @"Int64",
+        udf.return_type(&[]).unwrap_err(),
+        @"Error during planning: `foo` expects 1 parameters but got 0",
+    );
+
+    insta::assert_snapshot!(udf.return_type(
+        &[DataType::Int64, DataType::Int64]).unwrap_err(),
+        @"Error during planning: `foo` expects 1 parameters but got 2",
+    );
+
+    insta::assert_snapshot!(
+        udf.return_type(&[DataType::Float64]).unwrap_err(),
+        @"Error during planning: argument 1 of `foo` should be Int64, got Float64",
     );
 }
 

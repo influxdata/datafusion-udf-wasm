@@ -438,6 +438,35 @@ impl WasmScalarUdf {
     pub fn as_async_udf(self) -> AsyncScalarUDF {
         AsyncScalarUDF::new(Arc::new(self))
     }
+
+    /// Check that the provided argument types match the UDF signature.
+    fn check_arg_types(&self, arg_types: &[DataType]) -> DataFusionResult<()> {
+        if let TypeSignature::Exact(expected_types) = &self.signature.type_signature {
+            if arg_types.len() != expected_types.len() {
+                return Err(DataFusionError::Plan(format!(
+                    "`{}` expects {} parameters but got {}",
+                    self.name,
+                    expected_types.len(),
+                    arg_types.len()
+                )));
+            }
+
+            for (i, (provided, expected)) in arg_types.iter().zip(expected_types.iter()).enumerate()
+            {
+                if provided != expected {
+                    return Err(DataFusionError::Plan(format!(
+                        "argument {} of `{}` should be {:?}, got {:?}",
+                        i + 1,
+                        self.name,
+                        expected,
+                        provided
+                    )));
+                }
+            }
+        };
+
+        Ok(())
+    }
 }
 
 impl std::fmt::Debug for WasmScalarUdf {
@@ -476,6 +505,8 @@ impl ScalarUDFImpl for WasmScalarUdf {
     }
 
     fn return_type(&self, arg_types: &[DataType]) -> DataFusionResult<DataType> {
+        self.check_arg_types(arg_types)?;
+
         if let Some(return_type) = &self.return_type {
             return Ok(return_type.clone());
         }

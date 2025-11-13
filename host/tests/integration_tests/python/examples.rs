@@ -32,9 +32,10 @@ def add_one(x: int) -> int:
         udf.return_type(&[DataType::Int64]).unwrap(),
         DataType::Int64,
     );
-    // Signature is exact, so it would have been cached;
-    // thus - no error even with a wrong type of argument.
-    assert_eq!(udf.return_type(&[]).unwrap(), DataType::Int64,);
+    assert_eq!(
+        udf.return_type(&[]).unwrap_err().to_string(),
+        "Error during planning: `add_one` expects 1 parameters but got 0",
+    );
 
     // call with array
     let array = udf
