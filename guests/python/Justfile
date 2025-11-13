@@ -163,13 +163,13 @@ build-lib profile: download-python-sdk download-wasi-sdk python-site-packages
 do profile: (build-lib profile)
 
 # create dev/debug build
-debug: (do "debug")
+build-debug: (do "debug")
 
 # create release build
-release: (do "release")
+build-release: (do "release")
 
 # checks build
-check-build: debug
+check-build: build-debug
 
 # clean build artifacts
 clean:
