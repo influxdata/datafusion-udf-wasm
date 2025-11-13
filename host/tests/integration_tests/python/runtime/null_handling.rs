@@ -9,7 +9,7 @@ use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, async_udf::AsyncScalarU
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_no_optionals() {
     const CODE: &str = "
 def add(x: int, y: int) -> int:
@@ -24,7 +24,7 @@ def add(x: int, y: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_first_arg_optional_union() {
     const CODE: &str = "
 def add(x: int | None, y: int) -> int:
@@ -40,7 +40,7 @@ def add(x: int | None, y: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_first_arg_optional_old_alias() {
     const CODE: &str = "
 from typing import Optional
@@ -58,7 +58,7 @@ def add(x: Optional[int], y: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_second_arg_optional_union() {
     const CODE: &str = "
 def add(x: int, y: int | None) -> int:
@@ -74,7 +74,7 @@ def add(x: int, y: int | None) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_second_arg_optional_old_alias() {
     const CODE: &str = "
 from typing import Optional
@@ -92,7 +92,7 @@ def add(x: int, y: Optional[int]) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_both_args_optional_union() {
     const CODE: &str = "
 def add(x: int | None, y: int | None) -> int:
@@ -109,7 +109,7 @@ def add(x: int | None, y: int | None) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_both_args_optional_old_alias() {
     const CODE: &str = "
 from typing import Optional
@@ -128,7 +128,7 @@ def add(x: Optional[int], y: Optional[int]) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_optional_passthrough_union() {
     const CODE: &str = "
 def add(x: int | None, y: int | None) -> int | None:
@@ -143,7 +143,7 @@ def add(x: int | None, y: int | None) -> int | None:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_optional_passthrough_old_alias() {
     const CODE: &str = "
 from typing import Optional
@@ -160,7 +160,7 @@ def add(x: Optional[int], y: Optional[int]) -> Optional[int]:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_optional_flip_union() {
     const CODE: &str = "
 def add(x: int | None, y: int | None) -> int | None:
@@ -183,7 +183,7 @@ def add(x: int | None, y: int | None) -> int | None:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_optional_flip_old_alias() {
     const CODE: &str = "
 from typing import Optional

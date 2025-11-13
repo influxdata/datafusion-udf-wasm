@@ -13,7 +13,7 @@ use datafusion_expr::{
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_add_one() {
     const CODE: &str = "
 def add_one(x: int) -> int:

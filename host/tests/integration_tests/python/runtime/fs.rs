@@ -11,7 +11,7 @@ use tokio::runtime::Handle;
 
 use crate::integration_tests::python::test_utils::{python_component, python_scalar_udf};
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_listdir() {
     const CODE: &str = r#"
 import os
@@ -110,7 +110,7 @@ def listdir(cwd: str | None, dir: str) -> str:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_read() {
     const CODE: &str = r#"
 def read(path: str) -> str:
@@ -181,7 +181,7 @@ if __name__ == '__main__':
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_write() {
     const CODE: &str = r#"
 def write(path: str) -> str:
@@ -236,7 +236,7 @@ def write(path: str) -> str:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_limit_inodes() {
     let component = python_component().await;
 
@@ -258,7 +258,7 @@ async fn test_limit_inodes() {
         @"IO error: inodes limit reached: limit<=42 current==42 requested+=1");
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_limit_bytes() {
     let component = python_component().await;
 

@@ -3,7 +3,7 @@ use datafusion_expr::{ScalarUDFImpl, Signature, Volatility};
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_reduction_bool() {
     const CODE: &str = "
 def foo(x: bool | None | bool | None) -> None:
@@ -17,7 +17,7 @@ def foo(x: bool | None | bool | None) -> None:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_reduction_int() {
     const CODE: &str = "
 def foo(x: int | None | int | None) -> None:
@@ -31,7 +31,7 @@ def foo(x: int | None | int | None) -> None:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_reduction_str() {
     const CODE: &str = "
 def foo(x: str | None | str | None) -> None:

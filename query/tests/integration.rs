@@ -39,7 +39,7 @@ impl UdfQueryInvocator {
     }
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_basic() {
     let query = r#"
 CREATE FUNCTION add_one()
@@ -88,7 +88,7 @@ SELECT add_one(1);
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_multiple_functions() {
     let query = r#"
 CREATE FUNCTION add_one()
@@ -144,7 +144,7 @@ SELECT add_one(1), multiply_two(3);
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_multiple_functions_single_statement() {
     let query = r#"
 CREATE FUNCTION add_one()
@@ -196,7 +196,7 @@ SELECT add_one(1), multiply_two(3);
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_empty_string() {
     let query = r#"
 CREATE FUNCTION add_one()
@@ -234,7 +234,7 @@ SELECT add_one(1)
     assert!(err.message().contains("Invalid function 'add_one'"));
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_explain() {
     let query = r#"
 CREATE FUNCTION add_one()
@@ -288,7 +288,7 @@ EXPLAIN SELECT add_one(1);
     ");
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_strip_indentation_everything_indented() {
     let query_lines = &[
         "  CREATE FUNCTION add_one()",
@@ -339,7 +339,7 @@ async fn test_strip_indentation_everything_indented() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_strip_indentation_empty_lines_not_indented() {
     let query_lines = &[
         "  CREATE FUNCTION add_one()",
@@ -390,7 +390,7 @@ async fn test_strip_indentation_empty_lines_not_indented() {
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_strip_indentation_python_further_indented() {
     let query_lines = &[
         "  CREATE FUNCTION add_one()",

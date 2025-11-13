@@ -9,7 +9,7 @@ use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, async_udf::AsyncScalarU
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn call_other_function() {
     const CODE: &str = "
 def _sub1(x: int) -> int:
@@ -45,7 +45,7 @@ def foo(x: int) -> int:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn functools_cache() {
     const CODE: &str = "
 from functools import cache

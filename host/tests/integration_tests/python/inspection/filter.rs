@@ -1,7 +1,7 @@
 use crate::integration_tests::python::test_utils::python_scalar_udfs;
 use datafusion_expr::ScalarUDFImpl;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_underscore() {
     const CODE: &str = "
 def foo(x: int) -> int:
@@ -14,7 +14,7 @@ def _bar(x: int) -> int:
     assert_eq!(found_udfs(CODE).await, ["foo".to_owned()]);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_non_callalbes() {
     const CODE: &str = "
 variable = 1
@@ -26,7 +26,7 @@ def foo(x: int) -> int:
     assert_eq!(found_udfs(CODE).await, ["foo".to_owned()]);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_imports() {
     const CODE: &str = "
 from sys import exit
@@ -38,7 +38,7 @@ def foo(x: int) -> int:
     assert_eq!(found_udfs(CODE).await, ["foo".to_owned()]);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_classes() {
     const CODE: &str = "
 class C:

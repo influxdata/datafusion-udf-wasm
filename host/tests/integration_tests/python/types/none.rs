@@ -12,7 +12,7 @@ use datafusion_expr::{
 
 use crate::integration_tests::python::test_utils::python_scalar_udf;
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_ok() {
     const CODE: &str = "
 def foo(x: None) -> None:
@@ -42,7 +42,7 @@ def foo(x: None) -> None:
     assert_eq!(array.as_ref(), &NullArray::new(3) as &dyn Array,);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_implicit_return_pass() {
     const CODE: &str = "
 def foo() -> None:
@@ -65,7 +65,7 @@ def foo() -> None:
     assert_eq!(array.as_ref(), &NullArray::new(3) as &dyn Array,);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_implicit_return_ellipsis() {
     const CODE: &str = "
 def foo() -> None:
@@ -88,7 +88,7 @@ def foo() -> None:
     assert_eq!(array.as_ref(), &NullArray::new(3) as &dyn Array,);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_implicit_return_docstring() {
     const CODE: &str = r#"
 def foo() -> None:
@@ -113,7 +113,7 @@ def foo() -> None:
     assert_eq!(array.as_ref(), &NullArray::new(3) as &dyn Array,);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_err_zero_returned() {
     const CODE: &str = "
 def foo() -> None:
@@ -140,7 +140,7 @@ def foo() -> None:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_err_false_returned() {
     const CODE: &str = "
 def foo() -> None:
@@ -167,7 +167,7 @@ def foo() -> None:
     );
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_err_empty_tuple_returned() {
     const CODE: &str = "
 def foo() -> None:

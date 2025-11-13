@@ -13,6 +13,13 @@ use datafusion_expr::{
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmScalarUdf};
 use tokio::runtime::Handle;
 
+// FIXME: remove `multi_thread` flavor.
+//
+// This test relies on a non-exact function signature to verify error handling
+// in `return_type``. [WasmScalarUdf::return_type](ScalarUdfImpl::return_type)
+// is *not* async, and will need to compute the return type if the function
+// signature is not exact, which effectively means it will block; which is
+// incompatible with the current single-threaded tokio runtime used in tests.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_add_one() {
     let component = WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_EXAMPLE.into())
