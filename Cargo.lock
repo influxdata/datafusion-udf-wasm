@@ -1273,6 +1273,7 @@ dependencies = [
  "http",
  "hyper",
  "insta",
+ "log",
  "rand 0.9.2",
  "siphasher",
  "tar",

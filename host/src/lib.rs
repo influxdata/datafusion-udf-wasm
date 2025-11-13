@@ -2,7 +2,7 @@
 //!
 //!
 //! [DataFusion]: https://datafusion.apache.org/
-use std::{any::Any, ops::DerefMut, sync::Arc};
+use std::{any::Any, collections::BTreeMap, ops::DerefMut, sync::Arc};
 
 use ::http::HeaderName;
 use arrow::datatypes::DataType;
@@ -143,6 +143,11 @@ impl WasiHttpView for WasmStateImpl {
                     .validate(&request, config.use_tls)
                     .map_err(|_| HttpErrorCode::HttpRequestDenied)?;
 
+                log::debug!(
+                    "UDF HTTP request: {} {}",
+                    request.method().as_str(),
+                    request.uri(),
+                );
                 default_send_request_handler(request, config).await
             };
 
@@ -203,6 +208,12 @@ impl WasmComponentPrecompiled {
                 .precompile_component(&wasm_binary)
                 .context("pre-compile component", None)?;
 
+            log::debug!(
+                "Pre-compiled {} bytes of WASM bytecode into {} bytes",
+                wasm_binary.len(),
+                compiled_component.len()
+            );
+
             // SAFETY: the compiled version was produced by us with the same engine. This is NOT external/untrusted input.
             let component_res = unsafe { Component::deserialize(&engine, compiled_component) };
             let component = component_res.context("create WASM component", None)?;
@@ -236,6 +247,9 @@ pub struct WasmPermissions {
 
     /// Virtual file system limits.
     vfs: VfsLimits,
+
+    /// Environment variables.
+    envs: BTreeMap<String, String>,
 }
 
 impl WasmPermissions {
@@ -250,6 +264,7 @@ impl Default for WasmPermissions {
         Self {
             http: Arc::new(RejectAllHttpRequests),
             vfs: VfsLimits::default(),
+            envs: BTreeMap::default(),
         }
     }
 }
@@ -272,6 +287,12 @@ impl WasmPermissions {
             vfs: limits,
             ..self
         }
+    }
+
+    /// Add environment variable.
+    pub fn with_env(mut self, key: String, value: String) -> Self {
+        self.envs.insert(key, value);
+        self
     }
 }
 
@@ -328,12 +349,18 @@ impl WasmScalarUdf {
         // Create in-memory VFS
         let vfs_state = VfsState::new(&permissions.vfs);
 
+        // set up WASI p2 context
         let stderr = MemoryOutputPipe::new(1024);
-        let wasi_ctx = WasiCtx::builder().stderr(stderr.clone()).build();
+        let mut wasi_ctx_builder = WasiCtx::builder();
+        wasi_ctx_builder.stderr(stderr.clone());
+        permissions.envs.iter().for_each(|(k, v)| {
+            wasi_ctx_builder.env(k, v);
+        });
+
         let state = WasmStateImpl {
             vfs_state,
             stderr,
-            wasi_ctx,
+            wasi_ctx: wasi_ctx_builder.build(),
             wasi_http_ctx: WasiHttpCtx::new(),
             resource_table: ResourceTable::new(),
             http_validator: Arc::clone(&permissions.http),

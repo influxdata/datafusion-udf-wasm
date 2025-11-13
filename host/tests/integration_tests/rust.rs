@@ -90,7 +90,7 @@ async fn test_add_one() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn test_invoke_with_args_returns_error() {
     let component = WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_EXAMPLE.into())
         .await
@@ -114,5 +114,8 @@ async fn test_invoke_with_args_returns_error() {
 
     assert!(result.is_err());
     let error = result.unwrap_err();
-    assert!(error.to_string().contains("synchronous invocation of WasmScalarUdf is not supported, use invoke_async_with_args instead"));
+    insta::assert_snapshot!(
+        error,
+        @r"This feature is not implemented: synchronous invocation of WasmScalarUdf is not supported, use invoke_async_with_args instead"
+    );
 }
