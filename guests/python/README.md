@@ -197,6 +197,9 @@ def compute(x: int) -> int:
 ## I/O
 All I/O operations go through the host, there is no direct interaction with the host operating system.
 
+### Environment Variables
+Hosts can pass environment variables to the guest if they want. By default, NO variables are available for the guest though (i.e. there is NO implicit pass-through). The standard Python library can read these environment variables, e.g. via [`os.environ`].
+
 ### Filesystem
 The [Python Standard Library] is mounted as a read-only filesystem. The host file system (incl. special paths like `/proc`) are NOT exposed to the guest.
 
@@ -234,6 +237,7 @@ There is NO other I/O available that escapes the sandbox.
 [`timedelta`]: https://docs.python.org/3/library/datetime.html#datetime.timedelta
 [`Duration`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Duration
 [`Microsecond`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.TimeUnit.html#variant.Microsecond
+[`os.environ`]: https://docs.python.org/3/library/os.html#os.environ
 [Python 3.14.0]: https://www.python.org/downloads/release/python-3140
 [Python Standard Library]: https://docs.python.org/3/library/index.html
 [`requests`]: https://pypi.org/project/requests/
