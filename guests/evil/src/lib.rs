@@ -9,6 +9,7 @@ use datafusion_udf_wasm_guest::export;
 
 mod root;
 mod runtime;
+mod spin;
 
 /// Method that returns the root filesystem.
 type RootFn = Box<dyn Fn() -> Option<Vec<u8>>>;
@@ -36,6 +37,14 @@ impl Evil {
             "runtime" => Self {
                 root: Box::new(runtime::root),
                 udfs: Box::new(runtime::udfs),
+            },
+            "spin::root" => Self {
+                root: Box::new(spin::root::root),
+                udfs: Box::new(spin::root::udfs),
+            },
+            "spin::udfs" => Self {
+                root: Box::new(spin::udfs::root),
+                udfs: Box::new(spin::udfs::udfs),
             },
             other => panic!("unknown evil: {other}"),
         }

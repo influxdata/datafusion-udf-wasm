@@ -2,7 +2,7 @@
 //!
 //!
 //! [DataFusion]: https://datafusion.apache.org/
-use std::{any::Any, collections::BTreeMap, ops::DerefMut, sync::Arc};
+use std::{any::Any, collections::BTreeMap, ops::DerefMut, sync::Arc, time::Duration};
 
 use ::http::HeaderName;
 use arrow::datatypes::DataType;
@@ -11,9 +11,9 @@ use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature,
     async_udf::{AsyncScalarUDF, AsyncScalarUDFImpl},
 };
-use tokio::{runtime::Handle, sync::Mutex};
+use tokio::{runtime::Handle, sync::Mutex, task::JoinSet};
 use wasmtime::{
-    Engine, Store,
+    Engine, Store, UpdateDeadline,
     component::{Component, ResourceAny},
 };
 use wasmtime_wasi::{
@@ -178,16 +178,28 @@ impl VfsView for WasmStateImpl {
     }
 }
 
+/// Create WASM engine.
+fn create_engine() -> DataFusionResult<Engine> {
+    Engine::new(
+        wasmtime::Config::new()
+            .async_support(true)
+            .epoch_interruption(true)
+            .memory_init_cow(true)
+            // Disable backtraces for now since debug info parsing doesn't seem to work and hence error
+            // messages are nondeterministic.
+            .wasm_backtrace(false),
+    )
+    .context("create WASM engine", None)
+}
+
 /// Pre-compiled WASM component.
 ///
 /// The pre-compilation is stateless and can be used to [create](WasmScalarUdf::new) multiple instances that do not share
 /// any state.
+#[derive(Debug)]
 pub struct WasmComponentPrecompiled {
-    /// WASM execution engine based on [`wasmtime`].
-    engine: Engine,
-
-    /// The pre-compiled component based on the binary provided by the API user.
-    component: Component,
+    /// Binary representation of the pre-compiled component.
+    compiled_component: Vec<u8>,
 }
 
 impl WasmComponentPrecompiled {
@@ -199,15 +211,8 @@ impl WasmComponentPrecompiled {
     /// [binary format]: https://webassembly.github.io/spec/core/binary/index.html
     pub async fn new(wasm_binary: Arc<[u8]>) -> DataFusionResult<Self> {
         tokio::task::spawn_blocking(move || {
-            let engine = Engine::new(
-                wasmtime::Config::new()
-                    .async_support(true)
-                    .memory_init_cow(true)
-                    // Disable backtraces for now since debug info parsing doesn't seem to work and hence error
-                    // messages are nondeterministic.
-                    .wasm_backtrace(false),
-            )
-            .context("create WASM engine", None)?;
+            // Create temporary engine that we need for compilation.
+            let engine = create_engine()?;
 
             let compiled_component = engine
                 .precompile_component(&wasm_binary)
@@ -219,34 +224,19 @@ impl WasmComponentPrecompiled {
                 compiled_component.len()
             );
 
-            // SAFETY: the compiled version was produced by us with the same engine. This is NOT external/untrusted input.
-            let component_res = unsafe { Component::deserialize(&engine, compiled_component) };
-            let component = component_res.context("create WASM component", None)?;
-
-            Ok(Self { engine, component })
+            Ok(Self { compiled_component })
         })
         .await
         .map_err(|e| DataFusionError::External(Box::new(e)))?
     }
 }
 
-impl std::fmt::Debug for WasmComponentPrecompiled {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            engine,
-            component: _,
-        } = self;
-
-        f.debug_struct("WasmComponentPrecompiled")
-            .field("engine", engine)
-            .field("component", &"<COMPONENT>")
-            .finish()
-    }
-}
-
 /// Permissions for a WASM component.
 #[derive(Debug)]
 pub struct WasmPermissions {
+    /// Epoch tick time.
+    epoch_tick_time: Duration,
+
     /// Validator for HTTP requests.
     http: Arc<dyn HttpRequestValidator>,
 
@@ -267,6 +257,7 @@ impl WasmPermissions {
 impl Default for WasmPermissions {
     fn default() -> Self {
         Self {
+            epoch_tick_time: Duration::from_millis(10),
             http: Arc::new(RejectAllHttpRequests),
             vfs: VfsLimits::default(),
             envs: BTreeMap::default(),
@@ -275,6 +266,17 @@ impl Default for WasmPermissions {
 }
 
 impl WasmPermissions {
+    /// Set epoch tick time.
+    ///
+    /// WASM payload can only be interrupted when the background epoch timer ticks. However, there is a balance
+    /// between too aggressive ticking and potentially longer latency.
+    pub fn with_epoch_tick_time(self, t: Duration) -> Self {
+        Self {
+            epoch_tick_time: t,
+            ..self
+        }
+    }
+
     /// Set HTTP validator.
     pub fn with_http<V>(self, http: V) -> Self
     where
@@ -307,6 +309,9 @@ pub struct WasmScalarUdf {
     ///
     /// This mostly contains [`WasmStateImpl`].
     store: Arc<Mutex<Store<WasmStateImpl>>>,
+
+    /// Background task that keeps the WASM epoch timer running.
+    epoch_task: Arc<JoinSet<()>>,
 
     /// WIT-based bindings that we resolved within the payload.
     bindings: Arc<bindings::Datafusion>,
@@ -349,7 +354,40 @@ impl WasmScalarUdf {
         io_rt: Handle,
         source: String,
     ) -> DataFusionResult<Vec<Self>> {
-        let WasmComponentPrecompiled { engine, component } = component;
+        let WasmComponentPrecompiled { compiled_component } = component;
+
+        let engine = create_engine()?;
+
+        // set up epoch timer
+        let mut epoch_task = JoinSet::new();
+        let epoch_tick_time = permissions.epoch_tick_time;
+        let engine_weak = engine.weak();
+        epoch_task.spawn_on(
+            async move {
+                // Create the interval within the I/O runtime so that this runtime drives it, not the CPU runtime.
+                let mut epoch_ticker = tokio::time::interval(epoch_tick_time);
+                epoch_ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+                loop {
+                    epoch_ticker.tick().await;
+
+                    match engine_weak.upgrade() {
+                        Some(engine) => {
+                            engine.increment_epoch();
+                        }
+                        None => {
+                            return;
+                        }
+                    }
+                }
+            },
+            &io_rt,
+        );
+        let epoch_task = Arc::new(epoch_task);
+
+        // SAFETY: the compiled version was produced by us with the same engine. This is NOT external/untrusted input.
+        let component_res = unsafe { Component::deserialize(&engine, compiled_component) };
+        let component = component_res.context("create WASM component", None)?;
 
         // Create in-memory VFS
         let vfs_state = VfsState::new(&permissions.vfs);
@@ -371,9 +409,22 @@ impl WasmScalarUdf {
             http_validator: Arc::clone(&permissions.http),
             io_rt,
         };
-        let (bindings, mut store) = link(engine, component, state)
+        let (bindings, mut store) = link(&engine, &component, state)
             .await
             .context("link WASM components", None)?;
+
+        // configure store
+        store.epoch_deadline_callback(|_| {
+            Ok(UpdateDeadline::YieldCustom(
+                // increment deadline epoch by one step
+                1,
+                // tell tokio that we COULD yield (depending on the remaining cooperative budget)
+                //
+                // NOTE: This future will be executed in the callers context (i.e. whoever is using the WASM UDF code),
+                //       NOT in the context of the epoch background timer.
+                Box::pin(tokio::task::consume_budget()),
+            ))
+        });
 
         // Populate VFS from tar archive
         let root_data = bindings
@@ -455,6 +506,7 @@ impl WasmScalarUdf {
 
             udfs.push(Self {
                 store: Arc::clone(&store),
+                epoch_task: Arc::clone(&epoch_task),
                 bindings: Arc::clone(&bindings),
                 resource,
                 name,
@@ -505,6 +557,7 @@ impl std::fmt::Debug for WasmScalarUdf {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self {
             store,
+            epoch_task,
             bindings: _,
             resource,
             name,
@@ -514,6 +567,7 @@ impl std::fmt::Debug for WasmScalarUdf {
 
         f.debug_struct("WasmScalarUdf")
             .field("store", store)
+            .field("epoch_task", epoch_task)
             .field("bindings", &"<BINDINGS>")
             .field("resource", resource)
             .field("name", name)
