@@ -1,6 +1,8 @@
+use std::sync::LazyLock;
+
 use datafusion_common::DataFusionError;
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
-use tokio::{runtime::Handle, sync::OnceCell};
+use tokio::{runtime::Runtime, sync::OnceCell};
 
 /// Static precompiled WASM component for tests
 static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
@@ -15,6 +17,15 @@ async fn component() -> &'static WasmComponentPrecompiled {
         })
         .await
 }
+
+/// I/O runtime used for all tests.
+static IO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap()
+});
 
 /// Try to get scalar UDFs.
 pub(crate) async fn try_scalar_udfs(
@@ -35,5 +46,11 @@ pub(crate) async fn try_scalar_udfs_with_env(
         permissions = permissions.with_env((*k).to_owned(), (*v).to_owned());
     }
 
-    WasmScalarUdf::new(component, &permissions, Handle::current(), "".to_owned()).await
+    WasmScalarUdf::new(
+        component,
+        &permissions,
+        IO_RUNTIME.handle().clone(),
+        "".to_owned(),
+    )
+    .await
 }

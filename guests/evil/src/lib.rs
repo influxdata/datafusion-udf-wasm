@@ -12,6 +12,7 @@ mod env;
 mod fs;
 mod root;
 mod runtime;
+mod spin;
 
 /// Method that returns the root filesystem.
 type RootFn = Box<dyn Fn() -> Option<Vec<u8>>>;
@@ -59,6 +60,34 @@ impl Evil {
             "runtime" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(runtime::udfs),
+            },
+            "spin::root" => Self {
+                root: Box::new(spin::root::root),
+                udfs: Box::new(common::udfs_empty),
+            },
+            "spin::udf_invoke" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udf_invoke::udfs),
+            },
+            "spin::udf_name" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udf_name::udfs),
+            },
+            "spin::udf_return_type_exact" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udf_return_type_exact::udfs),
+            },
+            "spin::udf_return_type_other" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udf_return_type_other::udfs),
+            },
+            "spin::udf_signature" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udf_signature::udfs),
+            },
+            "spin::udfs" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udfs::udfs),
             },
             other => panic!("unknown evil: {other}"),
         }
