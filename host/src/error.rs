@@ -21,7 +21,14 @@ impl WasmToDataFusionErrorExt for wasmtime::Error {
             context.push_str(&format!("\n\nstderr:\n{}", String::from_utf8_lossy(stderr)));
         }
 
-        DataFusionError::External(self.into_boxed_dyn_error()).context(context)
+        // `anyhow` gives as a choice:
+        // - keep the backtrace but don't allow error downcasting
+        // - remove the backtrace and gain the ability to downcast error types
+        //
+        // Since users may want to turn error types into status codes (e.g. for gRPC / Flight), we should probably use
+        // the latter option.
+        DataFusionError::External(self.reallocate_into_boxed_dyn_error_without_backtrace())
+            .context(context)
     }
 }
 

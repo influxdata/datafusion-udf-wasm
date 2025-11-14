@@ -44,6 +44,8 @@ use datafusion_udf_wasm_bundle as _;
 #[cfg(test)]
 use insta as _;
 #[cfg(test)]
+use regex as _;
+#[cfg(test)]
 use wiremock as _;
 
 mod bindings;
@@ -200,7 +202,10 @@ impl WasmComponentPrecompiled {
             let engine = Engine::new(
                 wasmtime::Config::new()
                     .async_support(true)
-                    .memory_init_cow(true),
+                    .memory_init_cow(true)
+                    // Disable backtraces for now since debug info parsing doesn't seem to work and hence error
+                    // messages are nondeterministic.
+                    .wasm_backtrace(false),
             )
             .context("create WASM engine", None)?;
 

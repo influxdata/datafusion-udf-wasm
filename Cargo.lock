@@ -1244,9 +1244,21 @@ dependencies = [
 name = "datafusion-udf-wasm-bundle"
 version = "0.1.0"
 dependencies = [
+ "datafusion-udf-wasm-evil",
  "datafusion-udf-wasm-guest",
  "datafusion-udf-wasm-python",
  "serde_json",
+]
+
+[[package]]
+name = "datafusion-udf-wasm-evil"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "datafusion-common",
+ "datafusion-expr",
+ "datafusion-udf-wasm-guest",
+ "tar",
 ]
 
 [[package]]
@@ -1275,6 +1287,7 @@ dependencies = [
  "insta",
  "log",
  "rand 0.9.2",
+ "regex",
  "siphasher",
  "tar",
  "tokio",

@@ -1,0 +1,18 @@
+[package]
+name = "datafusion-udf-wasm-evil"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+arrow.workspace = true
+datafusion-common.workspace = true
+datafusion-expr.workspace = true
+datafusion-udf-wasm-guest.workspace = true
+tar.workspace = true
+
+[lints]
+workspace = true

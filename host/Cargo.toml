@@ -24,10 +24,12 @@ wasmtime-wasi-io.workspace = true
 
 [dev-dependencies]
 datafusion-udf-wasm-bundle = { workspace = true, features = [
+  "evil",
   "example",
   "python"
 ] }
 insta.workspace = true
+regex.workspace = true
 tokio = { workspace = true, features = ["fs", "macros"] }
 wiremock = "0.6.5"
 

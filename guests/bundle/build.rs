@@ -288,6 +288,15 @@ fn just_build(cwd: &Path, just_cmd: &str, cargo_target_dir: &Path) {
 /// This must be in-sync with the feature list in `Cargo.toml`.
 const FEATURES: &[Feature] = &[
     Feature {
+        name: "evil",
+        package: "datafusion-udf-wasm-evil",
+        just_cmds: &[JustCmd {
+            artifact_type: ArtifactType::Lib,
+            const_name: "EVIL",
+            doc: "Evil payloads.",
+        }],
+    },
+    Feature {
         name: "example",
         package: "datafusion-udf-wasm-guest",
         just_cmds: &[JustCmd {
