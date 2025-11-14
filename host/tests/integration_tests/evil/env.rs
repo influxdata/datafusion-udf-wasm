@@ -51,7 +51,7 @@ async fn call(udf: &WasmScalarUdf) -> Option<String> {
                 args: vec![],
                 arg_fields: vec![],
                 number_rows: 1,
-                return_field: Arc::new(Field::new("r", DataType::Null, true)),
+                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
             },
             &ConfigOptions::default(),
         )

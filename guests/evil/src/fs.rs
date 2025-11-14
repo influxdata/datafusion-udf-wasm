@@ -111,7 +111,7 @@ impl String2Udf {
         Self {
             name,
             effect: Box::new(effect),
-            signature: Signature::uniform(1, vec![DataType::Utf8], Volatility::Immutable),
+            signature: Signature::uniform(2, vec![DataType::Utf8], Volatility::Immutable),
         }
     }
 }
