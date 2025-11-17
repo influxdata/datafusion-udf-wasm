@@ -13,6 +13,8 @@ use datafusion_expr::{
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmScalarUdf};
 use tokio::runtime::Handle;
 
+use crate::integration_tests::test_utils::ColumnarValueExt;
+
 // FIXME: remove `multi_thread` flavor.
 //
 // This test relies on a non-exact function signature to verify error handling
@@ -53,44 +55,40 @@ async fn test_add_one() {
     );
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(Int32Array::from_iter([
-                    Some(3),
-                    None,
-                    Some(1),
-                ])))],
-                arg_fields: vec![Arc::new(Field::new("a1", DataType::Int32, true))],
-                number_rows: 3,
-                return_field: Arc::new(Field::new("r", DataType::Int32, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Int32Array::from_iter([
+                Some(3),
+                None,
+                Some(1),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Int32, true))],
+            number_rows: 3,
+            return_field: Arc::new(Field::new("r", DataType::Int32, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
     assert_eq!(
         array.as_ref(),
         &Int32Array::from_iter([Some(4), None, Some(2)]) as &dyn Array,
     );
-    let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Scalar(ScalarValue::Int32(Some(3)))],
-                arg_fields: vec![Arc::new(Field::new("a1", DataType::Int32, true))],
-                number_rows: 3,
-                return_field: Arc::new(Field::new("r", DataType::Int32, true)),
-            },
-            &ConfigOptions::default(),
-        )
+
+    let scalar = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Int32(Some(3)))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Int32, true))],
+            number_rows: 3,
+            return_field: Arc::new(Field::new("r", DataType::Int32, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
-    assert_eq!(
-        array.as_ref(),
-        &Int32Array::from_iter([Some(4), Some(4), Some(4)]) as &dyn Array,
-    );
+        .unwrap()
+        .unwrap_scalar();
+    assert_eq!(scalar, ScalarValue::Int32(Some(4)));
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_invoke_with_args_returns_error() {
     let component = WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_EXAMPLE.into())
         .await
@@ -110,6 +108,7 @@ async fn test_invoke_with_args_returns_error() {
         arg_fields: vec![Arc::new(Field::new("a1", DataType::Int32, true))],
         number_rows: 3,
         return_field: Arc::new(Field::new("r", DataType::Int32, true)),
+        config_options: Arc::new(ConfigOptions::default()),
     });
 
     assert!(result.is_err());

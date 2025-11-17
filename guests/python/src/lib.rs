@@ -4,6 +4,7 @@
 //! [CPython]: https://www.python.org/
 //! [`pyo3`]: https://pyo3.rs/
 use std::any::Any;
+use std::hash::Hash;
 use std::ops::{ControlFlow, Range};
 use std::sync::{Arc, Once};
 
@@ -15,6 +16,7 @@ use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signatur
 use datafusion_udf_wasm_guest::export;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
+use uuid::Uuid;
 
 use crate::error::py_err_to_string;
 use crate::inspect::inspect_python_code;
@@ -34,6 +36,9 @@ const PYTHON_VERSION_RANGE: Range<(u8, u8, u8)> = (3, 14, 0)..(3, 15, 0);
 struct PythonScalarUDF {
     /// Handle of the wrapped python function.
     python_function: PythonFn,
+
+    /// We treat every python UDF as unique, but we need a proxy value to express that.
+    id: Uuid,
 
     /// Signature of the UDF.
     ///
@@ -56,6 +61,7 @@ impl PythonScalarUDF {
 
         Self {
             python_function,
+            id: Uuid::new_v4(),
             signature,
         }
     }
@@ -94,6 +100,20 @@ impl PythonScalarUDF {
     }
 }
 
+impl PartialEq<Self> for PythonScalarUDF {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for PythonScalarUDF {}
+
+impl Hash for PythonScalarUDF {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
 impl ScalarUDFImpl for PythonScalarUDF {
     fn as_any(&self) -> &dyn Any {
         self
@@ -118,6 +138,7 @@ impl ScalarUDFImpl for PythonScalarUDF {
             arg_fields,
             number_rows,
             return_field,
+            config_options: _,
         } = args;
 
         let return_dt = self.python_function.signature.return_type.t.data_type();

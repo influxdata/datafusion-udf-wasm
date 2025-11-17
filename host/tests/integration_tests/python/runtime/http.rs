@@ -17,7 +17,10 @@ use tokio::runtime::Handle;
 use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
 use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
 
-use crate::integration_tests::python::test_utils::{python_component, python_scalar_udf};
+use crate::integration_tests::{
+    python::test_utils::{python_component, python_scalar_udf},
+    test_utils::ColumnarValueExt,
+};
 
 #[tokio::test]
 async fn test_requests_simple() {
@@ -44,17 +47,16 @@ def perform_request(url: str) -> str:
     let udf = python_udf_with_permissions(CODE, permissions).await;
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
-                arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
 
     assert_eq!(
         array.as_ref(),
@@ -81,15 +83,13 @@ def perform_request(url: str) -> str:
         .await;
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
-                arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
 
@@ -414,6 +414,7 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
         ],
         number_rows: cases.len(),
         return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+        config_options: Arc::new(ConfigOptions::default()),
     };
     let array_result = builder_result.finish();
 
@@ -424,9 +425,10 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
         println!("{}", udf.name());
 
         let array = udf
-            .invoke_async_with_args(args.clone(), &ConfigOptions::default())
+            .invoke_async_with_args(args.clone())
             .await
-            .unwrap();
+            .unwrap()
+            .unwrap_array();
         assert_eq!(array.as_ref(), &array_result as &dyn Array);
     }
 }
@@ -655,17 +657,16 @@ def perform_request(url: str) -> str:
     rt_tmp.shutdown_timeout(Duration::from_secs(1));
 
     let array = rt_cpu.block_on(async {
-        udf.invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
-                arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        udf.invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap()
+        .unwrap_array()
     });
 
     assert_eq!(

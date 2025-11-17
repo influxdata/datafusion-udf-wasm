@@ -10,7 +10,9 @@ use datafusion_expr::{
     async_udf::AsyncScalarUDFImpl,
 };
 
-use crate::integration_tests::python::test_utils::python_scalar_udf;
+use crate::integration_tests::{
+    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+};
 
 #[tokio::test]
 async fn test_ok() {
@@ -37,32 +39,31 @@ def foo(x: datetime) -> datetime:
     );
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    TimestampMicrosecondArray::from_iter([
-                        Some(1),
-                        None,
-                        Some(1_757_520_791_123_456),
-                        Some(-100_000_000_000),
-                    ]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Timestamp(TimeUnit::Microsecond, None),
-                    true,
-                ))],
-                number_rows: 4,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Timestamp(TimeUnit::Microsecond, None),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                TimestampMicrosecondArray::from_iter([
+                    Some(1),
+                    None,
+                    Some(1_757_520_791_123_456),
+                    Some(-100_000_000_000),
+                ]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            ))],
+            number_rows: 4,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
     assert_eq!(
         array.as_ref(),
         &TimestampMicrosecondArray::from_iter([
@@ -85,25 +86,23 @@ def foo(x: datetime) -> datetime:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    TimestampMicrosecondArray::from_iter([Some(1)]).with_timezone("Europe/Berlin"),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Timestamp(TimeUnit::Microsecond, None),
-                    true,
-                ))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Timestamp(TimeUnit::Microsecond, None),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                TimestampMicrosecondArray::from_iter([Some(1)]).with_timezone("Europe/Berlin"),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            ))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
     insta::assert_snapshot!(
@@ -123,25 +122,23 @@ def foo(x: datetime) -> datetime:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    TimestampMicrosecondArray::from_iter([Some(1)]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Timestamp(TimeUnit::Microsecond, None),
-                    true,
-                ))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Timestamp(TimeUnit::Microsecond, None),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                TimestampMicrosecondArray::from_iter([Some(1)]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            ))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
     insta::assert_snapshot!(
@@ -161,25 +158,23 @@ def foo(x: datetime) -> datetime:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    TimestampMicrosecondArray::from_iter([Some(1)]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Timestamp(TimeUnit::Microsecond, None),
-                    true,
-                ))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Timestamp(TimeUnit::Microsecond, None),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                TimestampMicrosecondArray::from_iter([Some(1)]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            ))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
     insta::assert_snapshot!(
@@ -199,25 +194,23 @@ def foo(x: datetime) -> datetime:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    TimestampMicrosecondArray::from_iter([Some(1)]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Timestamp(TimeUnit::Microsecond, None),
-                    true,
-                ))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Timestamp(TimeUnit::Microsecond, None),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                TimestampMicrosecondArray::from_iter([Some(1)]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            ))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Timestamp(TimeUnit::Microsecond, None),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
     insta::assert_snapshot!(

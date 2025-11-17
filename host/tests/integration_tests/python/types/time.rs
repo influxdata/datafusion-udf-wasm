@@ -10,7 +10,9 @@ use datafusion_expr::{
     async_udf::AsyncScalarUDFImpl,
 };
 
-use crate::integration_tests::python::test_utils::python_scalar_udf;
+use crate::integration_tests::{
+    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+};
 
 #[tokio::test]
 async fn test_ok() {
@@ -22,15 +24,15 @@ def foo(x: time) -> time:
     total_seconds = x.hour * 3600 + x.minute * 60 + x.second
     total_microseconds = total_seconds * 1000000 + x.microsecond
     new_microseconds = total_microseconds + 3600 * 1000000  # Add 1 hour
-    
+
     # Convert back to time components
     new_total_seconds = new_microseconds // 1000000
     new_microsecond = new_microseconds % 1000000
-    
+
     new_hour = (new_total_seconds // 3600) % 24
     new_minute = (new_total_seconds % 3600) // 60
     new_second = new_total_seconds % 60
-    
+
     return time(new_hour, new_minute, new_second, new_microsecond)
 ";
     let udf = python_scalar_udf(CODE).await.unwrap();
@@ -50,34 +52,31 @@ def foo(x: time) -> time:
     );
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    Time64MicrosecondArray::from_iter([
-                        Some(0), // 00:00:00.000000
-                        None,
-                        Some(12 * 3600 * 1_000_000), // 12:00:00.000000
-                        Some(
-                            23 * 3600 * 1_000_000 + 59 * 60 * 1_000_000 + 59 * 1_000_000 + 999_999,
-                        ), // 23:59:59.999999
-                    ]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Time64(TimeUnit::Microsecond),
-                    true,
-                ))],
-                number_rows: 4,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Time64(TimeUnit::Microsecond),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                Time64MicrosecondArray::from_iter([
+                    Some(0), // 00:00:00.000000
+                    None,
+                    Some(12 * 3600 * 1_000_000), // 12:00:00.000000
+                    Some(23 * 3600 * 1_000_000 + 59 * 60 * 1_000_000 + 59 * 1_000_000 + 999_999), // 23:59:59.999999
+                ]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Time64(TimeUnit::Microsecond),
+                true,
+            ))],
+            number_rows: 4,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Time64(TimeUnit::Microsecond),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
     assert_eq!(
         array.as_ref(),
         &Time64MicrosecondArray::from_iter([
@@ -100,25 +99,23 @@ def foo(x: time) -> time:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    Time64MicrosecondArray::from_iter([Some(0)]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Time64(TimeUnit::Microsecond),
-                    true,
-                ))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Time64(TimeUnit::Microsecond),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                Time64MicrosecondArray::from_iter([Some(0)]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Time64(TimeUnit::Microsecond),
+                true,
+            ))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Time64(TimeUnit::Microsecond),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
     insta::assert_snapshot!(
@@ -138,25 +135,23 @@ def foo(x: time) -> time:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    Time64MicrosecondArray::from_iter([Some(0)]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Time64(TimeUnit::Microsecond),
-                    true,
-                ))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Time64(TimeUnit::Microsecond),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                Time64MicrosecondArray::from_iter([Some(0)]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Time64(TimeUnit::Microsecond),
+                true,
+            ))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Time64(TimeUnit::Microsecond),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
 

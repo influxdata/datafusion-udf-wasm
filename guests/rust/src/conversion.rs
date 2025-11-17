@@ -1,9 +1,11 @@
 //! Conversion routes from/to [WIT types](crate::bindings).
+use std::sync::Arc;
+
 use arrow::{
     array::ArrayRef,
     datatypes::{DataType, Field, FieldRef},
 };
-use datafusion_common::{error::DataFusionError, scalar::ScalarValue};
+use datafusion_common::{config::ConfigOptions, error::DataFusionError, scalar::ScalarValue};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs};
 use datafusion_udf_wasm_arrow2bytes::{array2bytes, bytes2array, bytes2datatype, datatype2bytes};
 
@@ -238,6 +240,9 @@ impl TryFrom<wit_types::ScalarFunctionArgs> for ScalarFunctionArgs {
                 .collect::<Result<_, _>>()?,
             number_rows: value.number_rows as usize,
             return_field: value.return_field.try_into()?,
+            config_options: Arc::new(ConfigOptions::from_string_hash_map(
+                &value.config_options.into_iter().collect(),
+            )?),
         })
     }
 }

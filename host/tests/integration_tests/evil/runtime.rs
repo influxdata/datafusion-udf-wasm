@@ -143,15 +143,13 @@ async fn udf(name: &'static str) -> WasmScalarUdf {
 }
 
 async fn try_call_no_params(udf: &WasmScalarUdf) -> Result<(), DataFusionError> {
-    udf.invoke_async_with_args(
-        ScalarFunctionArgs {
-            args: vec![],
-            arg_fields: vec![],
-            number_rows: 1,
-            return_field: Arc::new(Field::new("r", DataType::Null, true)),
-        },
-        &ConfigOptions::default(),
-    )
+    udf.invoke_async_with_args(ScalarFunctionArgs {
+        args: vec![],
+        arg_fields: vec![],
+        number_rows: 1,
+        return_field: Arc::new(Field::new("r", DataType::Null, true)),
+        config_options: Arc::new(ConfigOptions::default()),
+    })
     .await
     .map(|_| ())
 }

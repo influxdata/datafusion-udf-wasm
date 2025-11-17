@@ -17,6 +17,7 @@ rand = { version = "0.9" }
 siphasher = { version = "1", default-features = false }
 tar.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync"] }
+uuid.workspace = true
 wasmtime.workspace = true
 wasmtime-wasi.workspace = true
 wasmtime-wasi-http.workspace = true

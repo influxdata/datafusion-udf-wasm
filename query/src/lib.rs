@@ -253,7 +253,10 @@ fn extract_function_body(body: &CreateFunctionBody) -> DataFusionResult<&str> {
         CreateFunctionBody::AsAfterOptions(e) | CreateFunctionBody::AsBeforeOptions(e) => {
             expression_into_str(e)
         }
-        CreateFunctionBody::Return(_) => Err(DataFusionError::Plan(
+        CreateFunctionBody::Return(_)
+        | CreateFunctionBody::AsBeginEnd(_)
+        | CreateFunctionBody::AsReturnExpr(_)
+        | CreateFunctionBody::AsReturnSelect(_) => Err(DataFusionError::Plan(
             "`RETURN` function body not supported for UDFs".to_string(),
         )),
     }

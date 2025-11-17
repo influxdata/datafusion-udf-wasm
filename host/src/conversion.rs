@@ -221,6 +221,16 @@ impl TryFrom<ScalarFunctionArgs> for wit_types::ScalarFunctionArgs {
                 .collect(),
             number_rows: value.number_rows as u64,
             return_field: value.return_field.as_ref().clone().into(),
+            config_options: value
+                .config_options
+                .entries()
+                .into_iter()
+                .filter_map(|e| {
+                    let k = e.key;
+                    let v = e.value?;
+                    Some((k, v))
+                })
+                .collect(),
         })
     }
 }

@@ -10,7 +10,9 @@ use datafusion_expr::{
     async_udf::AsyncScalarUDFImpl,
 };
 
-use crate::integration_tests::python::test_utils::python_scalar_udf;
+use crate::integration_tests::{
+    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+};
 
 #[tokio::test]
 async fn test_ok() {
@@ -28,22 +30,21 @@ def foo(x: str) -> str:
     assert_eq!(udf.return_type(&[DataType::Utf8]).unwrap(), DataType::Utf8,);
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter([
-                    Some("hello".to_owned()),
-                    None,
-                    Some("".to_owned()),
-                    Some("w\x00rld".to_owned()),
-                ])))],
-                arg_fields: vec![Arc::new(Field::new("a1", DataType::Utf8, true))],
-                number_rows: 4,
-                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter([
+                Some("hello".to_owned()),
+                None,
+                Some("".to_owned()),
+                Some("w\x00rld".to_owned()),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Utf8, true))],
+            number_rows: 4,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
     assert_eq!(
         array.as_ref(),
         &StringArray::from_iter([
@@ -64,17 +65,15 @@ def foo(x: str) -> str:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter([
-                    Some("hello".to_owned()),
-                ])))],
-                arg_fields: vec![Arc::new(Field::new("a1", DataType::Utf8, true))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter([
+                Some("hello".to_owned()),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
     insta::assert_snapshot!(
