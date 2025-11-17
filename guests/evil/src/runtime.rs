@@ -1,5 +1,5 @@
 //! Evil payloads that try to break the sandbox when the UDF is called.
-use std::sync::Arc;
+use std::{hash::Hash, sync::Arc};
 
 use arrow::datatypes::DataType;
 use datafusion_common::{Result as DataFusionResult, ScalarValue};
@@ -46,6 +46,20 @@ impl std::fmt::Debug for SideEffect {
             .field("effect", &"<EFFECT>")
             .field("signature", signature)
             .finish()
+    }
+}
+
+impl PartialEq<Self> for SideEffect {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for SideEffect {}
+
+impl Hash for SideEffect {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
     }
 }
 

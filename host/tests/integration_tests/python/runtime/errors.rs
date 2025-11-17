@@ -52,7 +52,8 @@ def foo(x: int) -> int:
             arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        }, &ConfigOptions::default())
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await.unwrap_err(),
         @"Execution error: `foo` expects 1 parameters (passed as args) but got 0",
     );
@@ -72,7 +73,8 @@ def foo(x: int) -> int:
             ],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        }, &ConfigOptions::default())
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err(),
         @"Execution error: `foo` expects 1 parameters (passed as args) but got 2",
@@ -86,7 +88,8 @@ def foo(x: int) -> int:
             arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        }, &ConfigOptions::default())
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await.
         unwrap_err(),
         @r"
@@ -107,7 +110,8 @@ def foo(x: int) -> int:
             ],
             number_rows: 2,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        }, &ConfigOptions::default())
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err(),
         @"Execution error: array passed for argument 1 should have 2 rows but has 1",
@@ -126,7 +130,8 @@ def foo(x: int) -> int:
             ],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        }, &ConfigOptions::default())
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err(),
         @"Execution error: array passed for argument 1 should have 1 rows but has 2",
@@ -150,7 +155,8 @@ def foo(x: int) -> int:
             arg_fields: vec![],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        }, &ConfigOptions::default())
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err(),
         @"Execution error: checking argument fields: `foo` expects 1 parameters but got 0",
@@ -167,7 +173,8 @@ def foo(x: int) -> int:
             ],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        }, &ConfigOptions::default())
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err(),
         @"Execution error: checking argument fields: `foo` expects 1 parameters but got 2",
@@ -181,7 +188,8 @@ def foo(x: int) -> int:
             arg_fields: vec![Arc::new(Field::new("x", DataType::Float64, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        }, &ConfigOptions::default())
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err(),
         @"Execution error: checking argument fields: argument 1 of `foo` should be Int64, got Float64",
@@ -205,7 +213,8 @@ def foo(x: int) -> int:
             arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Float64, true)),
-        }, &ConfigOptions::default())
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err(),
         @"Execution error: `foo` returns Int64 but was asked to produce Float64",
@@ -219,7 +228,8 @@ def foo(x: int) -> int:
             arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
             number_rows: 1,
             return_field: Arc::new(Field::new("r", DataType::Int64, false)),
-        }, &ConfigOptions::default())
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err(),
         @"Execution error: `foo` returns nullable data but was asked not to do so",
@@ -329,17 +339,15 @@ def foo(x: int) -> int:
 
 async fn err(code: &str) -> DataFusionError {
     let udf = python_scalar_udf(code).await.unwrap();
-    udf.invoke_async_with_args(
-        ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
-                Some(1),
-            ])))],
-            arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
-            number_rows: 1,
-            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        },
-        &ConfigOptions::default(),
-    )
+    udf.invoke_async_with_args(ScalarFunctionArgs {
+        args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+            Some(1),
+        ])))],
+        arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
+        number_rows: 1,
+        return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        config_options: Arc::new(ConfigOptions::default()),
+    })
     .await
     .unwrap_err()
 }

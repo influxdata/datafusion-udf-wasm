@@ -5,7 +5,9 @@
 
 use std::sync::Arc;
 
-use crate::integration_tests::python::test_utils::python_scalar_udfs;
+use crate::integration_tests::{
+    python::test_utils::python_scalar_udfs, test_utils::ColumnarValueExt,
+};
 use arrow::{
     array::{Array, ArrayRef, Int64Array},
     datatypes::{DataType, Field},
@@ -96,15 +98,14 @@ async fn udfs() -> [impl AsyncScalarUDFImpl; 2] {
 }
 
 async fn call(udf: &impl AsyncScalarUDFImpl) -> ArrayRef {
-    udf.invoke_async_with_args(
-        ScalarFunctionArgs {
-            args: vec![],
-            arg_fields: vec![],
-            number_rows: 3,
-            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        },
-        &ConfigOptions::default(),
-    )
+    udf.invoke_async_with_args(ScalarFunctionArgs {
+        args: vec![],
+        arg_fields: vec![],
+        number_rows: 3,
+        return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+        config_options: Arc::new(ConfigOptions::default()),
+    })
     .await
     .unwrap()
+    .unwrap_array()
 }

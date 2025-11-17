@@ -10,7 +10,9 @@ use datafusion_expr::{
     async_udf::AsyncScalarUDFImpl,
 };
 
-use crate::integration_tests::python::test_utils::python_scalar_udf;
+use crate::integration_tests::{
+    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+};
 
 #[tokio::test]
 async fn test_ok() {
@@ -31,22 +33,21 @@ def foo(x: bytes) -> bytes:
     );
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(BinaryArray::from_iter([
-                    Some(b"hello".as_slice()),
-                    None,
-                    Some(b"world".as_slice()),
-                    Some(b"".as_slice()),
-                ])))],
-                arg_fields: vec![Arc::new(Field::new("a1", DataType::Binary, true))],
-                number_rows: 4,
-                return_field: Arc::new(Field::new("r", DataType::Binary, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(BinaryArray::from_iter([
+                Some(b"hello".as_slice()),
+                None,
+                Some(b"world".as_slice()),
+                Some(b"".as_slice()),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Binary, true))],
+            number_rows: 4,
+            return_field: Arc::new(Field::new("r", DataType::Binary, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
     assert_eq!(
         array.as_ref(),
         &BinaryArray::from_iter([
@@ -67,17 +68,15 @@ def foo(x: bytes) -> bytes:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(BinaryArray::from_iter([
-                    Some(b"hello".as_slice()),
-                ])))],
-                arg_fields: vec![Arc::new(Field::new("a1", DataType::Binary, true))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new("r", DataType::Binary, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(BinaryArray::from_iter([
+                Some(b"hello".as_slice()),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Binary, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Binary, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
     insta::assert_snapshot!(
@@ -95,17 +94,15 @@ def foo(x: bytes) -> bytes:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(BinaryArray::from_iter([
-                    Some(b"hello".as_slice()),
-                ])))],
-                arg_fields: vec![Arc::new(Field::new("a1", DataType::Binary, true))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new("r", DataType::Binary, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(BinaryArray::from_iter([
+                Some(b"hello".as_slice()),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Binary, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Binary, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
     insta::assert_snapshot!(

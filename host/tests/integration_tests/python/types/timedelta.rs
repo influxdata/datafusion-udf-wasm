@@ -10,7 +10,9 @@ use datafusion_expr::{
     async_udf::AsyncScalarUDFImpl,
 };
 
-use crate::integration_tests::python::test_utils::python_scalar_udf;
+use crate::integration_tests::{
+    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+};
 
 #[tokio::test]
 async fn test_ok() {
@@ -37,33 +39,32 @@ def foo(x: timedelta) -> timedelta:
     );
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    DurationMicrosecondArray::from_iter([
-                        Some(0), // 0 microseconds
-                        None,
-                        Some(1_000_000),             // 1 second
-                        Some(24 * 3600 * 1_000_000), // 1 day
-                        Some(-3600 * 1_000_000),     // -1 hour
-                    ]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Duration(TimeUnit::Microsecond),
-                    true,
-                ))],
-                number_rows: 5,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Duration(TimeUnit::Microsecond),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                DurationMicrosecondArray::from_iter([
+                    Some(0), // 0 microseconds
+                    None,
+                    Some(1_000_000),             // 1 second
+                    Some(24 * 3600 * 1_000_000), // 1 day
+                    Some(-3600 * 1_000_000),     // -1 hour
+                ]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Duration(TimeUnit::Microsecond),
+                true,
+            ))],
+            number_rows: 5,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Duration(TimeUnit::Microsecond),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
     assert_eq!(
         array.as_ref(),
         &DurationMicrosecondArray::from_iter([
@@ -87,27 +88,26 @@ def foo(x: timedelta) -> timedelta:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    DurationMicrosecondArray::from_iter([Some(0)]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Duration(TimeUnit::Microsecond),
-                    true,
-                ))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Duration(TimeUnit::Microsecond),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                DurationMicrosecondArray::from_iter([Some(0)]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Duration(TimeUnit::Microsecond),
+                true,
+            ))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Duration(TimeUnit::Microsecond),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
 
     // -1 day - 2 hours - 30 minutes = -26.5 hours = -95400 seconds = -95400000000 microseconds
     let expected_microseconds = -95400 * 1_000_000i64;
@@ -128,25 +128,23 @@ def foo(x: timedelta) -> timedelta:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    DurationMicrosecondArray::from_iter([Some(0)]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Duration(TimeUnit::Microsecond),
-                    true,
-                ))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Duration(TimeUnit::Microsecond),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                DurationMicrosecondArray::from_iter([Some(0)]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Duration(TimeUnit::Microsecond),
+                true,
+            ))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Duration(TimeUnit::Microsecond),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
 
@@ -165,25 +163,23 @@ def foo(x: timedelta) -> timedelta:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(
-                    DurationMicrosecondArray::from_iter([Some(0)]),
-                ))],
-                arg_fields: vec![Arc::new(Field::new(
-                    "a1",
-                    DataType::Duration(TimeUnit::Microsecond),
-                    true,
-                ))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new(
-                    "r",
-                    DataType::Duration(TimeUnit::Microsecond),
-                    true,
-                )),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(
+                DurationMicrosecondArray::from_iter([Some(0)]),
+            ))],
+            arg_fields: vec![Arc::new(Field::new(
+                "a1",
+                DataType::Duration(TimeUnit::Microsecond),
+                true,
+            ))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new(
+                "r",
+                DataType::Duration(TimeUnit::Microsecond),
+                true,
+            )),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
     insta::assert_snapshot!(

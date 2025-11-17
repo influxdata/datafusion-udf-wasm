@@ -10,7 +10,9 @@ use datafusion_expr::{
     async_udf::AsyncScalarUDFImpl,
 };
 
-use crate::integration_tests::python::test_utils::python_scalar_udf;
+use crate::integration_tests::{
+    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+};
 
 #[tokio::test]
 async fn test_ok() {
@@ -31,21 +33,20 @@ def foo(x: bool) -> bool:
     );
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(BooleanArray::from_iter([
-                    Some(true),
-                    None,
-                    Some(false),
-                ])))],
-                arg_fields: vec![Arc::new(Field::new("a1", DataType::Boolean, true))],
-                number_rows: 3,
-                return_field: Arc::new(Field::new("r", DataType::Boolean, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(BooleanArray::from_iter([
+                Some(true),
+                None,
+                Some(false),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Boolean, true))],
+            number_rows: 3,
+            return_field: Arc::new(Field::new("r", DataType::Boolean, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
     assert_eq!(
         array.as_ref(),
         &BooleanArray::from_iter([Some(false), None, Some(true)]) as &dyn Array,
@@ -61,17 +62,15 @@ def foo(x: bool) -> bool:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let err = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(BooleanArray::from_iter([
-                    Some(true),
-                ])))],
-                arg_fields: vec![Arc::new(Field::new("a1", DataType::Boolean, true))],
-                number_rows: 1,
-                return_field: Arc::new(Field::new("r", DataType::Boolean, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(BooleanArray::from_iter([
+                Some(true),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Boolean, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Boolean, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
         .unwrap_err();
     insta::assert_snapshot!(

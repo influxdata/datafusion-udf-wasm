@@ -273,7 +273,7 @@ EXPLAIN SELECT add_one(1);
     | plan_type     | plan                                                                         |
     +---------------+------------------------------------------------------------------------------+
     | logical_plan  | Projection: add_one(Int64(1))                                                |
-    |               |   EmptyRelation                                                              |
+    |               |   EmptyRelation: rows=1                                                      |
     | physical_plan | ProjectionExec: expr=[__async_fn_0@0 as add_one(Int64(1))]                   |
     |               |   AsyncFuncExec: async_expr=[async_expr(name=__async_fn_0, expr=add_one(1))] |
     |               |     CoalesceBatchesExec: target_batch_size=8192                              |

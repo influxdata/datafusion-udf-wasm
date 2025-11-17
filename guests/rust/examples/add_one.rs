@@ -13,7 +13,7 @@ use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signatur
 use datafusion_udf_wasm_guest::export;
 
 /// UDF that implements "add one".
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct AddOne {
     /// Signature of the UDF.
     ///
@@ -58,6 +58,7 @@ impl ScalarUDFImpl for AddOne {
             arg_fields: _,
             number_rows: _,
             return_field: _,
+            config_options: _,
         } = args;
 
         // extract inputs

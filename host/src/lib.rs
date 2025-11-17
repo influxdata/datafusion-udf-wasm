@@ -2,16 +2,17 @@
 //!
 //!
 //! [DataFusion]: https://datafusion.apache.org/
-use std::{any::Any, collections::BTreeMap, ops::DerefMut, sync::Arc};
+use std::{any::Any, collections::BTreeMap, hash::Hash, ops::DerefMut, sync::Arc};
 
 use ::http::HeaderName;
 use arrow::datatypes::DataType;
-use datafusion_common::{DataFusionError, Result as DataFusionResult, config::ConfigOptions};
+use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature,
     async_udf::{AsyncScalarUDF, AsyncScalarUDFImpl},
 };
 use tokio::{runtime::Handle, sync::Mutex};
+use uuid::Uuid;
 use wasmtime::{
     Engine, Store,
     component::{Component, ResourceAny},
@@ -322,6 +323,9 @@ pub struct WasmScalarUdf {
     /// [`ScalarUDFImpl::name`] is sync and requires us to return a reference.
     name: String,
 
+    /// We treat every UDF as unique, but we need a proxy value to express that.
+    id: Uuid,
+
     /// Signature of the UDF.
     ///
     /// This was pre-fetched during UDF generation because
@@ -458,6 +462,7 @@ impl WasmScalarUdf {
                 bindings: Arc::clone(&bindings),
                 resource,
                 name,
+                id: Uuid::new_v4(),
                 signature,
                 return_type,
             });
@@ -508,6 +513,7 @@ impl std::fmt::Debug for WasmScalarUdf {
             bindings: _,
             resource,
             name,
+            id,
             signature,
             return_type,
         } = self;
@@ -517,9 +523,24 @@ impl std::fmt::Debug for WasmScalarUdf {
             .field("bindings", &"<BINDINGS>")
             .field("resource", resource)
             .field("name", name)
+            .field("id", id)
             .field("signature", signature)
             .field("return_type", return_type)
             .finish()
+    }
+}
+
+impl PartialEq<Self> for WasmScalarUdf {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for WasmScalarUdf {}
+
+impl Hash for WasmScalarUdf {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }
 
@@ -579,8 +600,7 @@ impl AsyncScalarUDFImpl for WasmScalarUdf {
     async fn invoke_async_with_args(
         &self,
         args: ScalarFunctionArgs,
-        _option: &ConfigOptions,
-    ) -> DataFusionResult<arrow::array::ArrayRef> {
+    ) -> DataFusionResult<ColumnarValue> {
         let args = args.try_into()?;
         let mut store_guard = self.store.lock().await;
         let return_type = self
@@ -596,10 +616,6 @@ impl AsyncScalarUDFImpl for WasmScalarUdf {
 
         drop(store_guard);
 
-        let columnar_value: ColumnarValue = return_type.try_into()?;
-        match columnar_value {
-            ColumnarValue::Array(v) => Ok(v),
-            ColumnarValue::Scalar(v) => v.to_array_of_size(args.number_rows as usize),
-        }
+        return_type.try_into()
     }
 }

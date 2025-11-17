@@ -11,7 +11,9 @@ use datafusion_expr::{
     async_udf::AsyncScalarUDFImpl,
 };
 
-use crate::integration_tests::python::test_utils::python_scalar_udf;
+use crate::integration_tests::{
+    python::test_utils::python_scalar_udf, test_utils::ColumnarValueExt,
+};
 
 #[tokio::test]
 async fn test_roundtrip() {
@@ -44,19 +46,18 @@ def foo(x: float) -> float:
     ];
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(Float64Array::from_iter(
-                    values.iter().copied(),
-                )))],
-                arg_fields: vec![Arc::new(Field::new("a1", DataType::Float64, true))],
-                number_rows: values.len(),
-                return_field: Arc::new(Field::new("r", DataType::Float64, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Float64Array::from_iter(
+                values.iter().copied(),
+            )))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Float64, true))],
+            number_rows: values.len(),
+            return_field: Arc::new(Field::new("r", DataType::Float64, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
     assert_float_total_eq(&array, values);
 }
 

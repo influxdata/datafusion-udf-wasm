@@ -82,6 +82,7 @@ interface types {
         arg-fields: list<field>,
         number-rows: u64,
         return-field: field,
+        config-options: list<tuple<string, string>>,
     }
 
     resource scalar-udf {

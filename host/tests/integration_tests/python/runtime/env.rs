@@ -6,7 +6,9 @@ use datafusion_expr::{ScalarFunctionArgs, async_udf::AsyncScalarUDFImpl};
 use datafusion_udf_wasm_host::{WasmPermissions, WasmScalarUdf};
 use tokio::runtime::Handle;
 
-use crate::integration_tests::python::test_utils::python_component;
+use crate::integration_tests::{
+    python::test_utils::python_component, test_utils::ColumnarValueExt,
+};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_env() {
@@ -42,17 +44,16 @@ def env() -> str:
     let udf = udfs.into_iter().next().unwrap();
 
     let array = udf
-        .invoke_async_with_args(
-            ScalarFunctionArgs {
-                args: vec![],
-                arg_fields: vec![],
-                number_rows: 1,
-                return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
-            },
-            &ConfigOptions::default(),
-        )
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![],
+            arg_fields: vec![],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
         .await
-        .unwrap();
+        .unwrap()
+        .unwrap_array();
 
     let actual = as_string_array(&array)
         .unwrap()
