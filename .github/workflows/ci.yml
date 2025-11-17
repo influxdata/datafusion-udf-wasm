@@ -15,6 +15,34 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      - name: Free disk space
+        run: |
+          df -h
+
+          to_delete=(
+            "/lib/firefox"
+            "/lib/google-cloud-sdk"
+            "/lib/jvm"
+            "/lib/llvm-16"
+            "/lib/llvm-17"
+            "/opt/az"
+            "/opt/google"
+            "/opt/hostedtoolcache/CodeQL"
+            "/opt/hostedtoolcache/PyPy"
+            "/opt/hostedtoolcache/Ruby"
+            "/opt/hostedtoolcache/go"
+            "/opt/hostedtoolcache/node"
+            "/opt/microsoft"
+            "/opt/pipx"
+            "/usr/share/swift"
+          )
+          for d in "${to_delete[@]}"; do
+            echo "delete $d"
+            sudo rm -rf "$d"
+          done
+
+          df -h
+
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with:
