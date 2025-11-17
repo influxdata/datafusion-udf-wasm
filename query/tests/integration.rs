@@ -7,11 +7,10 @@
 
 use std::collections::HashMap;
 
-use datafusion::{
-    assert_batches_eq,
-    prelude::{DataFrame, SessionContext},
+use datafusion::prelude::{DataFrame, SessionContext};
+use datafusion_common::{
+    Result as DataFusionResult, assert_batches_eq, test_util::batches_to_string,
 };
-use datafusion_common::{Result as DataFusionResult, test_util::batches_to_string};
 use datafusion_udf_wasm_host::WasmPermissions;
 use datafusion_udf_wasm_query::{
     ComponentFn, Lang, ParsedQuery, UdfQueryParser,

@@ -4,8 +4,8 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 
-use datafusion::execution::TaskContext;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
+use datafusion_execution::TaskContext;
 use datafusion_sql::parser::{DFParserBuilder, Statement};
 use sqlparser::ast::{CreateFunctionBody, Expr, Statement as SqlStatement, Value};
 use sqlparser::dialect::dialect_from_str;

@@ -5,8 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-datafusion.workspace = true
 datafusion-common.workspace = true
+datafusion-execution.workspace = true
 datafusion-expr.workspace = true
 datafusion-sql.workspace = true
 datafusion-udf-wasm-host.workspace = true
@@ -14,6 +14,7 @@ sqlparser.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+datafusion.workspace = true
 datafusion-udf-wasm-bundle = { workspace = true, features = ["python"] }
 datafusion-udf-wasm-host = { workspace = true }
 insta.workspace = true
