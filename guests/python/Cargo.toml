@@ -20,6 +20,11 @@ wasip2.workspace = true
 [build-dependencies]
 tar.workspace = true
 walkdir = "2.5.0"
+sha2 = "0.10"
+hex = "0.4"
+reqwest = { version = "0.12", features = ["blocking"] }
+zip = "2.2"
+flate2 = "1.0"
 
 [lints]
 workspace = true

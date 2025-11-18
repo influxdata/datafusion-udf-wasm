@@ -2,13 +2,6 @@ PYTHON_VERSION_MAJOR := "3"
 PYTHON_VERSION_MINOR := "14"
 PYTHON_VERSION_MICRO := "0"
 
-WASI_SDK_VERSION_MAJOR := "24"
-WASI_SDK_VERSION_MINOR := "0"
-
-SHA256_PYTHON_SDK := "54aa3e33ebb45e03b5c13b86ce8742b45bb94e394925622fa66c4700f6782979"
-SHA256_PYTHON_SDK_BUILD := "98e7cd352e512d1d2af6f999f4391df959eba1b213ef778646353620d697638a"
-SHA256_WASI_SDK_SYSROOT := "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99153a50888f08"
-
 PYTHON_VERSION_FULL := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR + "." + PYTHON_VERSION_MICRO
 
 DOWNLOADS_DIR := source_directory() / "downloads"
@@ -21,104 +14,10 @@ PYTHON_SITE_PACKAGES := PYO3_CROSS_LIB_DIR / "lib" / "python" + PYO3_CROSS_PYTHO
 
 export WASI_SDK_LINK_PATH := DOWNLOADS_DIR / "wasi-sysroot" / "lib" / "wasm32-wasip2"
 
-# download pre-built Python WASM SDK
+
+# Note: Downloads are now handled by build.rs during the cargo build process
 [private]
-download-python-sdk:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    echo ::group::guests::python::download-python-sdk
-    set -x
-
-    mkdir -p downloads
-    pushd downloads >/dev/null
-
-    # skip if already downloaded
-    if [ -d python-sdk ]; then
-        echo "python sdk already present"
-        set +x
-        echo ::endgroup::
-        exit 0
-    fi
-
-    curl \
-        --fail \
-        --show-error \
-        --silent \
-        --proto '=https' \
-        --tlsv1.2 \
-        --location \
-        --output "python-sdk.zip" \
-        "https://github.com/brettcannon/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
-
-    curl \
-        --fail \
-        --show-error \
-        --silent \
-        --proto '=https' \
-        --tlsv1.2 \
-        --location \
-        --output "build-python-sdk.zip" \
-        "https://github.com/brettcannon/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/_build-python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
-
-    echo "{{SHA256_PYTHON_SDK}} python-sdk.zip" | sha256sum -c
-    echo "{{SHA256_PYTHON_SDK_BUILD}} build-python-sdk.zip" | sha256sum -c
-
-    unzip -d python-sdk python-sdk.zip
-    unzip -d build-python-sdk build-python-sdk.zip
-
-    mv build-python-sdk/libpython{{PYTHON_VERSION_MAJOR}}.{{PYTHON_VERSION_MINOR}}.a python-sdk/
-    mv build-python-sdk/Modules/_decimal/libmpdec/libmpdec.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_HMAC.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_Hash_BLAKE2.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_Hash_MD5.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_Hash_SHA1.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_Hash_SHA2.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_Hash_SHA3.a python-sdk/
-    mv build-python-sdk/Modules/expat/libexpat.a python-sdk/
-
-    set +x
-    echo ::endgroup::
-
-# download WASI SDK because we need some libraries during the static linking phase
-[private]
-download-wasi-sdk:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    echo ::group::guests::python::download-wasi-sdk
-    set -x
-
-    mkdir -p downloads
-    pushd downloads >/dev/null
-
-    # skip if already downloaded
-    if [ -d wasi-sysroot ]; then
-        echo "wasi sdk already present"
-        set +x
-        echo ::endgroup::
-        exit 0
-    fi
-
-    curl \
-        --fail \
-        --show-error \
-        --silent \
-        --proto '=https' \
-        --tlsv1.2 \
-        --location \
-        --output "wasi-sysroot.tar.gz" \
-        "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{{WASI_SDK_VERSION_MAJOR}}/wasi-sysroot-{{WASI_SDK_VERSION_MAJOR}}.{{WASI_SDK_VERSION_MINOR}}.tar.gz"
-
-    echo "{{SHA256_WASI_SDK_SYSROOT}} wasi-sysroot.tar.gz" | sha256sum -c
-    tar xf wasi-sysroot.tar.gz
-    mv wasi-sysroot-{{WASI_SDK_VERSION_MAJOR}}.{{WASI_SDK_VERSION_MINOR}} wasi-sysroot
-
-    set +x
-    echo ::endgroup::
-
-[private]
-python-site-packages: download-python-sdk
+python-site-packages:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -126,14 +25,14 @@ python-site-packages: download-python-sdk
     set -x
 
     # skip if already downloaded
-    if [ -d "{{PYTHON_TMP_VENV}}" ]; then
+    if [ -d python-sdk ]; then
         echo "site-packages already set up"
         set +x
         echo ::endgroup::
         exit 0
     fi
 
-    python -m venv "{{PYTHON_TMP_VENV}}"
+    python3 -m venv "{{PYTHON_TMP_VENV}}"
 
     # Notes:
     # - "only binary" means "only wheels, no sdist", i.e. we don't need to run any Python lib build code
@@ -153,7 +52,7 @@ python-site-packages: download-python-sdk
     echo ::endgroup::
 
 [private]
-build-lib profile: download-python-sdk download-wasi-sdk python-site-packages
+build-lib profile: python-site-packages
     @echo ::group::guests::python::build-lib {{profile}}
     cargo build --target=wasm32-wasip2 --profile={{replace(profile, "debug", "dev")}}
     @echo ::endgroup::
@@ -174,5 +73,5 @@ check-build: build-debug
 # clean build artifacts
 clean:
     @echo ::group::guests::python::clean
-    rm -rf {{DOWNLOADS_DIR}}
+    cargo clean
     @echo ::endgroup::
