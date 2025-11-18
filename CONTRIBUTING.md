@@ -28,6 +28,9 @@ Install [Python] to set up the environment for the [Python] guest.
 ### Tombi
 Install [tombi] to format and lint [TOML] files.
 
+### Spellcheck
+Install [typos] to run an automatic spellcheck.
+
 
 ## Checks
 There is one "run everything" [just] recipe:
@@ -112,4 +115,5 @@ Then the [Python Standard Library] was not found or not bundled correctly. You m
 [rustup]: https://rustup.rs/
 [tombi]: https://tombi-toml.github.io/tombi
 [TOML]: https://toml.io/
+[typos]: https://github.com/crate-ci/typos
 [yamllint]: https://github.com/adrienverge/yamllint

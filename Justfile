@@ -52,6 +52,12 @@ check-rust-deny:
 # run ALL Rust checks
 check-rust: check-rust-fmt check-rust-check check-rust-build check-rust-clippy check-rust-test check-rust-doc check-rust-bench check-rust-deny
 
+# check spelling
+check-spelling:
+    @echo ::group::check-spelling
+    typos
+    @echo ::endgroup::
+
 # check TOML formatting
 check-toml-fmt:
     @echo ::group::check-toml-fmt
@@ -74,7 +80,7 @@ check-yaml:
     @echo ::endgroup::
 
 # run ALL checks
-check: check-rust check-toml check-yaml
+check: check-rust check-spelling check-toml check-yaml
 
 # clean Rust build artifacts
 clean-rust:
@@ -106,6 +112,12 @@ fix-rust-fmt:
 # fix common Rust issues automatically
 fix-rust: fix-rust-clippy fix-rust-check fix-rust-fmt
 
+# fix typos
+fix-spellcheck:
+    @echo ::group::fix-rust-fmt
+    typos --write-changes
+    @echo ::endgroup::
+
 # fix TOML formatting
 fix-toml-fmt:
     @echo ::group::fix-toml-fmt
@@ -116,4 +128,4 @@ fix-toml-fmt:
 fix-toml: fix-toml-fmt
 
 # fix common issues automatically
-fix: fix-rust fix-toml
+fix: fix-spellcheck fix-rust fix-toml

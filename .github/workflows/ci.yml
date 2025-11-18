@@ -51,10 +51,10 @@ jobs:
       - name: Install `yamllint`
         run: pip install --requirement=.github/workflows/requirements.txt
 
-      - name: Install `cargo-deny` & `just`
+      - name: Install `cargo-deny` & `just` & 'typos'
         uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532  # v2
         with:
-          tool: cargo-deny,just
+          tool: cargo-deny,just,typos
 
       - name: Install `tombi`
         uses: tombi-toml/setup-tombi@a9378ac9fe5c29df7d26263deacea4ac642af9c2  # v1
