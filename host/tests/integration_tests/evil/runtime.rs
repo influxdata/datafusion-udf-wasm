@@ -61,7 +61,7 @@ async fn test_maxptr() {
     let err = err_call_no_params(&udf).await.to_string();
 
     // linear memory size is nondeterministic
-    let err = Regex::new(r#"size 0x[0-9]+"#)
+    let err = Regex::new(r#"size 0x[0-9a-f]+"#)
         .unwrap()
         .replace_all(&err, "size <SIZE>");
 

@@ -7,6 +7,9 @@ use datafusion_common::Result as DataFusionResult;
 use datafusion_expr::ScalarUDFImpl;
 use datafusion_udf_wasm_guest::export;
 
+mod common;
+mod env;
+mod fs;
 mod root;
 mod runtime;
 
@@ -29,12 +32,32 @@ impl Evil {
     /// Get evil, multiplexed by env.
     fn get() -> Self {
         match std::env::var("EVIL").expect("evil specified").as_str() {
+            "env" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(env::udfs),
+            },
+            "fs" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(fs::udfs),
+            },
+            "root::invalid_entry" => Self {
+                root: Box::new(root::invalid_entry::root),
+                udfs: Box::new(common::udfs_empty),
+            },
             "root::many_files" => Self {
                 root: Box::new(root::many_files::root),
-                udfs: Box::new(root::many_files::udfs),
+                udfs: Box::new(common::udfs_empty),
+            },
+            "root::not_tar" => Self {
+                root: Box::new(root::not_tar::root),
+                udfs: Box::new(common::udfs_empty),
+            },
+            "root::unsupported_entry" => Self {
+                root: Box::new(root::unsupported_entry::root),
+                udfs: Box::new(common::udfs_empty),
             },
             "runtime" => Self {
-                root: Box::new(runtime::root),
+                root: Box::new(common::root_empty),
                 udfs: Box::new(runtime::udfs),
             },
             other => panic!("unknown evil: {other}"),
