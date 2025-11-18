@@ -70,7 +70,8 @@ fn bundle_python_lib() {
 
     let file = File::create(&tar_path).unwrap();
     let mut archive = tar::Builder::new(file);
-    for entry in walkdir::WalkDir::new(&lib_dir) {
+    archive.mode(tar::HeaderMode::Deterministic);
+    for entry in walkdir::WalkDir::new(&lib_dir).sort_by_file_name() {
         let entry = entry.unwrap();
 
         let path_abs = entry.path();

@@ -6,6 +6,7 @@ use arrow::{
 };
 use datafusion_common::ScalarValue;
 use datafusion_common::config::ConfigOptions;
+use datafusion_execution::memory_pool::UnboundedMemoryPool;
 use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl,
 };
@@ -582,6 +583,7 @@ where
         python_component().await,
         &WasmPermissions::new().with_http(permissions),
         Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
         code.to_owned(),
     )
     .await
@@ -647,6 +649,7 @@ def perform_request(url: str) -> str:
             python_component().await,
             &WasmPermissions::new().with_http(permissions),
             rt_io.handle().clone(),
+            &(Arc::new(UnboundedMemoryPool::default()) as _),
             CODE.to_owned(),
         )
         .await

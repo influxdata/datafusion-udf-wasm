@@ -6,11 +6,14 @@ use arrow::{
 };
 use datafusion_common::ScalarValue;
 use datafusion_common::config::ConfigOptions;
+use datafusion_execution::memory_pool::{GreedyMemoryPool, UnboundedMemoryPool};
 use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility,
     async_udf::AsyncScalarUDFImpl,
 };
-use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmScalarUdf};
+use datafusion_udf_wasm_host::{
+    WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf, limiter::StaticResourceLimits,
+};
 use tokio::{runtime::Handle, sync::OnceCell};
 
 use crate::integration_tests::test_utils::ColumnarValueExt;
@@ -125,6 +128,152 @@ async fn test_return_type_no_multithread_runtime() {
     );
 }
 
+#[tokio::test]
+async fn test_stderr_is_included_in_mem() {
+    let component = component().await;
+    let err = WasmScalarUdf::new(
+        component,
+        &WasmPermissions::default().with_stderr_bytes(10_000_001),
+        Handle::current(),
+        &(Arc::new(GreedyMemoryPool::new(10_000_000)) as _),
+        "".to_owned(),
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @"Resources exhausted: Failed to allocate additional 9.5 MB for WASM UDF resources with 0.0 B already allocated for this reservation - 9.5 MB remain available for the total pool"
+    );
+}
+
+#[tokio::test]
+async fn test_component_initial_mem_is_included_in_mem() {
+    let component = component().await;
+    let err = WasmScalarUdf::new(
+        component,
+        &WasmPermissions::default(),
+        Handle::current(),
+        &(Arc::new(GreedyMemoryPool::new(1_000_000)) as _),
+        "".to_owned(),
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @r"
+    link WASM components
+    caused by
+    External error: initialize bindings
+    "
+    );
+}
+
+#[tokio::test]
+async fn test_limit_initial_n_instances() {
+    let component = component().await;
+    let err = WasmScalarUdf::new(
+        component,
+        &WasmPermissions::default().with_resource_limits(StaticResourceLimits {
+            n_instances: 0,
+            ..Default::default()
+        }),
+        Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
+        "".to_owned(),
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @r"
+    link WASM components
+    caused by
+    External error: initialize bindings
+    "
+    );
+}
+
+#[tokio::test]
+async fn test_limit_initial_n_tables() {
+    let component = component().await;
+    let err = WasmScalarUdf::new(
+        component,
+        &WasmPermissions::default().with_resource_limits(StaticResourceLimits {
+            n_tables: 0,
+            ..Default::default()
+        }),
+        Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
+        "".to_owned(),
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @r"
+    link WASM components
+    caused by
+    External error: initialize bindings
+    "
+    );
+}
+
+#[tokio::test]
+async fn test_limit_initial_n_elements_per_table() {
+    let component = component().await;
+    let err = WasmScalarUdf::new(
+        component,
+        &WasmPermissions::default().with_resource_limits(StaticResourceLimits {
+            n_elements_per_table: 0,
+            ..Default::default()
+        }),
+        Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
+        "".to_owned(),
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @r"
+    link WASM components
+    caused by
+    External error: initialize bindings
+    "
+    );
+}
+
+#[tokio::test]
+async fn test_limit_initial_n_memories() {
+    let component = component().await;
+    let err = WasmScalarUdf::new(
+        component,
+        &WasmPermissions::default().with_resource_limits(StaticResourceLimits {
+            n_memories: 0,
+            ..Default::default()
+        }),
+        Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
+        "".to_owned(),
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @r"
+    link WASM components
+    caused by
+    External error: initialize bindings
+    "
+    );
+}
+
 async fn component() -> &'static WasmComponentPrecompiled {
     static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
 
@@ -143,6 +292,7 @@ async fn udf() -> WasmScalarUdf {
         component,
         &Default::default(),
         Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
         "".to_owned(),
     )
     .await

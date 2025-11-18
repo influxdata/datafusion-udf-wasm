@@ -7,6 +7,7 @@ use std::{any::Any, collections::BTreeMap, hash::Hash, ops::DerefMut, sync::Arc,
 use ::http::HeaderName;
 use arrow::datatypes::DataType;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
+use datafusion_execution::memory_pool::MemoryPool;
 use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature,
     async_udf::{AsyncScalarUDF, AsyncScalarUDFImpl},
@@ -34,6 +35,7 @@ use crate::{
     bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
     error::{DataFusionResultExt, WasmToDataFusionResultExt},
     http::{HttpRequestValidator, RejectAllHttpRequests},
+    limiter::{Limiter, StaticResourceLimits},
     linker::link,
     tokio_helpers::async_in_sync_context,
     vfs::{VfsCtxView, VfsLimits, VfsState, VfsView},
@@ -51,6 +53,7 @@ mod bindings;
 mod conversion;
 pub mod error;
 pub mod http;
+pub mod limiter;
 mod linker;
 mod tokio_helpers;
 pub mod vfs;
@@ -61,6 +64,9 @@ struct WasmStateImpl {
     ///
     /// This filesystem is provided to the payload in memory with read-write support.
     vfs_state: VfsState,
+
+    /// Resource limiter.
+    limiter: Limiter,
 
     /// A limited buffer for stderr.
     ///
@@ -87,6 +93,7 @@ impl std::fmt::Debug for WasmStateImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self {
             vfs_state,
+            limiter,
             stderr,
             wasi_ctx: _,
             wasi_http_ctx: _,
@@ -96,6 +103,7 @@ impl std::fmt::Debug for WasmStateImpl {
         } = self;
         f.debug_struct("WasmStateImpl")
             .field("vfs_state", vfs_state)
+            .field("limiter", limiter)
             .field("stderr", stderr)
             .field("wasi_ctx", &"<WASI_CTX>")
             .field("resource_table", resource_table)
@@ -249,6 +257,12 @@ pub struct WasmPermissions {
     /// Virtual file system limits.
     vfs: VfsLimits,
 
+    /// Limit of the stored stderr data.
+    stderr_bytes: usize,
+
+    /// Static resource limits.
+    resource_limits: StaticResourceLimits,
+
     /// Environment variables.
     envs: BTreeMap<String, String>,
 }
@@ -272,6 +286,8 @@ impl Default for WasmPermissions {
                 .floor() as _,
             http: Arc::new(RejectAllHttpRequests),
             vfs: VfsLimits::default(),
+            stderr_bytes: 1024, // 1KB
+            resource_limits: StaticResourceLimits::default(),
             envs: BTreeMap::default(),
         }
     }
@@ -312,6 +328,24 @@ impl WasmPermissions {
     {
         Self {
             http: Arc::new(http),
+            ..self
+        }
+    }
+
+    /// Limit of the stored stderr data.
+    pub fn with_stderr_bytes(self, limit: usize) -> Self {
+        Self {
+            stderr_bytes: limit,
+            ..self
+        }
+    }
+
+    /// Set static resource limits.
+    ///
+    /// Note that this does NOT limit the overall memory consumption of the payload. This will be done via [`MemoryPool`].
+    pub fn with_resource_limits(self, limits: StaticResourceLimits) -> Self {
+        Self {
+            resource_limits: limits,
             ..self
         }
     }
@@ -406,6 +440,7 @@ impl WasmScalarUdf {
         component: &WasmComponentPrecompiled,
         permissions: &WasmPermissions,
         io_rt: Handle,
+        memory_pool: &Arc<dyn MemoryPool>,
         source: String,
     ) -> DataFusionResult<Vec<Self>> {
         let WasmComponentPrecompiled { compiled_component } = component;
@@ -446,19 +481,27 @@ impl WasmScalarUdf {
         let component_res = unsafe { Component::deserialize(&engine, compiled_component) };
         let component = component_res.context("create WASM component", None)?;
 
+        // resource/mem limiter
+        let mut limiter = Limiter::new(permissions.resource_limits.clone(), memory_pool);
+
         // Create in-memory VFS
         let vfs_state = VfsState::new(permissions.vfs.clone());
 
         // set up WASI p2 context
-        let stderr = MemoryOutputPipe::new(1024);
+        limiter.grow(permissions.stderr_bytes)?;
+        let stderr = MemoryOutputPipe::new(permissions.stderr_bytes);
         let mut wasi_ctx_builder = WasiCtx::builder();
         wasi_ctx_builder.stderr(stderr.clone());
         permissions.envs.iter().for_each(|(k, v)| {
             wasi_ctx_builder.env(k, v);
         });
 
+        // configure store
+        // NOTE: Do that BEFORE linking so that memory limits are checked for the initial allocation of the WASM
+        //       component as well.
         let state = WasmStateImpl {
             vfs_state,
+            limiter,
             stderr,
             wasi_ctx: wasi_ctx_builder.build(),
             wasi_http_ctx: WasiHttpCtx::new(),
@@ -466,11 +509,7 @@ impl WasmScalarUdf {
             http_validator: Arc::clone(&permissions.http),
             io_rt,
         };
-        let (bindings, mut store) = link(&engine, &component, state)
-            .await
-            .context("link WASM components", None)?;
-
-        // configure store
+        let mut store = Store::new(&engine, state);
         store.epoch_deadline_callback(|_| {
             Ok(UpdateDeadline::YieldCustom(
                 // increment deadline epoch by one step
@@ -482,6 +521,11 @@ impl WasmScalarUdf {
                 Box::pin(tokio::task::consume_budget()),
             ))
         });
+        store.limiter(|state| &mut state.limiter);
+
+        let bindings = link(&engine, &component, &mut store)
+            .await
+            .context("link WASM components", None)?;
 
         // Populate VFS from tar archive
         let root_data = bindings
@@ -493,11 +537,12 @@ impl WasmScalarUdf {
                 Some(&store.data().stderr.contents()),
             )?;
         if let Some(root_data) = root_data {
-            store
-                .data_mut()
+            let state = store.data_mut();
+
+            state
                 .vfs_state
-                .populate_from_tar(&root_data)
-                .map_err(DataFusionError::IoError)?;
+                .populate_from_tar(&root_data, &mut state.limiter)
+                .map_err(|e| DataFusionError::IoError(e).context("populate root FS from TAR"))?;
         }
 
         let udf_resources = bindings

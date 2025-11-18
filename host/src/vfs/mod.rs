@@ -40,6 +40,7 @@ use wasmtime_wasi::{
 pub use crate::vfs::limits::VfsLimits;
 use crate::{
     error::LimitExceeded,
+    limiter::Limiter,
     vfs::path::{PathSegment, PathTraversal},
 };
 
@@ -233,26 +234,6 @@ impl Allocation {
     }
 }
 
-/// Current virtual filesystem allocation.
-#[derive(Debug)]
-struct VfsAllocation {
-    /// Number of inodes.
-    inodes: Allocation,
-
-    /// Number of bytes.
-    bytes: Allocation,
-}
-
-impl VfsAllocation {
-    /// Create new empty allocation tracker.
-    fn new(limits: &VfsLimits) -> Self {
-        Self {
-            inodes: Allocation::new("inodes", limits.inodes),
-            bytes: Allocation::new("bytes", limits.bytes),
-        }
-    }
-}
-
 /// State for the virtual filesystem.
 #[derive(Debug)]
 pub(crate) struct VfsState {
@@ -265,14 +246,14 @@ pub(crate) struct VfsState {
     /// Limits.
     limits: VfsLimits,
 
-    /// Current allocation.
-    allocation: VfsAllocation,
+    /// Current allocation of inodes.
+    inodes_allocation: Allocation,
 }
 
 impl VfsState {
     /// Create a new empty VFS.
     pub(crate) fn new(limits: VfsLimits) -> Self {
-        let allocation = VfsAllocation::new(&limits);
+        let inodes_allocation = Allocation::new("inodes", limits.inodes);
 
         Self {
             root: Arc::new(RwLock::new(VfsNode {
@@ -283,12 +264,17 @@ impl VfsState {
             })),
             metadata_hash_key: rand::rng().random(),
             limits,
-            allocation,
+            inodes_allocation,
         }
     }
 
     /// Populate the VFS from a tar archive.
-    pub(crate) fn populate_from_tar(&mut self, tar_data: &[u8]) -> Result<(), std::io::Error> {
+    pub(crate) fn populate_from_tar(
+        &mut self,
+        tar_data: &[u8],
+        limiter: &mut Limiter,
+    ) -> Result<(), std::io::Error> {
+        let size_pre = limiter.size();
         let cursor = Cursor::new(tar_data);
         let mut archive = tar::Archive::new(cursor);
 
@@ -304,7 +290,7 @@ impl VfsState {
                     let mut content = Vec::new();
                     entry.read_to_end(&mut content)?;
                     content.shrink_to_fit();
-                    self.allocation.bytes.inc(content.capacity() as u64)?;
+                    limiter.grow(content.capacity())?;
                     VfsNodeKind::File { content }
                 }
                 other => {
@@ -351,11 +337,9 @@ impl VfsState {
                 parent: Some(Arc::downgrade(&node)),
             }));
 
-            self.allocation.inodes.inc(1)?;
-            self.allocation.bytes.inc(name.len() as u64)?;
-            self.allocation
-                .bytes
-                .inc(std::mem::size_of_val(&child) as u64)?;
+            self.inodes_allocation.inc(1)?;
+            limiter.grow(name.len())?;
+            limiter.grow(std::mem::size_of_val(&child))?;
 
             match &mut node.write().unwrap().kind {
                 VfsNodeKind::File { .. } => {
@@ -373,8 +357,8 @@ impl VfsState {
         log::info!(
             "unpacked WASM guest root filesystem from {} bytes TAR, consuming {} bytes and {} inodes",
             tar_data.len(),
-            self.allocation.bytes.get(),
-            self.allocation.inodes.get()
+            limiter.size() - size_pre,
+            self.inodes_allocation.get()
         );
 
         Ok(())

@@ -1328,6 +1328,7 @@ dependencies = [
  "anyhow",
  "arrow",
  "datafusion-common",
+ "datafusion-execution",
  "datafusion-expr",
  "datafusion-udf-wasm-arrow2bytes",
  "datafusion-udf-wasm-bundle",
