@@ -1,5 +1,6 @@
 //! Helper for simpler error handling.
 use datafusion_common::DataFusionError;
+use wasmtime_wasi::p2::FsError;
 
 /// Extension for [`wasmtime::Error`].
 pub(crate) trait WasmToDataFusionErrorExt {
@@ -72,5 +73,53 @@ where
 
     fn context(self, description: impl Into<String>) -> Result<Self::T, DataFusionError> {
         self.map_err(|e| e.into().context(description))
+    }
+}
+
+/// Failed allocation error.
+#[derive(Debug, Clone)]
+#[expect(missing_copy_implementations, reason = "allow later extensions")]
+pub struct LimitExceeded {
+    /// Name of the allocation type/resource.
+    pub(crate) name: &'static str,
+
+    /// Allocation limit.
+    pub(crate) limit: u64,
+
+    /// Current allocation size.
+    pub(crate) current: u64,
+
+    /// Requested/additional allocation.
+    pub(crate) requested: u64,
+}
+
+impl std::fmt::Display for LimitExceeded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self {
+            name,
+            limit,
+            current,
+            requested,
+        } = self;
+
+        write!(
+            f,
+            "{name} limit reached: limit<={limit} current=={current} requested+={requested}"
+        )
+    }
+}
+
+impl std::error::Error for LimitExceeded {}
+
+impl From<LimitExceeded> for std::io::Error {
+    fn from(e: LimitExceeded) -> Self {
+        Self::new(std::io::ErrorKind::QuotaExceeded, e.to_string())
+    }
+}
+
+impl From<LimitExceeded> for FsError {
+    fn from(e: LimitExceeded) -> Self {
+        let e: std::io::Error = e.into();
+        e.into()
     }
 }

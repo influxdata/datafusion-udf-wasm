@@ -39,12 +39,21 @@ pub(crate) async fn try_scalar_udfs_with_env(
     evil: &'static str,
     vars: &[(&str, &str)],
 ) -> Result<Vec<WasmScalarUdf>, DataFusionError> {
-    let component = component().await;
-
-    let mut permissions = WasmPermissions::new().with_env("EVIL".to_owned(), evil.to_owned());
+    let mut permissions = WasmPermissions::new();
     for (k, v) in vars {
         permissions = permissions.with_env((*k).to_owned(), (*v).to_owned());
     }
+    try_scalar_udfs_with_permissions(evil, permissions).await
+}
+
+/// Try to get scalar UDFs with permissions.
+pub(crate) async fn try_scalar_udfs_with_permissions(
+    evil: &'static str,
+    permissions: WasmPermissions,
+) -> Result<Vec<WasmScalarUdf>, DataFusionError> {
+    let component = component().await;
+
+    let permissions = permissions.with_env("EVIL".to_owned(), evil.to_owned());
 
     WasmScalarUdf::new(
         component,

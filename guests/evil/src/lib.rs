@@ -53,6 +53,10 @@ impl Evil {
                 root: Box::new(root::not_tar::root),
                 udfs: Box::new(common::udfs_empty),
             },
+            "root::path_long" => Self {
+                root: Box::new(root::path_long::root),
+                udfs: Box::new(common::udfs_empty),
+            },
             "root::unsupported_entry" => Self {
                 root: Box::new(root::unsupported_entry::root),
                 udfs: Box::new(common::udfs_empty),
