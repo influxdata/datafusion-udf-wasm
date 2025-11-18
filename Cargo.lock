@@ -1370,6 +1370,7 @@ version = "0.1.0"
 dependencies = [
  "datafusion",
  "datafusion-common",
+ "datafusion-execution",
  "datafusion-expr",
  "datafusion-sql",
  "datafusion-udf-wasm-bundle",

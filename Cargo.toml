@@ -21,6 +21,7 @@ arrow = { version = "56.2.0", default-features = false, features = ["ipc"] }
 chrono = { version = "0.4.42", default-features = false }
 datafusion = { version = "50.3.0", default-features = false }
 datafusion-common = { version = "50.3.0", default-features = false }
+datafusion-execution = { version = "50.3.0", default-features = false }
 datafusion-expr = { version = "50.3.0", default-features = false }
 datafusion-sql = { version = "50.3.0", default-features = false }
 datafusion-udf-wasm-arrow2bytes = { path = "arrow2bytes", version = "0.1.0" }
