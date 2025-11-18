@@ -31,7 +31,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for PythonType {
         // https://docs.python.org/3/library/datetime.html
         let mod_datetime = py.import(intern!(py, "datetime"))?;
         let type_date = mod_datetime.getattr(intern!(py, "date"))?;
-        let type_dateime = mod_datetime.getattr(intern!(py, "datetime"))?;
+        let type_datetime = mod_datetime.getattr(intern!(py, "datetime"))?;
         let type_time = mod_datetime.getattr(intern!(py, "time"))?;
         let type_timedelta = mod_datetime.getattr(intern!(py, "timedelta"))?;
 
@@ -45,7 +45,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for PythonType {
             Ok(Self::Bytes)
         } else if ob.is(type_date) {
             Ok(Self::Date)
-        } else if ob.is(type_dateime) {
+        } else if ob.is(type_datetime) {
             Ok(Self::DateTime)
         } else if ob.is(type_float) {
             Ok(Self::Float)
@@ -107,7 +107,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for PythonNullableType {
 
             if args.len() != 1 {
                 return Err(PyErr::new::<PyTypeError, _>(format!(
-                    "only unions of form `T | None` are suppored, but got a union of {} distinct none-NULL types",
+                    "only unions of form `T | None` are supported, but got a union of {} distinct none-NULL types",
                     args.len()
                 )));
             }
@@ -156,7 +156,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for PythonFnSignature {
                 let kind_name = kind_name.to_str()?;
                 if (kind_name != "POSITIONAL_OR_KEYWORD") && (kind_name != "POSITIONAL_ONLY") {
                     return Err(PyErr::new::<PyTypeError, _>(
-                        format!("only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got {kind_name}")
+                        format!("only parameters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got {kind_name}")
                     ));
                 }
 

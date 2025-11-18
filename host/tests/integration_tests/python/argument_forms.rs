@@ -194,7 +194,7 @@ def foo(*x: int) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got VAR_POSITIONAL
+    Error during planning: TypeError: only parameters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got VAR_POSITIONAL
 
     The above exception was the direct cause of the following exception:
 
@@ -216,7 +216,7 @@ def foo(*, x: int) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got KEYWORD_ONLY
+    Error during planning: TypeError: only parameters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got KEYWORD_ONLY
 
     The above exception was the direct cause of the following exception:
 
@@ -238,7 +238,7 @@ def foo(**x: int) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: only paramters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got VAR_KEYWORD
+    Error during planning: TypeError: only parameters of kind `POSITIONAL_OR_KEYWORD` and `POSITIONAL_ONLY` are supported, got VAR_KEYWORD
 
     The above exception was the direct cause of the following exception:
 

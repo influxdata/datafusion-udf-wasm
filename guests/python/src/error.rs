@@ -58,7 +58,7 @@ pub(crate) trait PyErrExt {
     /// try:
     ///     my_fn(...)
     /// except Exception as e:
-    ///     raise Excpetion("foo") from e
+    ///     raise Exception("foo") from e
     /// ```
     ///
     ///

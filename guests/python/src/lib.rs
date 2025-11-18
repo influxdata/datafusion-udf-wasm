@@ -272,7 +272,7 @@ fn root() -> Option<Vec<u8>> {
 /// and will result in a "no-op"
 ///
 /// # Panic
-/// This assumes that the root file system contains the [Python Standard Library] or that the Python interpeter can
+/// This assumes that the root file system contains the [Python Standard Library] or that the Python interpreter can
 /// find it somewhere else (e.g. when executed outside of a WASM context).
 ///
 /// Otherwise this will likely panic and you find the following printed to stderr:

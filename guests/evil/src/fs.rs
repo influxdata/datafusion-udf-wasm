@@ -1,4 +1,4 @@
-//! Payload that interact with the (virtual) file sytem.
+//! Payload that interact with the (virtual) file system.
 use std::{hash::Hash, sync::Arc};
 
 use arrow::{array::StringArray, datatypes::DataType};

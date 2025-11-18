@@ -80,7 +80,7 @@ def add_one(x: int | str) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: only unions of form `T | None` are suppored, but got a union of 2 distinct none-NULL types
+    Error during planning: TypeError: only unions of form `T | None` are supported, but got a union of 2 distinct none-NULL types
 
     The above exception was the direct cause of the following exception:
 
@@ -105,7 +105,7 @@ def add_one(x: int | str | None) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: only unions of form `T | None` are suppored, but got a union of 2 distinct none-NULL types
+    Error during planning: TypeError: only unions of form `T | None` are supported, but got a union of 2 distinct none-NULL types
 
     The above exception was the direct cause of the following exception:
 
@@ -130,7 +130,7 @@ def add_one(x: int | str | int) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: only unions of form `T | None` are suppored, but got a union of 2 distinct none-NULL types
+    Error during planning: TypeError: only unions of form `T | None` are supported, but got a union of 2 distinct none-NULL types
 
     The above exception was the direct cause of the following exception:
 
@@ -155,7 +155,7 @@ def add_one(x: int | None | str | int) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: only unions of form `T | None` are suppored, but got a union of 2 distinct none-NULL types
+    Error during planning: TypeError: only unions of form `T | None` are supported, but got a union of 2 distinct none-NULL types
 
     The above exception was the direct cause of the following exception:
 
@@ -180,7 +180,7 @@ def add_one(x: int | str | float) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: only unions of form `T | None` are suppored, but got a union of 3 distinct none-NULL types
+    Error during planning: TypeError: only unions of form `T | None` are supported, but got a union of 3 distinct none-NULL types
 
     The above exception was the direct cause of the following exception:
 
