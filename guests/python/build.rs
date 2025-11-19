@@ -63,17 +63,18 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut file = File::create(&tar_gz_path)?;
     let mut reader = response.into_reader();
-    io::copy(&mut reader, &mut file)?;
-    drop(file);
-
-    // Verify SHA256 checksum
-    let mut file = File::open(&tar_gz_path)?;
-    let mut contents = Vec::new();
-    file.read_to_end(&mut contents)?;
-
-    let digest = sha2::Sha256::digest(&contents);
+    let mut hasher = sha2::Sha256::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let n = reader.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+        file.write_all(&buffer[..n])?;
+    }
+    let digest = hasher.finalize();
     let hex_digest = format!("{:x}", digest);
-
     if hex_digest != SHA256_WASI_SDK_SYSROOT {
         fs::remove_file(&tar_gz_path)?;
         return Err(format!(
