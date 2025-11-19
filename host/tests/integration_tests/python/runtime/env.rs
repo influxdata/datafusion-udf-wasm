@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use arrow::datatypes::{DataType, Field};
 use datafusion_common::{cast::as_string_array, config::ConfigOptions};
+use datafusion_execution::memory_pool::UnboundedMemoryPool;
 use datafusion_expr::{ScalarFunctionArgs, async_udf::AsyncScalarUDFImpl};
 use datafusion_udf_wasm_host::{WasmPermissions, WasmScalarUdf};
 use tokio::runtime::Handle;
@@ -40,9 +41,15 @@ def env() -> str | None:
         permissions = permissions.with_env((*k).to_owned(), (*v).to_owned());
     }
 
-    let udfs = WasmScalarUdf::new(component, &permissions, Handle::current(), CODE.to_owned())
-        .await
-        .unwrap();
+    let udfs = WasmScalarUdf::new(
+        component,
+        &permissions,
+        Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
+        CODE.to_owned(),
+    )
+    .await
+    .unwrap();
     assert_eq!(udfs.len(), 1);
     let udf = udfs.into_iter().next().unwrap();
 

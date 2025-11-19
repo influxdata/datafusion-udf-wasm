@@ -1,14 +1,20 @@
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use datafusion_common::DataFusionError;
+use datafusion_execution::memory_pool::GreedyMemoryPool;
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
 use tokio::{runtime::Runtime, sync::OnceCell};
+
+/// Static memory limit.
+///
+/// 10MB.
+pub(crate) const MEMORY_LIMIT: usize = 10 * 1024 * 1024;
 
 /// Static precompiled WASM component for tests
 static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
 
 /// Returns a static reference to the precompiled WASM component.
-async fn component() -> &'static WasmComponentPrecompiled {
+pub(crate) async fn component() -> &'static WasmComponentPrecompiled {
     COMPONENT
         .get_or_init(async || {
             WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_EVIL.into())
@@ -19,7 +25,7 @@ async fn component() -> &'static WasmComponentPrecompiled {
 }
 
 /// I/O runtime used for all tests.
-static IO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
+pub(crate) static IO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
         .worker_threads(1)
         .enable_all()
@@ -59,6 +65,7 @@ pub(crate) async fn try_scalar_udfs_with_permissions(
         component,
         &permissions,
         IO_RUNTIME.handle().clone(),
+        &(Arc::new(GreedyMemoryPool::new(MEMORY_LIMIT)) as _),
         "".to_owned(),
     )
     .await

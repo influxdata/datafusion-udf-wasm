@@ -45,6 +45,10 @@ impl Evil {
                 root: Box::new(root::invalid_entry::root),
                 udfs: Box::new(common::udfs_empty),
             },
+            "root::large_file" => Self {
+                root: Box::new(root::large_file::root),
+                udfs: Box::new(common::udfs_empty),
+            },
             "root::many_files" => Self {
                 root: Box::new(root::many_files::root),
                 udfs: Box::new(common::udfs_empty),
@@ -55,6 +59,10 @@ impl Evil {
             },
             "root::path_long" => Self {
                 root: Box::new(root::path_long::root),
+                udfs: Box::new(common::udfs_empty),
+            },
+            "root::sparse" => Self {
+                root: Box::new(root::sparse::root),
                 udfs: Box::new(common::udfs_empty),
             },
             "root::unsupported_entry" => Self {

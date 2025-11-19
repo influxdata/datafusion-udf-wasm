@@ -5,8 +5,10 @@ use arrow::{
     datatypes::{DataType, Field},
 };
 use datafusion_common::config::ConfigOptions;
+use datafusion_execution::memory_pool::{GreedyMemoryPool, UnboundedMemoryPool};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, async_udf::AsyncScalarUDFImpl};
 use datafusion_udf_wasm_host::{WasmPermissions, WasmScalarUdf, vfs::VfsLimits};
+use regex::Regex;
 use tokio::runtime::Handle;
 
 use crate::integration_tests::{
@@ -248,6 +250,7 @@ async fn test_limit_inodes() {
             ..Default::default()
         }),
         Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
         "".to_owned(),
     )
     .await
@@ -255,27 +258,57 @@ async fn test_limit_inodes() {
 
     insta::assert_snapshot!(
         err,
-        @"IO error: inodes limit reached: limit<=42 current==42 requested+=1");
+        @r"
+    populate root FS from TAR
+    caused by
+    IO error: inodes limit reached: limit<=42 current==42 requested+=1
+    ");
 }
 
 #[tokio::test]
 async fn test_limit_bytes() {
     let component = python_component().await;
 
-    // since the VFS is immutable, we have to use the limit that is too small for the root FS
-    let err = WasmScalarUdf::new(
-        component,
-        &WasmPermissions::new().with_vfs_limits(VfsLimits {
-            bytes: 1337,
-            ..Default::default()
-        }),
-        Handle::current(),
-        "".to_owned(),
-    )
-    .await
-    .unwrap_err();
+    // Since the VFS is immutable, we have to use the limit that is too small for the root FS. At the same time, the
+    // memory pool must be large enough to hold the component code itself. So the memory limit should be
+    // `code_size < limit < code_size + FS`. Instead of hard-coding this balance here, we try to automatically find it.
+    const START: usize = 100_000_000; // 100MB
+    const STEP: usize = 10_000_000; // 10MB
+    let try_create = async |limit| {
+        WasmScalarUdf::new(
+            component,
+            &WasmPermissions::default(),
+            Handle::current(),
+            &(Arc::new(GreedyMemoryPool::new(limit)) as _),
+            "".to_owned(),
+        )
+        .await
+    };
+    let mut current = START;
+    try_create(current)
+        .await
+        .expect("START limit should be large enough to succeed");
+    let err = loop {
+        current = current.checked_sub(STEP).unwrap();
+        match try_create(current).await {
+            Ok(_) => {}
+            Err(e) => {
+                break e;
+            }
+        }
+    };
+
+    // normalize sizes
+    let err = err.to_string();
+    let err = Regex::new(r#"[0-9.]+ [KM]B"#)
+        .unwrap()
+        .replace_all(&err, "<SIZE>");
 
     insta::assert_snapshot!(
         err,
-        @"IO error: bytes limit reached: limit<=1337 current==1021 requested+=12355");
+        @r"
+    populate root FS from TAR
+    caused by
+    IO error: Resources exhausted: Failed to allocate additional <SIZE> for WASM UDF resources with <SIZE> already allocated for this reservation - <SIZE> remain available for the total pool
+    ");
 }

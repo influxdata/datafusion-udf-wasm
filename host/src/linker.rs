@@ -19,21 +19,18 @@ use crate::{
 pub(crate) async fn link(
     engine: &Engine,
     component: &Component,
-    state: WasmStateImpl,
-) -> Result<(Arc<Datafusion>, Store<WasmStateImpl>)> {
-    let mut store = Store::new(engine, state);
-
+    store: &mut Store<WasmStateImpl>,
+) -> Result<Arc<Datafusion>> {
     let mut linker = Linker::new(engine);
     link_wasi_p2(&mut linker).context("link WASI p2")?;
-    wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)
-        .context("link WASI p2 HWasmStateImplWasmStateImplP")?;
+    wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).context("link WASI p2 HTTP")?;
 
     let bindings = Arc::new(
-        Datafusion::instantiate_async(&mut store, component, &linker)
+        Datafusion::instantiate_async(store, component, &linker)
             .await
             .context("initialize bindings")?,
     );
-    Ok((bindings, store))
+    Ok(bindings)
 }
 
 /// Link WASIp2 interfaces.

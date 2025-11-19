@@ -337,6 +337,27 @@ def foo(x: int) -> int:
     );
 }
 
+#[tokio::test]
+async fn test_oom() {
+    const CODE: &str = "
+def foo(x: int) -> int:
+    s = 'x' * 1_000_000_000
+
+    return len(s)
+";
+
+    insta::assert_snapshot!(
+        err(CODE).await,
+        @r#"
+    cannot call function
+    caused by
+    Execution error: Traceback (most recent call last):
+      File "<string>", line 3, in foo
+    MemoryError
+    "#,
+    );
+}
+
 async fn err(code: &str) -> DataFusionError {
     let udf = python_scalar_udf(code).await.unwrap();
     udf.invoke_async_with_args(ScalarFunctionArgs {

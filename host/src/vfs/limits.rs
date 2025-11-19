@@ -12,9 +12,6 @@ pub struct VfsLimits {
     /// Maximum number of inodes.
     pub inodes: u64,
 
-    /// Maximum number of bytes in size.
-    pub bytes: u64,
-
     /// Maximum path length, in bytes.
     pub max_path_length: u64,
 
@@ -28,8 +25,6 @@ impl Default for VfsLimits {
     fn default() -> Self {
         Self {
             inodes: 10_000,
-            // 100MB
-            bytes: 100 * 1024 * 1024,
             max_path_length: 255,
             max_path_segment_size: 50,
         }
