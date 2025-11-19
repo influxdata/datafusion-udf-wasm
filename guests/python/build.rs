@@ -96,9 +96,14 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
     );
     let extracted_path = downloads_dir.join(extracted_name);
 
-    if extracted_path.exists() {
-        fs::rename(extracted_path, &wasi_sysroot_dir)?;
+    if !extracted_path.exists() {
+        return Err(format!(
+            "expected directory not found: {}",
+            extracted_path.display()
+        )
+        .into());
     }
+    fs::rename(extracted_path, &wasi_sysroot_dir)?;
 
     // Clean up the downloaded tar.gz file
     fs::remove_file(&tar_gz_path)?;
