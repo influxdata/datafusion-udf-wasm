@@ -192,7 +192,7 @@ async fn test_trap() {
     // the bad one fails
     let err = err_call_no_params(udf_bad).await;
 
-    // check that we actually enountered a trap
+    // check that we actually encountered a trap
     let mut e: Option<&(dyn std::error::Error + 'static)> = Some(&err);
     let mut chain = std::iter::from_fn(|| {
         let e2 = e.take()?;

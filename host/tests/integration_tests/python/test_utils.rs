@@ -7,7 +7,7 @@ use tokio::{runtime::Handle, sync::OnceCell};
 
 /// Memory limit in bytes.
 ///
-/// 500MB.
+/// 100MB.
 const MEMORY_LIMIT: usize = 100_000_000;
 
 /// Static precompiled Python WASM component for tests

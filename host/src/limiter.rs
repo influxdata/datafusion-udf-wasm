@@ -93,7 +93,7 @@ impl Limiter {
             }));
         }
 
-        // every elements needs a pointer to be stored
+        // every element needs a pointer to be stored
         let growth_n = desired
             .checked_sub(current)
             .expect("wasmtime accounting correct");
