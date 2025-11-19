@@ -43,15 +43,13 @@ use crate::{
 #[cfg(test)]
 use datafusion_udf_wasm_bundle as _;
 #[cfg(test)]
-use insta as _;
-#[cfg(test)]
 use regex as _;
 #[cfg(test)]
 use wiremock as _;
 
 mod bindings;
 mod conversion;
-mod error;
+pub mod error;
 pub mod http;
 mod linker;
 mod tokio_helpers;
@@ -449,7 +447,7 @@ impl WasmScalarUdf {
         let component = component_res.context("create WASM component", None)?;
 
         // Create in-memory VFS
-        let vfs_state = VfsState::new(&permissions.vfs);
+        let vfs_state = VfsState::new(permissions.vfs.clone());
 
         // set up WASI p2 context
         let stderr = MemoryOutputPipe::new(1024);
