@@ -75,6 +75,7 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
     let hex_digest = format!("{:x}", digest);
 
     if hex_digest != SHA256_WASI_SDK_SYSROOT {
+        fs::remove_file(&tar_gz_path)?;
         return Err(format!(
             "SHA256 mismatch for wasi-sysroot.tar.gz: expected {}, got {}",
             SHA256_WASI_SDK_SYSROOT, hex_digest
