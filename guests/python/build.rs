@@ -42,7 +42,7 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
 
     // Skip if already downloaded
     if wasi_sysroot_dir.exists() {
-        println!("cargo:warning=wasi sdk already present");
+        println!("cargo:info=wasi sdk already present, skipping download");
         return Ok(());
     }
 
@@ -64,11 +64,9 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = response.into_reader();
     let mut hasher = sha2::Sha256::new();
     let mut buffer = [0u8; 8192];
-    loop {
-        let n = reader.read(&mut buffer)?;
-        if n == 0 {
-            break;
-        }
+    while let Ok(n) = reader.read(&mut buffer)
+        && n > 0
+    {
         hasher.update(&buffer[..n]);
         file.write_all(&buffer[..n])?;
     }
@@ -89,7 +87,6 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
     let mut archive = tar::Archive::new(tar);
     archive.unpack(&downloads_dir)?;
 
-    // Rename the extracted directory
     let extracted_name = format!(
         "wasi-sysroot-{}.{}",
         WASI_SDK_VERSION_MAJOR, WASI_SDK_VERSION_MINOR
@@ -99,12 +96,18 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
     if !extracted_path.exists() {
         return Err(format!("expected directory not found: {}", extracted_path.display()).into());
     }
-    std::fs::rename(extracted_path, &wasi_sysroot_dir)?;
 
-    // Clean up the downloaded tar.gz file
+    let _mv = std::process::Command::new("mv")
+        .arg(&extracted_path)
+        .arg(&wasi_sysroot_dir)
+        .status()?;
+
     std::fs::remove_file(&tar_gz_path)?;
 
-    println!("cargo:warning=WASI SDK sysroot downloaded and extracted successfully");
+    println!(
+        "cargo:warning=WASI SDK sysroot downloaded to {}",
+        wasi_sysroot_dir.display()
+    );
 
     Ok(())
 }
