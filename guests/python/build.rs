@@ -13,8 +13,8 @@
 //! [`pyo3`]: https://pyo3.rs/
 use sha2::Digest;
 use std::{
-    fs::{self, File},
-    io::{self, Read},
+    fs::File,
+    io::{Read, Write},
     path::PathBuf,
 };
 
@@ -37,7 +37,7 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=build.rs");
 
     let downloads_dir = PathBuf::from("downloads");
-    fs::create_dir_all(&downloads_dir)?;
+    std::fs::create_dir_all(&downloads_dir)?;
 
     let wasi_sysroot_dir = downloads_dir.join("wasi-sysroot");
 
@@ -76,7 +76,7 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
     let digest = hasher.finalize();
     let hex_digest = format!("{:x}", digest);
     if hex_digest != SHA256_WASI_SDK_SYSROOT {
-        fs::remove_file(&tar_gz_path)?;
+        std::fs::remove_file(&tar_gz_path)?;
         return Err(format!(
             "SHA256 mismatch for wasi-sysroot.tar.gz: expected {}, got {}",
             SHA256_WASI_SDK_SYSROOT, hex_digest
@@ -100,10 +100,10 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
     if !extracted_path.exists() {
         return Err(format!("expected directory not found: {}", extracted_path.display()).into());
     }
-    fs::rename(extracted_path, &wasi_sysroot_dir)?;
+    std::fs::rename(extracted_path, &wasi_sysroot_dir)?;
 
     // Clean up the downloaded tar.gz file
-    fs::remove_file(&tar_gz_path)?;
+    std::fs::remove_file(&tar_gz_path)?;
 
     println!("cargo:warning=WASI SDK sysroot downloaded and extracted successfully");
 
