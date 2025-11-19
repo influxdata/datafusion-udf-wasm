@@ -81,41 +81,12 @@ download-python-sdk:
     echo ::endgroup::
 
 # download WASI SDK because we need some libraries during the static linking phase
+# This is now handled automatically by the build script (build.rs)
 [private]
 download-wasi-sdk:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    echo ::group::guests::python::download-wasi-sdk
-    set -x
-
-    mkdir -p downloads
-    pushd downloads >/dev/null
-
-    # skip if already downloaded
-    if [ -d wasi-sysroot ]; then
-        echo "wasi sdk already present"
-        set +x
-        echo ::endgroup::
-        exit 0
-    fi
-
-    curl \
-        --fail \
-        --show-error \
-        --silent \
-        --proto '=https' \
-        --tlsv1.2 \
-        --location \
-        --output "wasi-sysroot.tar.gz" \
-        "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{{WASI_SDK_VERSION_MAJOR}}/wasi-sysroot-{{WASI_SDK_VERSION_MAJOR}}.{{WASI_SDK_VERSION_MINOR}}.tar.gz"
-
-    echo "{{SHA256_WASI_SDK_SYSROOT}} wasi-sysroot.tar.gz" | sha256sum -c
-    tar xf wasi-sysroot.tar.gz
-    mv wasi-sysroot-{{WASI_SDK_VERSION_MAJOR}}.{{WASI_SDK_VERSION_MINOR}} wasi-sysroot
-
-    set +x
-    echo ::endgroup::
+    @echo ::group::guests::python::download-wasi-sdk
+    @echo "WASI SDK download is now handled by build.rs during cargo build"
+    @echo ::endgroup::
 
 [private]
 python-site-packages: download-python-sdk

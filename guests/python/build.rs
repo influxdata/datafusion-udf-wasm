@@ -11,11 +11,100 @@
 //! [CPython]: https://www.python.org/
 //! [Python Standard Library]: https://docs.python.org/3/library/index.html
 //! [`pyo3`]: https://pyo3.rs/
-use std::{fs::File, path::PathBuf};
+use sha2::Digest;
+use std::{
+    fs::{self, File},
+    io::{self, Read},
+    path::PathBuf,
+};
 
 fn main() {
+    download_wasi_sdk().expect("WASI SDK download");
     configure_linker();
     bundle_python_lib();
+}
+
+/// Download WASI SDK sysroot for static linking.
+///
+/// This downloads the WASI sysroot from the GitHub releases and extracts it to the downloads directory.
+/// If the sysroot already exists, this function returns early.
+fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
+    const WASI_SDK_VERSION_MAJOR: &str = "24";
+    const WASI_SDK_VERSION_MINOR: &str = "0";
+    const SHA256_WASI_SDK_SYSROOT: &str =
+        "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99153a50888f08";
+
+    println!("cargo:rerun-if-changed=build.rs");
+
+    let downloads_dir = PathBuf::from("downloads");
+    fs::create_dir_all(&downloads_dir)?;
+
+    let wasi_sysroot_dir = downloads_dir.join("wasi-sysroot");
+
+    // Skip if already downloaded
+    if wasi_sysroot_dir.exists() {
+        println!("cargo:warning=wasi sdk already present");
+        return Ok(());
+    }
+
+    println!("cargo:warning=downloading WASI SDK sysroot...");
+
+    let url = format!(
+        "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{}/wasi-sysroot-{}.{}.tar.gz",
+        WASI_SDK_VERSION_MAJOR, WASI_SDK_VERSION_MAJOR, WASI_SDK_VERSION_MINOR
+    );
+
+    let tar_gz_path = downloads_dir.join("wasi-sysroot.tar.gz");
+
+    // Download the file
+    let response = ureq::get(&url)
+        .call()
+        .map_err(|e| format!("failed to download WASI SDK: {}", e))?;
+
+    let mut file = File::create(&tar_gz_path)?;
+    let mut reader = response.into_reader();
+    io::copy(&mut reader, &mut file)?;
+    drop(file);
+
+    // Verify SHA256 checksum
+    let mut file = File::open(&tar_gz_path)?;
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents)?;
+
+    let digest = sha2::Sha256::digest(&contents);
+    let hex_digest = format!("{:x}", digest);
+
+    if hex_digest != SHA256_WASI_SDK_SYSROOT {
+        return Err(format!(
+            "SHA256 mismatch for wasi-sysroot.tar.gz: expected {}, got {}",
+            SHA256_WASI_SDK_SYSROOT, hex_digest
+        )
+        .into());
+    }
+
+    // Extract the tar.gz file
+    let tar_gz = File::open(&tar_gz_path)?;
+    let tar = flate2::read::GzDecoder::new(tar_gz);
+    let mut archive = tar::Archive::new(tar);
+    archive.unpack(&downloads_dir)?;
+
+    // Rename the extracted directory
+    let extracted_name = format!(
+        "wasi-sysroot-{}.{}",
+        WASI_SDK_VERSION_MAJOR, WASI_SDK_VERSION_MINOR
+    );
+    let extracted_path = downloads_dir.join(extracted_name);
+
+    if extracted_path.exists() {
+        fs::rename(extracted_path, &wasi_sysroot_dir)?;
+    }
+
+    // Clean up the downloaded tar.gz file
+    fs::remove_file(&tar_gz_path)?;
+
+    println!("cargo:warning=WASI SDK sysroot downloaded and extracted successfully");
+
+    Ok(())
 }
 
 /// Set up correct linker arguments.
