@@ -16,6 +16,35 @@ just build-release
 ## Python Version
 We currently bundle [Python 3.14.0], [build for WASI](https://docs.python.org/3/library/intro.html#webassembly-platforms).
 
+## Custom CPython Configuration
+You can configure the build to use a custom CPython source by setting the following environment variables:
+
+
+- `PYTHON_SDK_BASE_URL`: Base URL to download the Python WASI SDK artifacts. This
+  should point to a location containing both the main SDK archive and the build
+  artifacts archive.
+- `PYTHON_SDK_URL`: URL to download the main Python WASI SDK archive. This
+  should point to an artifact containing the pre-built Python runtime and
+  standard library for WASI. Will override `PYTHON_SDK_BASE_URL` if set.
+- `BUILD_PYTHON_SDK_URL`: URL to download the build artifacts archive. This
+  should point to an artifact containing the compiled Python libraries (like
+  `libpython3.14.a`, `libmpdec.a`, etc.) needed for static linking. Will override
+  `PYTHON_SDK_BASE_URL` if set.
+
+If these environment variables are not set, the build will use the default URLs pointing to the official [CPython WASI build releases](https://github.com/brettcannon/cpython-wasi-build/releases).
+
+Example usage:
+```console
+export PYTHON_SDK_URL="https://example.com/custom-python-sdk.zip"
+export BUILD_PYTHON_SDK_URL="https://example.com/custom-build-python-sdk.zip"
+just build-debug
+
+# Or
+
+export PYTHON_SDK_BASE_URL="https://example.com/custom-python-sdk-base/"
+just build-debug
+```
+
 ## Python Standard Library
 In contrast to a normal Python installation there are a few notable public[^public] modules **missing** from the [Python Standard Library]:
 
