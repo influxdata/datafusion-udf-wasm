@@ -19,6 +19,7 @@ use std::{
 };
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
     download_wasi_sdk().expect("WASI SDK download");
     configure_linker();
     bundle_python_lib();
@@ -33,8 +34,6 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
     const WASI_SDK_VERSION_MINOR: &str = "0";
     const SHA256_WASI_SDK_SYSROOT: &str =
         "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99153a50888f08";
-
-    println!("cargo:rerun-if-changed=build.rs");
 
     let downloads_dir = PathBuf::from("downloads");
     std::fs::create_dir_all(&downloads_dir)?;

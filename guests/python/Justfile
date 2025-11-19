@@ -19,8 +19,6 @@ export PYO3_CROSS_LIB_DIR := DOWNLOADS_DIR / "python-sdk"
 PYTHON_TMP_VENV := DOWNLOADS_DIR / "venv"
 PYTHON_SITE_PACKAGES := PYO3_CROSS_LIB_DIR / "lib" / "python" + PYO3_CROSS_PYTHON_VERSION / "site-packages"
 
-export WASI_SDK_LINK_PATH := DOWNLOADS_DIR / "wasi-sysroot" / "lib" / "wasm32-wasip2"
-
 # download pre-built Python WASM SDK
 [private]
 download-python-sdk:
@@ -124,7 +122,7 @@ python-site-packages: download-python-sdk
     echo ::endgroup::
 
 [private]
-build-lib profile: download-python-sdk download-wasi-sdk python-site-packages
+build-lib profile: download-python-sdk python-site-packages
     @echo ::group::guests::python::build-lib {{profile}}
     cargo build --target=wasm32-wasip2 --profile={{replace(profile, "debug", "dev")}}
     @echo ::endgroup::
