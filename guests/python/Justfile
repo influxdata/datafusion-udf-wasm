@@ -19,6 +19,9 @@ export PYO3_CROSS_LIB_DIR := DOWNLOADS_DIR / "python-sdk"
 PYTHON_TMP_VENV := DOWNLOADS_DIR / "venv"
 PYTHON_SITE_PACKAGES := PYO3_CROSS_LIB_DIR / "lib" / "python" + PYO3_CROSS_PYTHON_VERSION / "site-packages"
 
+# Not used in the script but the linker must know where to find the WASI sysroot libs.
+export WASI_SDK_LINK_PATH := DOWNLOADS_DIR / "wasi-sysroot" / "lib" / "wasm32-wasip2"
+
 # download pre-built Python WASM SDK
 [private]
 download-python-sdk:
@@ -77,14 +80,6 @@ download-python-sdk:
 
     set +x
     echo ::endgroup::
-
-# download WASI SDK because we need some libraries during the static linking phase
-# This is now handled automatically by the build script (build.rs)
-[private]
-download-wasi-sdk:
-    @echo ::group::guests::python::download-wasi-sdk
-    @echo "WASI SDK download is now handled by build.rs during cargo build"
-    @echo ::endgroup::
 
 [private]
 python-site-packages: download-python-sdk
