@@ -10,6 +10,7 @@ use datafusion_udf_wasm_guest::export;
 mod common;
 mod env;
 mod fs;
+mod net;
 mod root;
 mod runtime;
 mod spin;
@@ -40,6 +41,10 @@ impl Evil {
             "fs" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(fs::udfs),
+            },
+            "net" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(net::udfs),
             },
             "root::invalid_entry" => Self {
                 root: Box::new(root::invalid_entry::root),
