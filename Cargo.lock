@@ -775,7 +775,6 @@ checksum = "187622262ad8f7d16d3be9202b4c1e0116f1c9aa387e5074245538b755261621"
 dependencies = [
  "arrow",
  "async-trait",
- "dashmap",
  "datafusion-common",
  "datafusion-common-runtime",
  "datafusion-datasource",
