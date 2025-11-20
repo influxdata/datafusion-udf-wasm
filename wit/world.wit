@@ -1,5 +1,6 @@
-package datafusion-udf-wasm:udf@0.1.0;
+package datafusion-udf-wasm:udf@0.1.1;
 
+// test
 interface types {
     // TODO: add more variants
     variant data-fusion-error-kind {
