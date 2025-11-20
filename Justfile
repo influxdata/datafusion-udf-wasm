@@ -73,6 +73,40 @@ check-toml-lint:
 # check TOML files
 check-toml: check-toml-fmt check-toml-lint
 
+# check WIT files
+check-wit:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo ::group::check-wit
+
+    readonly wit='wit/world.wit'
+    readonly sed_filter='s/^[^@]+@([0-9.]+).*/\1/g'
+
+    echo
+    if ! git diff --exit-code origin/main "$wit"; then
+        echo
+        echo "change detected"
+
+        version_main="$(git show origin/main:"$wit" | grep package | sed -E "$sed_filter")"
+        version_head="$(cat "$wit" | grep package | sed -E "$sed_filter")"
+        echo "version main: $version_main"
+        echo "version HEAD: $version_head"
+
+        if [ "$version_head" == "$version_main" ]; then
+            echo "please update the WIT version!"
+            echo ::endgroup::
+            exit 1
+        else
+            echo "WIT version was updated"
+        fi
+    else
+        echo
+        echo "no change detected"
+    fi
+
+    echo ::endgroup::
+
 # lint YAML files
 check-yaml:
     @echo ::group::check-yaml
@@ -80,7 +114,7 @@ check-yaml:
     @echo ::endgroup::
 
 # run ALL checks
-check: check-rust check-spelling check-toml check-yaml
+check: check-rust check-spelling check-toml check-wit check-yaml
 
 # clean Rust build artifacts
 clean-rust:
