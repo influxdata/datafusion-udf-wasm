@@ -1287,6 +1287,7 @@ name = "datafusion-udf-wasm-arrow2bytes"
 version = "0.1.0"
 dependencies = [
  "arrow",
+ "insta",
 ]
 
 [[package]]
