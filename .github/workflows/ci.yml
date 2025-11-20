@@ -92,6 +92,16 @@ jobs:
           # "1" means line tables only, which is useful for panic tracebacks.
           CARGO_PROFILE_DEV_DEBUG: "1"
 
+      - name: Check Cargo.lock
+        shell: bash
+        run: |
+          if ! git diff --exit-code -- Cargo.lock; then
+              echo "::error::Cargo.lock changed, please commit your local changes!"
+              exit 1
+          else
+              echo "Good. Cargo.lock is up to date"
+          fi
+
       - name: upload docs
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0
         with:
