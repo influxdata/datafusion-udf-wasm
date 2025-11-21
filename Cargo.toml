@@ -17,13 +17,13 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 anyhow = { version = "1.0.100", default-features = false }
-arrow = { version = "56.2.0", default-features = false, features = ["ipc"] }
+arrow = { version = "57.0.0", default-features = false, features = ["ipc"] }
 chrono = { version = "0.4.42", default-features = false }
-datafusion = { version = "50.3.0", default-features = false }
-datafusion-common = { version = "50.3.0", default-features = false }
-datafusion-execution = { version = "50.3.0", default-features = false }
-datafusion-expr = { version = "50.3.0", default-features = false }
-datafusion-sql = { version = "50.3.0", default-features = false }
+datafusion = { version = "51.0.0", default-features = false }
+datafusion-common = { version = "51.0.0", default-features = false }
+datafusion-execution = { version = "51.0.0", default-features = false }
+datafusion-expr = { version = "51.0.0", default-features = false }
+datafusion-sql = { version = "51.0.0", default-features = false }
 datafusion-udf-wasm-arrow2bytes = { path = "arrow2bytes", version = "0.1.0" }
 datafusion-udf-wasm-bundle = { path = "guests/bundle", version = "0.1.0" }
 datafusion-udf-wasm-evil = { path = "guests/evil", version = "0.1.0" }
@@ -37,7 +37,7 @@ insta = { version = "1.44.1", "default-features" = false }
 log = { version = "0.4.28", default-features = false }
 pyo3 = { version = "0.27.1", default-features = false, features = ["macros"] }
 regex = { version = "1", default-features = false }
-sqlparser = { version = "0.58.0", default-features = false, features = [
+sqlparser = { version = "0.59.0", default-features = false, features = [
   "std",
   "visitor"
 ] }
