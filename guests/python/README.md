@@ -14,7 +14,7 @@ just build-release
 ```
 
 ## Python Version
-We currently bundle [Python 3.14.0], [build for WASI](https://docs.python.org/3/library/intro.html#webassembly-platforms).
+We currently bundle [Python 3.14.1], [build for WASI](https://docs.python.org/3/library/intro.html#webassembly-platforms).
 
 ## Custom CPython Configuration
 You can configure the build to use a custom CPython source by setting the following environment variables:
@@ -31,7 +31,7 @@ You can configure the build to use a custom CPython source by setting the follow
   `libpython3.14.a`, `libmpdec.a`, etc.) needed for static linking. Will override
   `PYTHON_SDK_BASE_URL` if set.
 
-If these environment variables are not set, the build will use the default URLs pointing to the official [CPython WASI build releases](https://github.com/brettcannon/cpython-wasi-build/releases).
+If these environment variables are not set, the build will use the default URLs pointing to Influx's [CPython WASI build releases](https://github.com/influxdata/cpython-wasi-build/releases).
 
 Example usage:
 ```console
@@ -267,7 +267,7 @@ There is NO other I/O available that escapes the sandbox.
 [`Duration`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Duration
 [`Microsecond`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.TimeUnit.html#variant.Microsecond
 [`os.environ`]: https://docs.python.org/3/library/os.html#os.environ
-[Python 3.14.0]: https://www.python.org/downloads/release/python-3140
+[Python 3.14.1]: https://www.python.org/downloads/release/python-3141
 [Python Standard Library]: https://docs.python.org/3/library/index.html
 [`requests`]: https://pypi.org/project/requests/
 [Scalar UDF]: https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.ScalarUDF.html
