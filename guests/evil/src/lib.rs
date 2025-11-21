@@ -10,8 +10,10 @@ use datafusion_udf_wasm_guest::export;
 mod common;
 mod env;
 mod fs;
+mod net;
 mod root;
 mod runtime;
+mod spin;
 
 /// Method that returns the root filesystem.
 type RootFn = Box<dyn Fn() -> Option<Vec<u8>>>;
@@ -40,8 +42,16 @@ impl Evil {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(fs::udfs),
             },
+            "net" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(net::udfs),
+            },
             "root::invalid_entry" => Self {
                 root: Box::new(root::invalid_entry::root),
+                udfs: Box::new(common::udfs_empty),
+            },
+            "root::large_file" => Self {
+                root: Box::new(root::large_file::root),
                 udfs: Box::new(common::udfs_empty),
             },
             "root::many_files" => Self {
@@ -52,6 +62,14 @@ impl Evil {
                 root: Box::new(root::not_tar::root),
                 udfs: Box::new(common::udfs_empty),
             },
+            "root::path_long" => Self {
+                root: Box::new(root::path_long::root),
+                udfs: Box::new(common::udfs_empty),
+            },
+            "root::sparse" => Self {
+                root: Box::new(root::sparse::root),
+                udfs: Box::new(common::udfs_empty),
+            },
             "root::unsupported_entry" => Self {
                 root: Box::new(root::unsupported_entry::root),
                 udfs: Box::new(common::udfs_empty),
@@ -59,6 +77,34 @@ impl Evil {
             "runtime" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(runtime::udfs),
+            },
+            "spin::root" => Self {
+                root: Box::new(spin::root::root),
+                udfs: Box::new(common::udfs_empty),
+            },
+            "spin::udf_invoke" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udf_invoke::udfs),
+            },
+            "spin::udf_name" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udf_name::udfs),
+            },
+            "spin::udf_return_type_exact" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udf_return_type_exact::udfs),
+            },
+            "spin::udf_return_type_other" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udf_return_type_other::udfs),
+            },
+            "spin::udf_signature" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udf_signature::udfs),
+            },
+            "spin::udfs" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(spin::udfs::udfs),
             },
             other => panic!("unknown evil: {other}"),
         }

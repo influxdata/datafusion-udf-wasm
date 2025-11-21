@@ -37,6 +37,16 @@ use wasmtime_wasi::{
     },
 };
 
+pub use crate::vfs::limits::VfsLimits;
+use crate::{
+    error::LimitExceeded,
+    limiter::Limiter,
+    vfs::path::{PathSegment, PathTraversal},
+};
+
+mod limits;
+mod path;
+
 /// Shared version of [`VfsNode`].
 type SharedVfsNode = Arc<RwLock<VfsNode>>;
 
@@ -61,7 +71,7 @@ enum VfsNodeKind {
     /// A directory containing child nodes.
     Directory {
         /// Child nodes indexed by name.
-        children: HashMap<Box<str>, SharedVfsNode>,
+        children: HashMap<PathSegment, SharedVfsNode>,
     },
 }
 
@@ -142,40 +152,28 @@ impl VfsNode {
     }
 
     /// Resolve a path from a starting node to a target node.
-    fn resolve_path(
-        root: SharedVfsNode,
+    fn traverse(
         start: SharedVfsNode,
-        path: &str,
+        directions: impl Iterator<Item = Result<PathTraversal, LimitExceeded>>,
     ) -> FsResult<SharedVfsNode> {
-        if path.is_empty() {
-            return Err(FsError::trap(ErrorCode::Invalid));
-        }
+        let mut current = start;
 
-        let mut parts = path.split('/').peekable();
-        let mut current = if parts.peek().expect("checked that not empty").is_empty() {
-            parts.next();
-            root
-        } else {
-            start
-        };
+        for direction in directions {
+            let direction = direction?;
 
-        for part in parts {
             let current_guard = current.read().unwrap();
             let next = match &current_guard.kind {
-                VfsNodeKind::Directory { children, .. } => match part {
-                    "" => {
-                        return Err(FsError::trap(ErrorCode::Invalid));
-                    }
-                    "." => Arc::clone(&current),
-                    ".." => current_guard
+                VfsNodeKind::Directory { children, .. } => match direction {
+                    PathTraversal::Stay => Arc::clone(&current),
+                    PathTraversal::Up => current_guard
                         .parent
                         .as_ref()
                         .map(|parent| parent.upgrade().expect("parent still valid"))
                         // note: `/..` = `/`, i.e. overshooting is allowed
                         .unwrap_or_else(|| Arc::clone(&current)),
-                    _ => Arc::clone(
+                    PathTraversal::Down(segment) => Arc::clone(
                         children
-                            .get(part)
+                            .get(&segment)
                             .ok_or_else(|| FsError::trap(ErrorCode::NoEntry))?,
                     ),
                 },
@@ -220,98 +218,19 @@ impl Allocation {
     }
 
     /// Increase allocation by given amount.
-    fn inc(&self, n: u64) -> Result<(), FailedAllocation> {
+    fn inc(&self, n: u64) -> Result<(), LimitExceeded> {
         self.n
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |old| {
                 let new = old.checked_add(n)?;
                 (new <= self.limit).then_some(new)
             })
             .map(|_| ())
-            .map_err(|current| FailedAllocation {
+            .map_err(|current| LimitExceeded {
                 name: self.name,
                 limit: self.limit,
                 current,
                 requested: n,
             })
-    }
-}
-
-/// Failed allocation error.
-#[derive(Debug)]
-struct FailedAllocation {
-    /// Name of the allocation type/resource.
-    name: &'static str,
-
-    /// Allocation limit.
-    limit: u64,
-
-    /// Current allocation size.
-    current: u64,
-
-    /// Requested/additional allocation.
-    requested: u64,
-}
-
-impl std::fmt::Display for FailedAllocation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            name,
-            limit,
-            current,
-            requested,
-        } = self;
-
-        write!(
-            f,
-            "{name} limit reached: limit<={limit} current=={current} requested+={requested}"
-        )
-    }
-}
-
-impl From<FailedAllocation> for std::io::Error {
-    fn from(e: FailedAllocation) -> Self {
-        Self::new(std::io::ErrorKind::QuotaExceeded, e.to_string())
-    }
-}
-
-/// Limits for virtual filesystems.
-#[derive(Debug, Clone)]
-#[expect(missing_copy_implementations, reason = "allow later extensions")]
-pub struct VfsLimits {
-    /// Maximum number of inodes.
-    pub inodes: u64,
-
-    /// Maximum number of bytes in size.
-    pub bytes: u64,
-}
-
-impl Default for VfsLimits {
-    fn default() -> Self {
-        Self {
-            inodes: 10_000,
-            // 100MB
-            bytes: 100 * 1024 * 1024,
-        }
-    }
-}
-
-/// Current virtual filesystem allocation.
-#[derive(Debug)]
-struct VfsAllocation {
-    /// Number of inodes.
-    inodes: Allocation,
-
-    /// Number of bytes.
-    bytes: Allocation,
-}
-
-impl VfsAllocation {
-    /// Create new empty allocation tracker.
-    fn new(limits: &VfsLimits) -> Self {
-        Self {
-            inodes: Allocation::new("inodes", limits.inodes),
-            bytes: Allocation::new("bytes", limits.bytes),
-        }
     }
 }
 
@@ -324,13 +243,18 @@ pub(crate) struct VfsState {
     /// Hash key for metadata hashes.
     metadata_hash_key: [u8; 16],
 
-    /// Current allocation.
-    allocation: VfsAllocation,
+    /// Limits.
+    limits: VfsLimits,
+
+    /// Current allocation of inodes.
+    inodes_allocation: Allocation,
 }
 
 impl VfsState {
     /// Create a new empty VFS.
-    pub(crate) fn new(limits: &VfsLimits) -> Self {
+    pub(crate) fn new(limits: VfsLimits) -> Self {
+        let inodes_allocation = Allocation::new("inodes", limits.inodes);
+
         Self {
             root: Arc::new(RwLock::new(VfsNode {
                 kind: VfsNodeKind::Directory {
@@ -339,12 +263,18 @@ impl VfsState {
                 parent: None,
             })),
             metadata_hash_key: rand::rng().random(),
-            allocation: VfsAllocation::new(limits),
+            limits,
+            inodes_allocation,
         }
     }
 
     /// Populate the VFS from a tar archive.
-    pub(crate) fn populate_from_tar(&mut self, tar_data: &[u8]) -> Result<(), std::io::Error> {
+    pub(crate) fn populate_from_tar(
+        &mut self,
+        tar_data: &[u8],
+        limiter: &mut Limiter,
+    ) -> Result<(), std::io::Error> {
+        let size_pre = limiter.size();
         let cursor = Cursor::new(tar_data);
         let mut archive = tar::Archive::new(cursor);
 
@@ -360,7 +290,7 @@ impl VfsState {
                     let mut content = Vec::new();
                     entry.read_to_end(&mut content)?;
                     content.shrink_to_fit();
-                    self.allocation.bytes.inc(content.capacity() as u64)?;
+                    limiter.grow(content.capacity())?;
                     VfsNodeKind::File { content }
                 }
                 other => {
@@ -380,21 +310,36 @@ impl VfsState {
             let path = entry.path()?;
             let path_str = path.to_string_lossy();
 
-            let (path_str, name) = path_str.rsplit_once("/").unwrap_or((".", &path_str));
-            let node =
-                VfsNode::resolve_path(Arc::clone(&self.root), Arc::clone(&self.root), path_str)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            // NOTE: we ignore "is_root" here because TAR files are unpacked at root level, hence CWD == root
+            let (_is_root, directions) = PathTraversal::parse(&path_str, &self.limits)?;
+            let mut directions = directions.collect::<Vec<_>>();
+
+            // Path traversal happens on the VFS tree, NOT on the parsed path, so the last part MUST be a valid segment.
+            // That also means that `/does_not_exist/../to_be_created` is NOT valid.
+            let name = match directions
+                .pop()
+                .expect("PathTraversal ensures that the path is not empty")?
+            {
+                PathTraversal::Down(segment) => segment,
+                other @ (PathTraversal::Stay | PathTraversal::Up) => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidFilename,
+                        format!("TAR target MUST end in a valid filename, not {other}"),
+                    ));
+                }
+            };
+
+            let node = VfsNode::traverse(Arc::clone(&self.root), directions.into_iter())
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
             let child = Arc::new(RwLock::new(VfsNode {
                 kind,
                 parent: Some(Arc::downgrade(&node)),
             }));
 
-            self.allocation.inodes.inc(1)?;
-            self.allocation.bytes.inc(name.len() as u64)?;
-            self.allocation
-                .bytes
-                .inc(std::mem::size_of_val(&child) as u64)?;
+            self.inodes_allocation.inc(1)?;
+            limiter.grow(name.len())?;
+            limiter.grow(std::mem::size_of_val(&child))?;
 
             match &mut node.write().unwrap().kind {
                 VfsNodeKind::File { .. } => {
@@ -404,7 +349,7 @@ impl VfsState {
                     ));
                 }
                 VfsNodeKind::Directory { children } => {
-                    children.insert(name.into(), child);
+                    children.insert(name, child);
                 }
             }
         }
@@ -412,8 +357,8 @@ impl VfsState {
         log::info!(
             "unpacked WASM guest root filesystem from {} bytes TAR, consuming {} bytes and {} inodes",
             tar_data.len(),
-            self.allocation.bytes.get(),
-            self.allocation.inodes.get()
+            limiter.size() - size_pre,
+            self.inodes_allocation.get()
         );
 
         Ok(())
@@ -467,7 +412,15 @@ impl<'a> VfsCtxView<'a> {
     /// Get node at given path.
     fn node_at(&self, res: Resource<Descriptor>, path: &str) -> FsResult<SharedVfsNode> {
         let node = self.node(res)?;
-        VfsNode::resolve_path(Arc::clone(&self.vfs_state.root), node, path)
+
+        let (is_root, directions) = PathTraversal::parse(path, &self.vfs_state.limits)?;
+
+        let start = if is_root {
+            Arc::clone(&self.vfs_state.root)
+        } else {
+            node
+        };
+        VfsNode::traverse(start, directions)
     }
 }
 

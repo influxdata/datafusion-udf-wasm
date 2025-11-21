@@ -44,15 +44,18 @@ jobs:
           df -h
 
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
         with:
           fetch-depth: 1
+
+      - name: Fetch main branch
+        run: git fetch --depth=1 origin main
 
       - name: Install `yamllint`
         run: pip install --requirement=.github/workflows/requirements.txt
 
       - name: Install `cargo-deny` & `just` & 'typos'
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532  # v2
+        uses: taiki-e/install-action@62da238c048aa0f865cc5a322082957d34e7fc1a  # v2
         with:
           tool: cargo-deny,just,typos
 
@@ -88,6 +91,16 @@ jobs:
           # Disable full debug symbol generation to speed up CI build
           # "1" means line tables only, which is useful for panic tracebacks.
           CARGO_PROFILE_DEV_DEBUG: "1"
+
+      - name: Check Cargo.lock
+        shell: bash
+        run: |
+          if ! git diff --exit-code -- Cargo.lock; then
+              echo "::error::Cargo.lock changed, please commit your local changes!"
+              exit 1
+          else
+              echo "Good. Cargo.lock is up to date"
+          fi
 
       - name: upload docs
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  # v5.0.0

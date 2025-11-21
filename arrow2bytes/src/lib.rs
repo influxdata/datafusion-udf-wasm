@@ -18,6 +18,10 @@ use arrow::{
     },
 };
 
+// unused-crate-dependencies false positives
+#[cfg(test)]
+use insta as _;
+
 /// Convert an [`Array`] to bytes.
 ///
 /// This is done by encoding writing this as a [`RecordBatch`] with a single [`Field`].
@@ -36,6 +40,7 @@ pub fn array2bytes(array: ArrayRef) -> Vec<u8> {
     let batch = RecordBatch::try_new(schema, vec![array]).expect("batch always valid");
     writer.write(&batch).expect("writing to buffer never fails");
 
+    writer.finish().expect("writing to buffer never fails");
     writer.into_inner().expect("writing to buffer never fails")
 }
 
@@ -43,8 +48,8 @@ pub fn array2bytes(array: ArrayRef) -> Vec<u8> {
 ///
 /// See [`array2bytes`] for the reverse method and the format description.
 pub fn bytes2array(bytes: &[u8]) -> Result<ArrayRef, ArrowError> {
-    let bytes = Cursor::new(bytes);
-    let mut reader = StreamReader::try_new(bytes, None)?;
+    let cursor = Cursor::new(bytes);
+    let mut reader = StreamReader::try_new(cursor, None)?;
     let Some(res) = reader.next() else {
         return Err(ArrowError::InvalidArgumentError(
             "no record batch found".to_owned(),
@@ -56,7 +61,10 @@ pub fn bytes2array(bytes: &[u8]) -> Result<ArrayRef, ArrowError> {
         return Err(ArrowError::InvalidArgumentError("invalid batch".to_owned()));
     }
     let array = Arc::clone(&columns[0]);
-    if reader.next().is_some() || !reader.is_finished() {
+    if reader.next().is_some()
+        || !reader.is_finished()
+        || (reader.get_ref().position() as usize != bytes.len())
+    {
         return Err(ArrowError::InvalidArgumentError("trailing data".to_owned()));
     }
     Ok(array)

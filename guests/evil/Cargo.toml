@@ -13,6 +13,7 @@ datafusion-common.workspace = true
 datafusion-expr.workspace = true
 datafusion-udf-wasm-guest.workspace = true
 tar.workspace = true
+wasip2.workspace = true
 
 [lints]
 workspace = true

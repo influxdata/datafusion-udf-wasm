@@ -1,5 +1,5 @@
 //! Payload that tries to read environment variables.
-use std::{hash::Hash, sync::Arc};
+use std::{hash::Hash, io::Read, sync::Arc};
 
 use arrow::datatypes::DataType;
 use datafusion_common::{Result as DataFusionResult, ScalarValue};
@@ -116,6 +116,19 @@ pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImp
             } else {
                 Some(vars.join(","))
             }
+        })),
+        Arc::new(StringUdf::new("process_id", || {
+            let id = std::process::id();
+            Some(id.to_string())
+        })),
+        Arc::new(StringUdf::new("stdin", || {
+            let mut buf = String::new();
+            std::io::stdin().read_to_string(&mut buf).unwrap();
+            Some(buf)
+        })),
+        Arc::new(StringUdf::new("thread_id", || {
+            let id = std::thread::current().id();
+            Some(format!("{id:?}"))
         })),
     ])
 }

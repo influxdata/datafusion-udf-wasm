@@ -11,6 +11,11 @@ SHA256_WASI_SDK_SYSROOT := "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99
 
 PYTHON_VERSION_FULL := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR + "." + PYTHON_VERSION_MICRO
 
+# Configurable URLs for Python SDK downloads (with defaults)
+PYTHON_SDK_BASE_URL := env_var_or_default("PYTHON_SDK_BASE_URL", "https://github.com/brettcannon/cpython-wasi-build/releases/download")
+PYTHON_SDK_URL := env_var_or_default("PYTHON_SDK_URL", PYTHON_SDK_BASE_URL + "/v" + PYTHON_VERSION_FULL + "/python-" + PYTHON_VERSION_FULL + "-wasi_sdk-" + WASI_SDK_VERSION_MAJOR + ".zip")
+BUILD_PYTHON_SDK_URL := env_var_or_default("BUILD_PYTHON_SDK_URL", PYTHON_SDK_BASE_URL + "/v" + PYTHON_VERSION_FULL + "/_build-python-" + PYTHON_VERSION_FULL + "-wasi_sdk-" + WASI_SDK_VERSION_MAJOR + ".zip")
+
 DOWNLOADS_DIR := source_directory() / "downloads"
 
 export PYO3_CROSS_PYTHON_VERSION := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR
@@ -50,7 +55,7 @@ download-python-sdk:
         --tlsv1.2 \
         --location \
         --output "python-sdk.zip" \
-        "https://github.com/brettcannon/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
+        "{{PYTHON_SDK_URL}}"
 
     curl \
         --fail \
@@ -60,7 +65,7 @@ download-python-sdk:
         --tlsv1.2 \
         --location \
         --output "build-python-sdk.zip" \
-        "https://github.com/brettcannon/cpython-wasi-build/releases/download/v{{PYTHON_VERSION_FULL}}/_build-python-{{PYTHON_VERSION_FULL}}-wasi_sdk-{{WASI_SDK_VERSION_MAJOR}}.zip"
+        "{{BUILD_PYTHON_SDK_URL}}"
 
     echo "{{SHA256_PYTHON_SDK}} python-sdk.zip" | sha256sum -c
     echo "{{SHA256_PYTHON_SDK_BUILD}} build-python-sdk.zip" | sha256sum -c

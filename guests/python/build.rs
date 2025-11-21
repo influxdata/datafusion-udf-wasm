@@ -44,6 +44,14 @@ fn download_wasi_sdk() -> Result<Option<String>, Box<dyn std::error::Error>> {
     let target =
         std::env::var("TARGET").expect("TARGET environment variable should be set by cargo!");
 
+    // Only configure the WASI SDK when building for the wasm target. The downloads directory may
+    // already exist from previous runs, but we must not trigger WASI-specific linking for native
+    // `cargo check` builds.
+    if target.as_str() != "wasm32-wasip2" {
+        println!("cargo:info=not building for wasm32-wasip2 target, skipping WASI SDK download");
+        return Ok(None);
+    }
+
     const WASI_SDK_VERSION_MAJOR: &str = "24";
     const WASI_SDK_VERSION_MINOR: &str = "0";
     const SHA256_WASI_SDK_SYSROOT: &str =
@@ -53,17 +61,13 @@ fn download_wasi_sdk() -> Result<Option<String>, Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&downloads_dir)?;
 
     let wasi_sysroot_dir = downloads_dir.join("wasi-sysroot");
+    let link_path = wasi_sysroot_dir.join("lib").join("wasm32-wasip2");
 
     // Skip if already downloaded
     if wasi_sysroot_dir.exists() {
+        assert!(link_path.exists());
         println!("cargo:info=wasi sdk already present, skipping download");
-        return Ok(None);
-    }
-
-    // Or if not building for wasm32-wasip2 target
-    if target.as_str() != "wasm32-wasip2" {
-        println!("cargo:info=not building for wasm32-wasip2 target, skipping WASI SDK download");
-        return Ok(None);
+        return Ok(link_path.to_string_lossy().to_string().into());
     }
 
     println!("cargo:warning=downloading WASI SDK sysroot...");
@@ -129,7 +133,8 @@ fn download_wasi_sdk() -> Result<Option<String>, Box<dyn std::error::Error>> {
         wasi_sysroot_dir.display()
     );
 
-    Ok(Some(wasi_sysroot_dir.to_string_lossy().to_string()))
+    assert!(link_path.exists());
+    Ok(link_path.to_string_lossy().to_string().into())
 }
 
 /// Set up correct linker arguments.
@@ -180,7 +185,8 @@ fn bundle_python_lib() {
 
     let file = File::create(&tar_path).unwrap();
     let mut archive = tar::Builder::new(file);
-    for entry in walkdir::WalkDir::new(&lib_dir) {
+    archive.mode(tar::HeaderMode::Deterministic);
+    for entry in walkdir::WalkDir::new(&lib_dir).sort_by_file_name() {
         let entry = entry.unwrap();
 
         let path_abs = entry.path();

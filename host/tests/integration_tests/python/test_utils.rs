@@ -1,6 +1,14 @@
+use std::sync::Arc;
+
 use datafusion_common::DataFusionError;
+use datafusion_execution::memory_pool::GreedyMemoryPool;
 use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmScalarUdf};
 use tokio::{runtime::Handle, sync::OnceCell};
+
+/// Memory limit in bytes.
+///
+/// 100MB.
+const MEMORY_LIMIT: usize = 100_000_000;
 
 /// Static precompiled Python WASM component for tests
 static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
@@ -24,6 +32,7 @@ pub(crate) async fn python_scalar_udfs(code: &str) -> Result<Vec<WasmScalarUdf>,
         component,
         &Default::default(),
         Handle::current(),
+        &(Arc::new(GreedyMemoryPool::new(MEMORY_LIMIT)) as _),
         code.to_owned(),
     )
     .await

@@ -5,8 +5,76 @@ use datafusion_common::{DataFusionError, config::ConfigOptions};
 use datafusion_expr::{ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl};
 use datafusion_udf_wasm_host::WasmScalarUdf;
 use regex::Regex;
+use wasmtime::Trap;
 
 use crate::integration_tests::evil::test_utils::try_scalar_udfs;
+
+#[tokio::test]
+async fn test_abort() {
+    let udf = udf("abort").await;
+
+    insta::assert_snapshot!(
+        err_call_no_params(&udf).await,
+        @r"
+    call ScalarUdf::invoke_with_args
+    caused by
+    External error: wasm trap: wasm `unreachable` instruction executed
+    ",
+    );
+}
+
+#[tokio::test]
+async fn test_alloc() {
+    let udf = udf("alloc").await;
+
+    insta::assert_snapshot!(
+        err_call_no_params(&udf).await,
+        @r"
+    call ScalarUdf::invoke_with_args
+
+    stderr:
+    memory allocation of 1000000000 bytes failed
+
+    caused by
+    External error: wasm trap: wasm `unreachable` instruction executed
+    ",
+    );
+}
+
+#[tokio::test]
+async fn test_alloc_try() {
+    let udf = udf("alloc_try").await;
+
+    insta::assert_snapshot!(
+        normalize_panic_location(err_call_no_params(&udf).await),
+        @r"
+    call ScalarUdf::invoke_with_args
+
+    stderr:
+
+    thread '<unnamed>' (1) panicked at <FILE>:<LINE>:<ROW>:
+    called `Result::unwrap()` on an `Err` value: TryReserveError { kind: AllocError { layout: Layout { size: 1000000000, align: 1 (1 << 0) }, non_exhaustive: () } }
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+    caused by
+    External error: wasm trap: wasm `unreachable` instruction executed
+    ",
+    );
+}
+
+#[tokio::test]
+async fn test_exit() {
+    let udf = udf("exit").await;
+
+    insta::assert_snapshot!(
+        err_call_no_params(&udf).await,
+        @r"
+    call ScalarUdf::invoke_with_args
+    caused by
+    External error: Exited with i32 exit status 1
+    ",
+    );
+}
 
 #[tokio::test]
 async fn test_fillstderr() {
@@ -132,11 +200,77 @@ async fn test_stackoverflow() {
     );
 }
 
+#[tokio::test]
+async fn test_thread() {
+    let udf = udf("thread").await;
+
+    insta::assert_snapshot!(
+        normalize_panic_location(err_call_no_params(&udf).await),
+        @r#"
+    call ScalarUdf::invoke_with_args
+
+    stderr:
+
+    thread '<unnamed>' (2) panicked at <FILE>:<LINE>:<ROW>:
+    failed to spawn thread: Error { kind: Unsupported, message: "operation not supported on this platform" }
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+    caused by
+    External error: wasm trap: wasm `unreachable` instruction executed
+    "#,
+    );
+}
+
+/// Tests that trapping a component poisons the guest.
+#[tokio::test]
+async fn test_trap() {
+    let udfs = udfs().await;
+
+    // pick a payload that we know is gonna trap and one that works
+    let udf_bad = udfs
+        .iter()
+        .find(|udf| udf.name() == "stackoverflow")
+        .unwrap();
+    let udf_good = udfs.iter().find(|udf| udf.name() == "pass").unwrap();
+
+    // the good one works, even multiple times
+    for _ in 0..2 {
+        try_call_no_params(udf_good).await.unwrap();
+    }
+
+    // the bad one fails
+    let err = err_call_no_params(udf_bad).await;
+
+    // check that we actually encountered a trap
+    let mut e: Option<&(dyn std::error::Error + 'static)> = Some(&err);
+    let mut chain = std::iter::from_fn(|| {
+        let e2 = e.take()?;
+        e = e2.source();
+        Some(e2)
+    });
+
+    assert!(chain.any(|e| e.is::<Trap>()));
+
+    // try to re-enter component, this should fail with a reasonable error message
+    insta::assert_snapshot!(
+        err_call_no_params(udf_good).await,
+        @r"
+    call ScalarUdf::invoke_with_args
+    caused by
+    External error: wasm trap: cannot enter component instance
+    ",
+    );
+}
+
+/// Get evil UDFs.
+async fn udfs() -> Vec<WasmScalarUdf> {
+    try_scalar_udfs("runtime").await.unwrap()
+}
+
 /// Get evil UDF.
 async fn udf(name: &'static str) -> WasmScalarUdf {
-    try_scalar_udfs("runtime")
+    udfs()
         .await
-        .unwrap()
         .into_iter()
         .find(|udf| udf.name() == name)
         .unwrap()

@@ -5,12 +5,13 @@
     unused_crate_dependencies,
 )]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use datafusion::prelude::{DataFrame, SessionContext};
 use datafusion_common::{
     Result as DataFusionResult, assert_batches_eq, test_util::batches_to_string,
 };
+use datafusion_execution::memory_pool::UnboundedMemoryPool;
 use datafusion_udf_wasm_host::WasmPermissions;
 use datafusion_udf_wasm_query::{
     ComponentFn, Lang, ParsedQuery, UdfQueryParser,
@@ -66,6 +67,7 @@ SELECT add_one(1);
             query,
             &WasmPermissions::new(),
             Handle::current(),
+            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -121,6 +123,7 @@ SELECT add_one(1), multiply_two(3);
             query,
             &WasmPermissions::new(),
             Handle::current(),
+            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -172,6 +175,7 @@ SELECT add_one(1), multiply_two(3);
             query,
             &WasmPermissions::new(),
             Handle::current(),
+            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -217,6 +221,7 @@ SELECT add_one(1)
             query,
             &WasmPermissions::new(),
             Handle::current(),
+            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -257,6 +262,7 @@ EXPLAIN SELECT add_one(1);
             query,
             &WasmPermissions::new(),
             Handle::current(),
+            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -312,6 +318,7 @@ async fn test_strip_indentation_everything_indented() {
             &query,
             &WasmPermissions::new(),
             Handle::current(),
+            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -362,6 +369,7 @@ async fn test_strip_indentation_empty_lines_not_indented() {
             &query,
             &WasmPermissions::new(),
             Handle::current(),
+            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -411,6 +419,7 @@ async fn test_strip_indentation_python_further_indented() {
             &query,
             &WasmPermissions::new(),
             Handle::current(),
+            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
