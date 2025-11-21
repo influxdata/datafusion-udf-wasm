@@ -44,7 +44,7 @@ jobs:
           df -h
 
       - name: Checkout
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
         with:
           fetch-depth: 1
 
@@ -55,7 +55,7 @@ jobs:
         run: pip install --requirement=.github/workflows/requirements.txt
 
       - name: Install `cargo-deny` & `just` & 'typos'
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532  # v2
+        uses: taiki-e/install-action@62da238c048aa0f865cc5a322082957d34e7fc1a  # v2
         with:
           tool: cargo-deny,just,typos
 
