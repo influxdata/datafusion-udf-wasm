@@ -35,7 +35,7 @@ fn main() {
 /// This downloads the WASI SDK extracts it to the downloads directory. If the
 /// sdk already exists, this function returns early.
 ///
-/// Retrurns:
+/// Returns:
 /// - `Ok(Some(String))`: Path to the WASI SDK sysroot if downloaded (i.e., if
 ///   building for wasm32-wasip2 target)
 /// - `Ok(None)`: If not building for wasm32-wasip2 target
