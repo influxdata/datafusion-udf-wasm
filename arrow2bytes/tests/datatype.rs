@@ -22,9 +22,9 @@ fn test_roundtrip() {
 #[test]
 fn test_err_invalid_bytes() {
     let err = bytes2datatype(b"").unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "Invalid argument error: Range [0, 4) is out of bounds.\n\n"
+    insta::assert_snapshot!(
+        err,
+        @"Invalid argument error: Range [0, 4) is out of bounds."
     );
 }
 
@@ -34,7 +34,10 @@ fn test_err_no_field() {
     let fb = IpcSchemaEncoder::new().schema_to_fb(&schema);
     let data = fb.finished_data().to_owned();
     let err = bytes2datatype(&data).unwrap_err();
-    assert_eq!(err.to_string(), "Invalid argument error: Invalid schema");
+    insta::assert_snapshot!(
+        err,
+        @"Invalid argument error: Invalid schema",
+    );
 }
 
 #[test]
@@ -46,7 +49,23 @@ fn test_err_two_fields() {
     let fb = IpcSchemaEncoder::new().schema_to_fb(&schema);
     let data = fb.finished_data().to_owned();
     let err = bytes2datatype(&data).unwrap_err();
-    assert_eq!(err.to_string(), "Invalid argument error: Invalid schema");
+    insta::assert_snapshot!(
+        err,
+        @"Invalid argument error: Invalid schema",
+    );
+}
+
+#[test]
+fn test_deeply_nested() {
+    let dt = (0..100).fold(DataType::Int64, |dt, _| {
+        DataType::List(Arc::new(Field::new("x", dt, true)))
+    });
+    let bytes = datatype2bytes(dt);
+    let err = bytes2datatype(&bytes).unwrap_err();
+    insta::assert_snapshot!(
+        err,
+        @"Invalid argument error: Nested table depth limit reached."
+    );
 }
 
 #[track_caller]
