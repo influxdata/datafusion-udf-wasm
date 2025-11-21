@@ -20,16 +20,30 @@ use std::{
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    download_wasi_sdk().expect("WASI SDK download");
-    configure_linker();
+
+    let downloaded = download_wasi_sdk().expect("WASI SDK download");
+
+    if let Some(wasi_sdk) = downloaded {
+        configure_linker(wasi_sdk);
+    }
+
     bundle_python_lib();
 }
 
 /// Download WASI SDK sysroot for static linking.
 ///
-/// This downloads the WASI sysroot from the GitHub releases and extracts it to the downloads directory.
-/// If the sysroot already exists, this function returns early.
-fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
+/// This downloads the WASI SDK extracts it to the downloads directory. If the
+/// sdk already exists, this function returns early.
+///
+/// Retrurns:
+/// - `Ok(Some(String))`: Path to the WASI SDK sysroot if downloaded (i.e., if
+///   building for wasm32-wasip2 target)
+/// - `Ok(None)`: If not building for wasm32-wasip2 target
+/// - `Err`: If an error occurred during download or extraction
+fn download_wasi_sdk() -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let target =
+        std::env::var("TARGET").expect("TARGET environment variable should be set by cargo!");
+
     const WASI_SDK_VERSION_MAJOR: &str = "24";
     const WASI_SDK_VERSION_MINOR: &str = "0";
     const SHA256_WASI_SDK_SYSROOT: &str =
@@ -43,7 +57,13 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
     // Skip if already downloaded
     if wasi_sysroot_dir.exists() {
         println!("cargo:info=wasi sdk already present, skipping download");
-        return Ok(());
+        return Ok(None);
+    }
+
+    // Or if not building for wasm32-wasip2 target
+    if target.as_str() != "wasm32-wasip2" {
+        println!("cargo:info=not building for wasm32-wasip2 target, skipping WASI SDK download");
+        return Ok(None);
     }
 
     println!("cargo:warning=downloading WASI SDK sysroot...");
@@ -109,21 +129,17 @@ fn download_wasi_sdk() -> Result<(), Box<dyn std::error::Error>> {
         wasi_sysroot_dir.display()
     );
 
-    Ok(())
+    Ok(Some(wasi_sysroot_dir.to_string_lossy().to_string()))
 }
 
 /// Set up correct linker arguments.
 ///
-/// This only happens when the `WASI_SDK_LINK_PATH` environment variable is set. Otherwise we assume that this is NOT
-/// a WASM build (e.g. during an ordinary `cargo check`) and that [`pyo3`] manages the linking itself.
-///
+/// # Arguments
+/// - `link_path`: Path to the WASI SDK
 ///
 /// [`pyo3`]: https://pyo3.rs/
-fn configure_linker() {
+fn configure_linker(link_path: String) {
     println!("cargo:rerun-if-env-changed=WASI_SDK_LINK_PATH");
-    let Ok(link_path) = std::env::var("WASI_SDK_LINK_PATH") else {
-        return;
-    };
 
     // wasi libc
     println!("cargo:rustc-link-lib=dl");
