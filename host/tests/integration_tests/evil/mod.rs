@@ -1,5 +1,6 @@
 mod env;
 mod fs;
+mod net;
 mod root;
 mod runtime;
 mod spin;

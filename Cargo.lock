@@ -1309,6 +1309,7 @@ dependencies = [
  "datafusion-expr",
  "datafusion-udf-wasm-guest",
  "tar",
+ "wasip2",
 ]
 
 [[package]]

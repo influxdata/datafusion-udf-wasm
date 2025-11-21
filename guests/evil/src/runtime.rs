@@ -109,6 +109,7 @@ fn ackermann(m: u128, n: u128) -> u128 {
 #[expect(clippy::unnecessary_wraps, reason = "public API through export! macro")]
 pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
     Ok(vec![
+        Arc::new(SideEffect::new("abort", || std::process::abort())),
         Arc::new(SideEffect::new("alloc", || {
             let data = vec![1u8; 1_000_000_000];
             // side effect to prevent optimization
@@ -124,6 +125,7 @@ pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImp
                 println!("{x}");
             }
         })),
+        Arc::new(SideEffect::new("exit", || std::process::exit(1))),
         Arc::new(SideEffect::new("fillstderr", || {
             let s: String = std::iter::repeat_n('x', 10_000).collect();
             for _ in 0..10_000 {
@@ -163,6 +165,9 @@ pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImp
         Arc::new(SideEffect::new("stackoverflow", || {
             // simulate a side-effect via I/O so the compiler cannot optimize this method away
             println!("{}", ackermann(10, 10));
+        })),
+        Arc::new(SideEffect::new("thread", || {
+            std::thread::spawn(|| {}).join().unwrap();
         })),
     ])
 }

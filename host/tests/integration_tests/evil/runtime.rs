@@ -10,6 +10,20 @@ use wasmtime::Trap;
 use crate::integration_tests::evil::test_utils::try_scalar_udfs;
 
 #[tokio::test]
+async fn test_abort() {
+    let udf = udf("abort").await;
+
+    insta::assert_snapshot!(
+        err_call_no_params(&udf).await,
+        @r"
+    call ScalarUdf::invoke_with_args
+    caused by
+    External error: wasm trap: wasm `unreachable` instruction executed
+    ",
+    );
+}
+
+#[tokio::test]
 async fn test_alloc() {
     let udf = udf("alloc").await;
 
@@ -44,6 +58,20 @@ async fn test_alloc_try() {
 
     caused by
     External error: wasm trap: wasm `unreachable` instruction executed
+    ",
+    );
+}
+
+#[tokio::test]
+async fn test_exit() {
+    let udf = udf("exit").await;
+
+    insta::assert_snapshot!(
+        err_call_no_params(&udf).await,
+        @r"
+    call ScalarUdf::invoke_with_args
+    caused by
+    External error: Exited with i32 exit status 1
     ",
     );
 }
@@ -169,6 +197,27 @@ async fn test_stackoverflow() {
     caused by
     External error: wasm trap: call stack exhausted
     ",
+    );
+}
+
+#[tokio::test]
+async fn test_thread() {
+    let udf = udf("thread").await;
+
+    insta::assert_snapshot!(
+        normalize_panic_location(err_call_no_params(&udf).await),
+        @r#"
+    call ScalarUdf::invoke_with_args
+
+    stderr:
+
+    thread '<unnamed>' (2) panicked at <FILE>:<LINE>:<ROW>:
+    failed to spawn thread: Error { kind: Unsupported, message: "operation not supported on this platform" }
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+    caused by
+    External error: wasm trap: wasm `unreachable` instruction executed
+    "#,
     );
 }
 
