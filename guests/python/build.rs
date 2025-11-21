@@ -57,7 +57,8 @@ fn download_wasi_sdk() -> Result<Option<String>, Box<dyn std::error::Error>> {
     const SHA256_WASI_SDK_SYSROOT: &str =
         "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99153a50888f08";
 
-    let downloads_dir = PathBuf::from("downloads");
+    let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("manifest dir"));
+    let downloads_dir = manifest_dir.join("downloads");
     std::fs::create_dir_all(&downloads_dir)?;
 
     let wasi_sysroot_dir = downloads_dir.join("wasi-sysroot");
