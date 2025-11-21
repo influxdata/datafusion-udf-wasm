@@ -1,12 +1,18 @@
 ---
 version: 2
 updates:
+  # daily Cargo updates of direct dependencies
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
       interval: "daily"
     open-pull-requests-limit: 10
-    # NOTE: groups are "match first", and "unmatched dependencies have individual PRs"
+    # Make it also update transitive dependencies in Cargo.lock
+    allow:
+      - dependency-type: "all"
+    # NOTE: Groups are "match first", and "unmatched dependencies have individual PRs".
+    #       By default, groups only match ordinary version updates. Security updates are
+    #       NOT matched.
     groups:
       apache:
         patterns:
@@ -19,6 +25,12 @@ updates:
         patterns:
           - "wasmtime"
           - "wasmtime-*"
+      # Catch-all group to bundle version updates (but not security updates) everything
+      # else into a single PR.
+      rust-other:
+        patterns:
+          - "*"
+          - "*"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
