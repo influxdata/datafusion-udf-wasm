@@ -22,6 +22,8 @@ use arrow::{
 #[cfg(test)]
 use insta as _;
 
+mod compression_check;
+
 /// Convert an [`Array`] to bytes.
 ///
 /// This is done by encoding writing this as a [`RecordBatch`] with a single [`Field`].
@@ -48,6 +50,8 @@ pub fn array2bytes(array: ArrayRef) -> Vec<u8> {
 ///
 /// See [`array2bytes`] for the reverse method and the format description.
 pub fn bytes2array(bytes: &[u8]) -> Result<ArrayRef, ArrowError> {
+    compression_check::detect_compressed_data(bytes)?;
+
     let cursor = Cursor::new(bytes);
     let mut reader = StreamReader::try_new(cursor, None)?;
     let Some(res) = reader.next() else {
