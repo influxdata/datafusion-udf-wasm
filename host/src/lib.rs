@@ -33,7 +33,8 @@ use wasmtime_wasi_http::{
 
 use crate::{
     bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
-    error::{DataFusionResultExt, WasmToDataFusionResultExt},
+    conversion::limits::{CheckedInto, TrustedDataLimits},
+    error::{DataFusionResultExt, WasmToDataFusionResultExt, WitDataFusionResultExt},
     http::{HttpRequestValidator, RejectAllHttpRequests},
     limiter::{Limiter, StaticResourceLimits},
     linker::link,
@@ -50,7 +51,7 @@ use regex as _;
 use wiremock as _;
 
 mod bindings;
-mod conversion;
+pub mod conversion;
 pub mod error;
 pub mod http;
 pub mod limiter;
@@ -263,6 +264,9 @@ pub struct WasmPermissions {
     /// Static resource limits.
     resource_limits: StaticResourceLimits,
 
+    /// Trusted data limits.
+    trusted_data_limits: TrustedDataLimits,
+
     /// Environment variables.
     envs: BTreeMap<String, String>,
 }
@@ -288,6 +292,7 @@ impl Default for WasmPermissions {
             vfs: VfsLimits::default(),
             stderr_bytes: 1024, // 1KB
             resource_limits: StaticResourceLimits::default(),
+            trusted_data_limits: TrustedDataLimits::default(),
             envs: BTreeMap::default(),
         }
     }
@@ -350,6 +355,14 @@ impl WasmPermissions {
         }
     }
 
+    /// Set trusted data limits.
+    pub fn with_trusted_data_limits(self, limits: TrustedDataLimits) -> Self {
+        Self {
+            trusted_data_limits: limits,
+            ..self
+        }
+    }
+
     /// Set virtual filesystem limits.
     pub fn with_vfs_limits(self, limits: VfsLimits) -> Self {
         Self {
@@ -397,6 +410,9 @@ pub struct WasmScalarUdf {
 
     /// Timeout for blocking tasks.
     inplace_blocking_timeout: Duration,
+
+    /// Trusted data limits.
+    trusted_data_limits: TrustedDataLimits,
 
     /// WIT-based bindings that we resolved within the payload.
     bindings: Arc<bindings::Datafusion>,
@@ -553,6 +569,7 @@ impl WasmScalarUdf {
                 "calling scalar_udfs() method failed",
                 Some(&store.data().stderr.contents()),
             )?
+            .convert_err(permissions.trusted_data_limits.clone())
             .context("scalar_udfs")?;
 
         let store = Arc::new(Mutex::new(store));
@@ -581,7 +598,7 @@ impl WasmScalarUdf {
                     "call ScalarUdf::signature",
                     Some(&store_guard.data().stderr.contents()),
                 )?
-                .try_into()?;
+                .checked_into_root(&permissions.trusted_data_limits)?;
 
             let return_type = match &signature.type_signature {
                 TypeSignature::Exact(t) => {
@@ -600,8 +617,9 @@ impl WasmScalarUdf {
                         .context(
                             "call ScalarUdf::return_type",
                             Some(&store_guard.data().stderr.contents()),
-                        )??;
-                    Some(r.try_into()?)
+                        )?
+                        .convert_err(permissions.trusted_data_limits.clone())?;
+                    Some(r.checked_into_root(&permissions.trusted_data_limits)?)
                 }
                 _ => None,
             };
@@ -610,6 +628,7 @@ impl WasmScalarUdf {
                 store: Arc::clone(&store),
                 epoch_task: Arc::clone(&epoch_task),
                 inplace_blocking_timeout,
+                trusted_data_limits: permissions.trusted_data_limits.clone(),
                 bindings: Arc::clone(&bindings),
                 resource,
                 name,
@@ -663,6 +682,7 @@ impl std::fmt::Debug for WasmScalarUdf {
             store,
             epoch_task,
             inplace_blocking_timeout,
+            trusted_data_limits,
             bindings: _,
             resource,
             name,
@@ -675,6 +695,7 @@ impl std::fmt::Debug for WasmScalarUdf {
             .field("store", store)
             .field("epoch_task", epoch_task)
             .field("inplace_blocking_timeout", inplace_blocking_timeout)
+            .field("trusted_data_limits", trusted_data_limits)
             .field("bindings", &"<BINDINGS>")
             .field("resource", resource)
             .field("name", name)
@@ -735,8 +756,9 @@ impl ScalarUDFImpl for WasmScalarUdf {
                     .context(
                         "call ScalarUdf::return_type",
                         Some(&store_guard.data().stderr.contents()),
-                    )??;
-                return_type.try_into()
+                    )?
+                    .convert_err(self.trusted_data_limits.clone())?;
+                return_type.checked_into_root(&self.trusted_data_limits)
             },
             self.inplace_blocking_timeout,
         )
@@ -770,10 +792,11 @@ impl AsyncScalarUDFImpl for WasmScalarUdf {
             .context(
                 "call ScalarUdf::invoke_with_args",
                 Some(&store_guard.data().stderr.contents()),
-            )??;
+            )?
+            .convert_err(self.trusted_data_limits.clone())?;
 
         drop(store_guard);
 
-        return_type.try_into()
+        return_type.checked_into_root(&self.trusted_data_limits)
     }
 }
