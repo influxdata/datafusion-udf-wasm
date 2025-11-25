@@ -8,6 +8,7 @@ use datafusion_expr::ScalarUDFImpl;
 use datafusion_udf_wasm_guest::export;
 
 mod common;
+mod complex;
 mod env;
 mod fs;
 mod net;
@@ -34,6 +35,10 @@ impl Evil {
     /// Get evil, multiplexed by env.
     fn get() -> Self {
         match std::env::var("EVIL").expect("evil specified").as_str() {
+            "complex::udfs_duplicate_names" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::udfs_duplicate_names::udfs),
+            },
             "env" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(env::udfs),

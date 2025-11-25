@@ -2,7 +2,14 @@
 //!
 //!
 //! [DataFusion]: https://datafusion.apache.org/
-use std::{any::Any, collections::BTreeMap, hash::Hash, ops::DerefMut, sync::Arc, time::Duration};
+use std::{
+    any::Any,
+    collections::{BTreeMap, HashSet},
+    hash::Hash,
+    ops::DerefMut,
+    sync::Arc,
+    time::Duration,
+};
 
 use ::http::HeaderName;
 use arrow::datatypes::DataType;
@@ -575,6 +582,7 @@ impl WasmScalarUdf {
         let store = Arc::new(Mutex::new(store));
 
         let mut udfs = Vec::with_capacity(udf_resources.len());
+        let mut names_seen = HashSet::with_capacity(udf_resources.len());
         for resource in udf_resources {
             let mut store_guard = store.lock().await;
             let store2: &mut Store<WasmStateImpl> = &mut store_guard;
@@ -587,6 +595,11 @@ impl WasmScalarUdf {
                     "call ScalarUdf::name",
                     Some(&store_guard.data().stderr.contents()),
                 )?;
+            if !names_seen.insert(name.clone()) {
+                return Err(DataFusionError::External(
+                    format!("non-unique UDF name: '{name}'").into(),
+                ));
+            }
 
             let store2: &mut Store<WasmStateImpl> = &mut store_guard;
             let signature: Signature = bindings
