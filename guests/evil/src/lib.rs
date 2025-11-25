@@ -11,6 +11,7 @@ mod common;
 mod env;
 mod fs;
 mod net;
+mod return_data;
 mod root;
 mod runtime;
 mod spin;
@@ -45,6 +46,10 @@ impl Evil {
             "net" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(net::udfs),
+            },
+            "return_data" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(return_data::udfs),
             },
             "root::invalid_entry" => Self {
                 root: Box::new(root::invalid_entry::root),

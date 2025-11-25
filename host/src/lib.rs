@@ -797,6 +797,20 @@ impl AsyncScalarUDFImpl for WasmScalarUdf {
 
         drop(store_guard);
 
-        return_type.checked_into_root(&self.trusted_data_limits)
+        match return_type.checked_into_root(&self.trusted_data_limits) {
+            Ok(ColumnarValue::Scalar(scalar)) => Ok(ColumnarValue::Scalar(scalar)),
+            Ok(ColumnarValue::Array(array)) if array.len() as u64 != args.number_rows => {
+                Err(DataFusionError::External(
+                    format!(
+                        "UDF returned array of length {} but should produce {} rows",
+                        array.len(),
+                        args.number_rows
+                    )
+                    .into(),
+                ))
+            }
+            Ok(ColumnarValue::Array(array)) => Ok(ColumnarValue::Array(array)),
+            Err(e) => Err(e),
+        }
     }
 }
