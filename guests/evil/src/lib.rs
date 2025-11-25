@@ -43,6 +43,10 @@ impl Evil {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(complex::udfs_duplicate_names::udfs),
             },
+            "complex::udfs_many" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::udfs_many::udfs),
+            },
             "env" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(env::udfs),

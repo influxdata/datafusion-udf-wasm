@@ -8,6 +8,7 @@ use datafusion_expr::{
 
 pub(crate) mod udf_long_name;
 pub(crate) mod udfs_duplicate_names;
+pub(crate) mod udfs_many;
 
 /// UDF with a name
 #[derive(Debug, PartialEq, Eq, Hash)]

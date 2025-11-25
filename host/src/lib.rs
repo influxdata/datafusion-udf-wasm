@@ -274,6 +274,9 @@ pub struct WasmPermissions {
     /// Trusted data limits.
     trusted_data_limits: TrustedDataLimits,
 
+    /// Maximum number of UDFs.
+    max_udfs: usize,
+
     /// Environment variables.
     envs: BTreeMap<String, String>,
 }
@@ -300,6 +303,7 @@ impl Default for WasmPermissions {
             stderr_bytes: 1024, // 1KB
             resource_limits: StaticResourceLimits::default(),
             trusted_data_limits: TrustedDataLimits::default(),
+            max_udfs: 20,
             envs: BTreeMap::default(),
         }
     }
@@ -374,6 +378,19 @@ impl WasmPermissions {
     pub fn with_vfs_limits(self, limits: VfsLimits) -> Self {
         Self {
             vfs: limits,
+            ..self
+        }
+    }
+
+    /// Get the maximum number of UDFs that a payload/guest can produce.
+    pub fn max_udfs(&self) -> usize {
+        self.max_udfs
+    }
+
+    /// Set the maximum number of UDFs that a payload/guest can produce.
+    pub fn with_max_udfs(self, limit: usize) -> Self {
+        Self {
+            max_udfs: limit,
             ..self
         }
     }
@@ -578,6 +595,13 @@ impl WasmScalarUdf {
             )?
             .convert_err(permissions.trusted_data_limits.clone())
             .context("scalar_udfs")?;
+        if udf_resources.len() > permissions.max_udfs {
+            return Err(DataFusionError::ResourcesExhausted(format!(
+                "guest returned too many UDFs: got={}, limit={}",
+                udf_resources.len(),
+                permissions.max_udfs,
+            )));
+        }
 
         let store = Arc::new(Mutex::new(store));
 
