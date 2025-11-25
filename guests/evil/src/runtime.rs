@@ -3,7 +3,9 @@ use std::{hash::Hash, sync::Arc};
 
 use arrow::datatypes::DataType;
 use datafusion_common::{Result as DataFusionResult, ScalarValue};
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
+use datafusion_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature, Volatility,
+};
 
 use crate::common::DynBox;
 
@@ -15,11 +17,6 @@ struct SideEffect {
 
     /// Side effect.
     effect: DynBox<dyn Fn() + Send + Sync>,
-
-    /// Signature of the UDF.
-    ///
-    /// We store this here because [`ScalarUDFImpl::signature`] requires us to return a reference.
-    signature: Signature,
 }
 
 impl SideEffect {
@@ -31,7 +28,6 @@ impl SideEffect {
         Self {
             name,
             effect: DynBox(Box::new(effect)),
-            signature: Signature::uniform(0, vec![], Volatility::Immutable),
         }
     }
 }
@@ -46,7 +42,12 @@ impl ScalarUDFImpl for SideEffect {
     }
 
     fn signature(&self) -> &Signature {
-        &self.signature
+        static S: Signature = Signature {
+            type_signature: TypeSignature::Uniform(0, vec![]),
+            volatility: Volatility::Immutable,
+        };
+
+        &S
     }
 
     fn return_type(&self, _arg_types: &[DataType]) -> DataFusionResult<DataType> {
