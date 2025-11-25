@@ -36,6 +36,10 @@ impl Evil {
     /// Get evil, multiplexed by env.
     fn get() -> Self {
         match std::env::var("EVIL").expect("evil specified").as_str() {
+            "complex::error" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::error::udfs),
+            },
             "complex::udf_long_name" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(complex::udf_long_name::udfs),
