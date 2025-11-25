@@ -5,13 +5,16 @@ use arrow::datatypes::DataType;
 use datafusion_common::{Result as DataFusionResult, ScalarValue};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 
+use crate::common::DynBox;
+
 /// UDF that executes a side effect.
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct SideEffect {
     /// Name.
     name: &'static str,
 
     /// Side effect.
-    effect: Box<dyn Fn() + Send + Sync>,
+    effect: DynBox<dyn Fn() + Send + Sync>,
 
     /// Signature of the UDF.
     ///
@@ -27,39 +30,9 @@ impl SideEffect {
     {
         Self {
             name,
-            effect: Box::new(effect),
+            effect: DynBox(Box::new(effect)),
             signature: Signature::uniform(0, vec![], Volatility::Immutable),
         }
-    }
-}
-
-impl std::fmt::Debug for SideEffect {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            name,
-            effect: _,
-            signature,
-        } = self;
-
-        f.debug_struct("SideEffect")
-            .field("name", name)
-            .field("effect", &"<EFFECT>")
-            .field("signature", signature)
-            .finish()
-    }
-}
-
-impl PartialEq<Self> for SideEffect {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Eq for SideEffect {}
-
-impl Hash for SideEffect {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
     }
 }
 

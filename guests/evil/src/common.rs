@@ -1,6 +1,6 @@
 //! Methods used by multiple payloads.
 
-use std::{hash::Hash, sync::Arc};
+use std::{fmt::Debug, hash::Hash, ops::Deref, sync::Arc};
 
 use arrow::{array::StringArray, datatypes::DataType};
 use datafusion_common::{Result as DataFusionResult, cast::as_string_array};
@@ -21,13 +21,61 @@ pub(crate) fn udfs_empty(_source: String) -> DataFusionResult<Vec<Arc<dyn Scalar
     Ok(vec![])
 }
 
+/// A container that shadows its inner dynamic value.
+///
+/// This is mostly used to simplify the handling of `Box<dyn Fn(...) -> ...>`.
+///
+/// The actual value is ignored for [`Debug`], [`PartialEq`], [`Eq`], and [`Hash`].
+pub(crate) struct DynBox<T>(pub(crate) Box<T>)
+where
+    T: ?Sized;
+
+impl<T> Debug for DynBox<T>
+where
+    T: ?Sized,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("DynBox").finish_non_exhaustive()
+    }
+}
+
+impl<T> PartialEq<Self> for DynBox<T>
+where
+    T: ?Sized,
+{
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+impl<T> Eq for DynBox<T> where T: ?Sized {}
+
+impl<T> Hash for DynBox<T>
+where
+    T: ?Sized,
+{
+    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {}
+}
+
+impl<T> Deref for DynBox<T>
+where
+    T: ?Sized,
+{
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// UDF that produces a string from one input.
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub(crate) struct String1Udf {
     /// Name.
     name: &'static str,
 
     /// String producer.
-    effect: Box<dyn Fn(String) -> Result<String, String> + Send + Sync>,
+    effect: DynBox<dyn Fn(String) -> Result<String, String> + Send + Sync>,
 
     /// Signature of the UDF.
     ///
@@ -43,39 +91,9 @@ impl String1Udf {
     {
         Self {
             name,
-            effect: Box::new(effect),
+            effect: DynBox(Box::new(effect)),
             signature: Signature::uniform(1, vec![DataType::Utf8], Volatility::Immutable),
         }
-    }
-}
-
-impl std::fmt::Debug for String1Udf {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            name,
-            effect: _,
-            signature,
-        } = self;
-
-        f.debug_struct("StringUdf")
-            .field("name", name)
-            .field("effect", &"<EFFECT>")
-            .field("signature", signature)
-            .finish()
-    }
-}
-
-impl PartialEq<Self> for String1Udf {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Eq for String1Udf {}
-
-impl Hash for String1Udf {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
     }
 }
 

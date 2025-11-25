@@ -5,13 +5,16 @@ use arrow::datatypes::DataType;
 use datafusion_common::{Result as DataFusionResult, ScalarValue};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 
+use crate::common::DynBox;
+
 /// UDF that produces a string.
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct StringUdf {
     /// Name.
     name: &'static str,
 
     /// String producer.
-    effect: Box<dyn Fn() -> Option<String> + Send + Sync>,
+    effect: DynBox<dyn Fn() -> Option<String> + Send + Sync>,
 
     /// Signature of the UDF.
     ///
@@ -27,39 +30,9 @@ impl StringUdf {
     {
         Self {
             name,
-            effect: Box::new(effect),
+            effect: DynBox(Box::new(effect)),
             signature: Signature::uniform(0, vec![], Volatility::Immutable),
         }
-    }
-}
-
-impl std::fmt::Debug for StringUdf {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            name,
-            effect: _,
-            signature,
-        } = self;
-
-        f.debug_struct("StringUdf")
-            .field("name", name)
-            .field("effect", &"<EFFECT>")
-            .field("signature", signature)
-            .finish()
-    }
-}
-
-impl PartialEq<Self> for StringUdf {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Eq for StringUdf {}
-
-impl Hash for StringUdf {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
     }
 }
 
