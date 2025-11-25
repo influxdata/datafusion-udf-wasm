@@ -1,4 +1,25 @@
-use crate::integration_tests::evil::test_utils::try_scalar_udfs;
+use datafusion_udf_wasm_host::conversion::limits::TrustedDataLimits;
+
+use crate::integration_tests::evil::test_utils::{try_scalar_udfs, try_scalar_udfs_with_env};
+
+#[tokio::test]
+async fn test_udf_long_name() {
+    let err = try_scalar_udfs_with_env(
+        "complex::udf_long_name",
+        &[(
+            "limit",
+            &TrustedDataLimits::default()
+                .max_identifier_length
+                .to_string(),
+        )],
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @"Resources exhausted: identifier length: got=51, limit=50");
+}
 
 #[tokio::test]
 async fn test_udfs_duplicate_names() {

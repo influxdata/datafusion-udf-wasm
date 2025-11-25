@@ -40,7 +40,7 @@ use wasmtime_wasi_http::{
 
 use crate::{
     bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
-    conversion::limits::{CheckedInto, TrustedDataLimits},
+    conversion::limits::{CheckedInto, ComplexityToken, TrustedDataLimits},
     error::{DataFusionResultExt, WasmToDataFusionResultExt, WitDataFusionResultExt},
     http::{HttpRequestValidator, RejectAllHttpRequests},
     limiter::{Limiter, StaticResourceLimits},
@@ -595,6 +595,8 @@ impl WasmScalarUdf {
                     "call ScalarUdf::name",
                     Some(&store_guard.data().stderr.contents()),
                 )?;
+            ComplexityToken::new(permissions.trusted_data_limits.clone())?
+                .check_identifier(&name)?;
             if !names_seen.insert(name.clone()) {
                 return Err(DataFusionError::External(
                     format!("non-unique UDF name: '{name}'").into(),
