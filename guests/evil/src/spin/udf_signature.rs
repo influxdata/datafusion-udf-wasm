@@ -3,27 +3,15 @@ use std::sync::Arc;
 
 use arrow::datatypes::DataType;
 use datafusion_common::{Result as DataFusionResult, ScalarValue};
-use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
+use datafusion_expr::{
+    ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature, Volatility,
+};
 
 use crate::spin::spin;
 
 /// UDF that spins.
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct SpinUdf {
-    /// Signature of the UDF.
-    ///
-    /// We store this here because [`ScalarUDFImpl::signature`] requires us to return a reference.
-    signature: Signature,
-}
-
-impl SpinUdf {
-    /// Create new  UDF.
-    fn new() -> Self {
-        Self {
-            signature: Signature::uniform(0, vec![], Volatility::Immutable),
-        }
-    }
-}
+struct SpinUdf;
 
 impl ScalarUDFImpl for SpinUdf {
     fn as_any(&self) -> &dyn std::any::Any {
@@ -35,8 +23,14 @@ impl ScalarUDFImpl for SpinUdf {
     }
 
     fn signature(&self) -> &Signature {
+        static S: Signature = Signature {
+            type_signature: TypeSignature::Uniform(0, vec![]),
+            volatility: Volatility::Immutable,
+        };
+
         spin();
-        &self.signature
+
+        &S
     }
 
     fn return_type(&self, _arg_types: &[DataType]) -> DataFusionResult<DataType> {
@@ -53,5 +47,5 @@ impl ScalarUDFImpl for SpinUdf {
 /// The passed `source` is ignored.
 #[expect(clippy::unnecessary_wraps, reason = "public API through export! macro")]
 pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
-    Ok(vec![Arc::new(SpinUdf::new())])
+    Ok(vec![Arc::new(SpinUdf)])
 }
