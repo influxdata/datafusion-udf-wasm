@@ -2,7 +2,14 @@
 //!
 //!
 //! [DataFusion]: https://datafusion.apache.org/
-use std::{any::Any, collections::BTreeMap, hash::Hash, ops::DerefMut, sync::Arc, time::Duration};
+use std::{
+    any::Any,
+    collections::{BTreeMap, HashSet},
+    hash::Hash,
+    ops::DerefMut,
+    sync::Arc,
+    time::Duration,
+};
 
 use ::http::HeaderName;
 use arrow::datatypes::DataType;
@@ -33,7 +40,7 @@ use wasmtime_wasi_http::{
 
 use crate::{
     bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
-    conversion::limits::{CheckedInto, TrustedDataLimits},
+    conversion::limits::{CheckedInto, ComplexityToken, TrustedDataLimits},
     error::{DataFusionResultExt, WasmToDataFusionResultExt, WitDataFusionResultExt},
     http::{HttpRequestValidator, RejectAllHttpRequests},
     limiter::{Limiter, StaticResourceLimits},
@@ -267,6 +274,9 @@ pub struct WasmPermissions {
     /// Trusted data limits.
     trusted_data_limits: TrustedDataLimits,
 
+    /// Maximum number of UDFs.
+    max_udfs: usize,
+
     /// Environment variables.
     envs: BTreeMap<String, String>,
 }
@@ -293,6 +303,7 @@ impl Default for WasmPermissions {
             stderr_bytes: 1024, // 1KB
             resource_limits: StaticResourceLimits::default(),
             trusted_data_limits: TrustedDataLimits::default(),
+            max_udfs: 20,
             envs: BTreeMap::default(),
         }
     }
@@ -367,6 +378,19 @@ impl WasmPermissions {
     pub fn with_vfs_limits(self, limits: VfsLimits) -> Self {
         Self {
             vfs: limits,
+            ..self
+        }
+    }
+
+    /// Get the maximum number of UDFs that a payload/guest can produce.
+    pub fn max_udfs(&self) -> usize {
+        self.max_udfs
+    }
+
+    /// Set the maximum number of UDFs that a payload/guest can produce.
+    pub fn with_max_udfs(self, limit: usize) -> Self {
+        Self {
+            max_udfs: limit,
             ..self
         }
     }
@@ -571,10 +595,18 @@ impl WasmScalarUdf {
             )?
             .convert_err(permissions.trusted_data_limits.clone())
             .context("scalar_udfs")?;
+        if udf_resources.len() > permissions.max_udfs {
+            return Err(DataFusionError::ResourcesExhausted(format!(
+                "guest returned too many UDFs: got={}, limit={}",
+                udf_resources.len(),
+                permissions.max_udfs,
+            )));
+        }
 
         let store = Arc::new(Mutex::new(store));
 
         let mut udfs = Vec::with_capacity(udf_resources.len());
+        let mut names_seen = HashSet::with_capacity(udf_resources.len());
         for resource in udf_resources {
             let mut store_guard = store.lock().await;
             let store2: &mut Store<WasmStateImpl> = &mut store_guard;
@@ -587,6 +619,13 @@ impl WasmScalarUdf {
                     "call ScalarUdf::name",
                     Some(&store_guard.data().stderr.contents()),
                 )?;
+            ComplexityToken::new(permissions.trusted_data_limits.clone())?
+                .check_identifier(&name)?;
+            if !names_seen.insert(name.clone()) {
+                return Err(DataFusionError::External(
+                    format!("non-unique UDF name: '{name}'").into(),
+                ));
+            }
 
             let store2: &mut Store<WasmStateImpl> = &mut store_guard;
             let signature: Signature = bindings
