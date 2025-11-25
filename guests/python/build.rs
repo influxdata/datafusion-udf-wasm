@@ -86,7 +86,7 @@ fn download_wasi_sdk() -> Result<Option<String>, Box<dyn std::error::Error>> {
         .map_err(|e| format!("failed to download WASI SDK: {}", e))?;
 
     let mut file = File::create(&tar_gz_path)?;
-    let mut reader = response.into_reader();
+    let mut reader = response.into_body().into_reader();
     let mut hasher = sha2::Sha256::new();
     let mut buffer = [0u8; 8192];
     while let Ok(n) = reader.read(&mut buffer)
