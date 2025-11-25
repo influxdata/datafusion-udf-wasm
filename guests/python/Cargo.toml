@@ -21,7 +21,7 @@ wasip2.workspace = true
 flate2 = "1.0.35"
 sha2 = "0.10.8"
 tar.workspace = true
-ureq = "2.12.1"
+ureq = "3.1.4"
 walkdir = "2.5.0"
 
 [lints]
