@@ -6,6 +6,7 @@ use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature, Volatility,
 };
 
+pub(crate) mod error;
 pub(crate) mod udf_long_name;
 pub(crate) mod udfs_duplicate_names;
 pub(crate) mod udfs_many;
