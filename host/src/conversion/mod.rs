@@ -1,4 +1,6 @@
 //! Conversion routes from/to WIT types.
+use std::collections::HashMap;
+
 use arrow::{
     array::ArrayRef,
     datatypes::{DataType, Field, IntervalUnit, TimeUnit, UnionFields, UnionMode},
@@ -94,7 +96,7 @@ fn check_union_fields(
     let token = token.sub()?;
 
     for (_idx, field) in ufields.iter() {
-        check_field(field, &token)?;
+        check_field(field, &token).context("field")?;
     }
     Ok(())
 }
@@ -167,26 +169,26 @@ fn check_data_type(
         | DataType::FixedSizeList(field, _)
         | DataType::LargeList(field)
         | DataType::LargeListView(field)
-        | DataType::Map(field, _) => check_field(field, &token),
+        | DataType::Map(field, _) => check_field(field, &token).context("field"),
         DataType::Struct(fields) => {
-            for field in fields {
-                check_field(field, &token)?;
+            for (idx, field) in fields.iter().enumerate() {
+                check_field(field, &token).with_context(|| format!("field {idx}"))?;
             }
             Ok(())
         }
         DataType::Union(ufields, umode) => {
-            check_union_fields(ufields, &token)?;
-            check_union_mode(umode, &token)?;
+            check_union_fields(ufields, &token).context("union fields")?;
+            check_union_mode(umode, &token).context("union mode")?;
             Ok(())
         }
         DataType::Dictionary(dt1, dt2) => {
-            check_data_type(dt1, &token)?;
-            check_data_type(dt2, &token)?;
+            check_data_type(dt1, &token).context("key type")?;
+            check_data_type(dt2, &token).context("value type")?;
             Ok(())
         }
         DataType::RunEndEncoded(field1, field2) => {
-            check_field(field1, &token)?;
-            check_field(field2, &token)?;
+            check_field(field1, &token).context("REE run-ends field")?;
+            check_field(field2, &token).context("REE value field")?;
             Ok(())
         }
     }
@@ -196,12 +198,24 @@ fn check_data_type(
 fn check_field(field: &Field, token: &limits::ComplexityToken) -> datafusion_common::Result<()> {
     let token = token.sub()?;
 
-    token.check_identifier(field.name())?;
-    check_data_type(field.data_type(), &token)?;
+    token.check_identifier(field.name()).context("field name")?;
+    check_data_type(field.data_type(), &token).context("field data type")?;
+    check_metadata(field.metadata(), &token).context("field metadata")?;
 
-    for (k, v) in field.metadata() {
-        token.check_identifier(k)?;
-        token.check_aux_string(v)?;
+    Ok(())
+}
+
+/// Check metadata complexity.
+fn check_metadata(
+    md: &HashMap<String, String>,
+    token: &limits::ComplexityToken,
+) -> datafusion_common::Result<()> {
+    let token = token.sub()?;
+
+    for (k, v) in md {
+        let token = token.sub()?;
+        token.check_identifier(k).context("metadata key")?;
+        token.check_aux_string(v).context("metadata value")?;
     }
 
     Ok(())
