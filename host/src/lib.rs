@@ -620,7 +620,8 @@ impl WasmScalarUdf {
                     Some(&store_guard.data().stderr.contents()),
                 )?;
             ComplexityToken::new(permissions.trusted_data_limits.clone())?
-                .check_identifier(&name)?;
+                .check_identifier(&name)
+                .context("UDF name")?;
             if !names_seen.insert(name.clone()) {
                 return Err(DataFusionError::External(
                     format!("non-unique UDF name: '{name}'").into(),
