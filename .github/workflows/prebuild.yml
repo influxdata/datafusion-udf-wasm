@@ -1,0 +1,101 @@
+---
+name: Prebuild
+description: Pre-Build WASM Binaries
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_dispatch:
+
+permissions:
+  attestations: write
+  contents: write
+  id-token: write
+
+env:
+  # Disable incremental compilation to avoid overhead.
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # do NOT load any caches here, we want a clean, freestanding build w/o stateful dependencies!
+
+      - name: Set Timestamp
+        id: timestamp
+        run: |
+          ts_iso="$(date -u -Is)"
+          ts_tag="$(echo "$ts_iso" | sed 's/+00:00//g' | sed 's/:/-/g')"
+
+          echo "iso=$ts_iso"
+          echo "tag=$ts_tag"
+
+          echo TIMESTAMP_ISO="$ts_iso" >> "$GITHUB_OUTPUT"
+          echo TIMESTAMP_TAG="$ts_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
+        with:
+          fetch-depth: 1
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
+
+      - name: Fetch main branch
+        run: git fetch --depth=1 origin main
+
+      - name: Install `just`
+        uses: taiki-e/install-action@763e3324d4fd026c9bd284c504378585777a87d5  # v2
+        with:
+          tool: just
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9  # master
+        with:
+          components: clippy, rustfmt
+          toolchain: stable
+          targets: wasm32-wasip2
+
+      - name: build "add one" example (debug)
+        run: just guests::rust::build-add-one-debug
+
+      - name: build "add one" example (release)
+        run: just guests::rust::build-add-one-release
+
+      - name: build python guest (debug)
+        run: just guests::python::build-debug
+
+      - name: build python guest (release)
+        run: just guests::python::build-release
+
+      # we need unique file names for the release
+      - name: stage release files
+        run: |
+          mkdir out
+          mv target/wasm32-wasip2/debug/examples/add_one.wasm             out/example_add_one.debug.wasm
+          mv target/wasm32-wasip2/release/examples/add_one.wasm           out/example_add_one.release.wasm
+          mv target/wasm32-wasip2/debug/datafusion_udf_wasm_python.wasm   out/datafusion_udf_wasm_python.debug.wasm
+          mv target/wasm32-wasip2/release/datafusion_udf_wasm_python.wasm out/datafusion_udf_wasm_python.release.wasm
+
+      - name: attestation
+        id: attestation
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a  # v3
+        with:
+          subject-path: out/*.wasm
+
+      - name: publish release
+        uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe  # v2
+        with:
+          body: |
+            WASM guest binaries.
+
+            **Commit:** [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/tree/${{ github.sha }})
+            **Build Timestamp:** `${{ steps.timestamp.outputs.TIMESTAMP_ISO }}`
+            **Build Attestation:** <${{ steps.attestation.outputs.attestation-url }}>
+          preserve_order: true
+          files: out/*.wasm
+          name: "WASM Binaries ${{ steps.timestamp.outputs.TIMESTAMP_ISO }}"
+          tag_name: "wasm-binaries/${{ steps.timestamp.outputs.TIMESTAMP_TAG }}/${{ github.sha }}"
+          fail_on_unmatched_files: true
+          target_commitish: "${{ github.sha }}"
+          make_latest: false
