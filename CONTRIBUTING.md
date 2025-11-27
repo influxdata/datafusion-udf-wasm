@@ -105,8 +105,27 @@ Current thread 0x012bd368 (most recent call first):
 
 Then the [Python Standard Library] was not found or not bundled correctly. You may try to wipe `guests/python/download`. If that does not help, open a ticket.
 
+## Pre-built WASM Binaries
+We offer pre-built WASM guest binaries to simplify integration into other software artifacts. This way you only need to depend on the host crates and don't need a WASI compilation toolchain. It also cuts build and test times, since you can include a release-optimized guest even during development and CI. Release-optimized guests are smaller and can be JIT-compiled and executed faster.
+
+You find WASM builds published as releases named "WASM Binaries".
+
+### Triggering A Build
+To trigger a build, you need write access to this repository. Then use the [GitHub CLI] tool and run:
+
+```console
+$ gh workflow run Prebuild
+```
+
+This will trigger the build on the `main` branch. If you need a different branch, use:
+
+```console
+$ gh workflow run Prebuild --ref <BRANCH_NAME>
+```
+
 
 [cargo-deny]: https://embarkstudios.github.io/cargo-deny/
+[GitHub CLI]: https://cli.github.com/
 [insta]: https://insta.rs/
 [just]: https://github.com/casey/just
 [Python]: https://www.python.org/
