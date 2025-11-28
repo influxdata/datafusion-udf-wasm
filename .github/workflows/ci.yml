@@ -15,34 +15,6 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Free disk space
-        run: |
-          df -h
-
-          to_delete=(
-            "/lib/firefox"
-            "/lib/google-cloud-sdk"
-            "/lib/jvm"
-            "/lib/llvm-16"
-            "/lib/llvm-17"
-            "/opt/az"
-            "/opt/google"
-            "/opt/hostedtoolcache/CodeQL"
-            "/opt/hostedtoolcache/PyPy"
-            "/opt/hostedtoolcache/Ruby"
-            "/opt/hostedtoolcache/go"
-            "/opt/hostedtoolcache/node"
-            "/opt/microsoft"
-            "/opt/pipx"
-            "/usr/share/swift"
-          )
-          for d in "${to_delete[@]}"; do
-            echo "delete $d"
-            sudo rm -rf "$d"
-          done
-
-          df -h
-
       - name: Checkout
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
         with:
@@ -50,6 +22,9 @@ jobs:
 
       - name: Fetch main branch
         run: git fetch --depth=1 origin main
+
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       - name: Install `yamllint`
         run: pip install --requirement=.github/workflows/requirements.txt
