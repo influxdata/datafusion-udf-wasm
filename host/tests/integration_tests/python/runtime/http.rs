@@ -11,8 +11,8 @@ use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl,
 };
 use datafusion_udf_wasm_host::{
-    WasmPermissions, WasmScalarUdf,
-    http::{AllowCertainHttpRequests, HttpRequestValidator, Matcher},
+    AllowCertainHttpRequests, HttpRequestMatcher, HttpRequestValidator, WasmPermissions,
+    WasmScalarUdf,
 };
 use tokio::runtime::Handle;
 use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
@@ -40,7 +40,7 @@ def perform_request(url: str) -> str:
         .await;
 
     let mut permissions = AllowCertainHttpRequests::new();
-    permissions.allow(Matcher {
+    permissions.allow(HttpRequestMatcher {
         method: http::Method::GET,
         host: server.address().ip().to_string().into(),
         port: server.address().port(),
@@ -474,8 +474,8 @@ impl Default for TestCase {
 }
 
 impl TestCase {
-    fn matcher(&self, server: &MockServer) -> Matcher {
-        Matcher {
+    fn matcher(&self, server: &MockServer) -> HttpRequestMatcher {
+        HttpRequestMatcher {
             method: self.method.try_into().unwrap(),
             host: server.address().ip().to_string().into(),
             port: server.address().port(),
@@ -639,7 +639,7 @@ def perform_request(url: str) -> str:
     // deliberately use a runtime what we are going to throw away later to prevent tricks like `Handle::current`
     let udf = rt_tmp.block_on(async {
         let mut permissions = AllowCertainHttpRequests::new();
-        permissions.allow(Matcher {
+        permissions.allow(HttpRequestMatcher {
             method: http::Method::GET,
             host: server.address().ip().to_string().into(),
             port: server.address().port(),

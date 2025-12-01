@@ -37,14 +37,16 @@ use wasmtime_wasi::{
     },
 };
 
-pub use crate::vfs::limits::VfsLimits;
 use crate::{
     error::LimitExceeded,
     limiter::Limiter,
-    vfs::path::{PathSegment, PathTraversal},
+    vfs::{
+        limits::VfsLimits,
+        path::{PathSegment, PathTraversal},
+    },
 };
 
-mod limits;
+pub(crate) mod limits;
 mod path;
 
 /// Shared version of [`VfsNode`].

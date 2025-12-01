@@ -40,14 +40,23 @@ use wasmtime_wasi_http::{
 
 use crate::{
     bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
-    conversion::limits::{CheckedInto, ComplexityToken, TrustedDataLimits},
+    conversion::limits::{CheckedInto, ComplexityToken},
     error::{DataFusionResultExt, WasmToDataFusionResultExt, WitDataFusionResultExt},
-    http::{HttpRequestValidator, RejectAllHttpRequests},
     ignore_debug::IgnoreDebug,
-    limiter::{Limiter, StaticResourceLimits},
+    limiter::Limiter,
     linker::link,
     tokio_helpers::async_in_sync_context,
-    vfs::{VfsCtxView, VfsLimits, VfsState, VfsView},
+    vfs::{VfsCtxView, VfsState, VfsView},
+};
+
+pub use crate::{
+    conversion::limits::TrustedDataLimits,
+    http::{
+        AllowCertainHttpRequests, HttpMethod, HttpRequestMatcher, HttpRequestRejected,
+        HttpRequestValidator, RejectAllHttpRequests,
+    },
+    limiter::StaticResourceLimits,
+    vfs::limits::VfsLimits,
 };
 
 // unused-crate-dependencies false positives
@@ -59,14 +68,14 @@ use regex as _;
 use wiremock as _;
 
 mod bindings;
-pub mod conversion;
-pub mod error;
-pub mod http;
+mod conversion;
+mod error;
+mod http;
 mod ignore_debug;
-pub mod limiter;
+mod limiter;
 mod linker;
 mod tokio_helpers;
-pub mod vfs;
+mod vfs;
 
 /// State of the WASM payload.
 #[derive(Debug)]

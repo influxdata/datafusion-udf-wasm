@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use datafusion_execution::memory_pool::UnboundedMemoryPool;
-use datafusion_udf_wasm_host::{WasmPermissions, WasmScalarUdf, vfs::VfsLimits};
+use datafusion_udf_wasm_host::{VfsLimits, WasmPermissions, WasmScalarUdf};
 
 use crate::integration_tests::evil::test_utils::{
     IO_RUNTIME, MEMORY_LIMIT, component, try_scalar_udfs, try_scalar_udfs_with_env,
