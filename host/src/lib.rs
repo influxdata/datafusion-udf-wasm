@@ -43,6 +43,7 @@ use crate::{
     conversion::limits::{CheckedInto, ComplexityToken, TrustedDataLimits},
     error::{DataFusionResultExt, WasmToDataFusionResultExt, WitDataFusionResultExt},
     http::{HttpRequestValidator, RejectAllHttpRequests},
+    ignore_debug::IgnoreDebug,
     limiter::{Limiter, StaticResourceLimits},
     linker::link,
     tokio_helpers::async_in_sync_context,
@@ -61,12 +62,14 @@ mod bindings;
 pub mod conversion;
 pub mod error;
 pub mod http;
+mod ignore_debug;
 pub mod limiter;
 mod linker;
 mod tokio_helpers;
 pub mod vfs;
 
 /// State of the WASM payload.
+#[derive(Debug)]
 struct WasmStateImpl {
     /// Virtual filesystem for the WASM payload.
     ///
@@ -82,7 +85,7 @@ struct WasmStateImpl {
     stderr: MemoryOutputPipe,
 
     /// WASI context.
-    wasi_ctx: WasiCtx,
+    wasi_ctx: IgnoreDebug<WasiCtx>,
 
     /// WASI HTTP context.
     wasi_http_ctx: WasiHttpCtx,
@@ -95,30 +98,6 @@ struct WasmStateImpl {
 
     /// Handle to tokio I/O runtime.
     io_rt: Handle,
-}
-
-impl std::fmt::Debug for WasmStateImpl {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            vfs_state,
-            limiter,
-            stderr,
-            wasi_ctx: _,
-            wasi_http_ctx: _,
-            resource_table,
-            http_validator,
-            io_rt,
-        } = self;
-        f.debug_struct("WasmStateImpl")
-            .field("vfs_state", vfs_state)
-            .field("limiter", limiter)
-            .field("stderr", stderr)
-            .field("wasi_ctx", &"<WASI_CTX>")
-            .field("resource_table", resource_table)
-            .field("http_validator", http_validator)
-            .field("io_rt", io_rt)
-            .finish()
-    }
 }
 
 impl WasiView for WasmStateImpl {
@@ -423,6 +402,7 @@ impl WasmPermissions {
 ///
 ///
 /// [runtime]: tokio::runtime::Runtime
+#[derive(Debug)]
 pub struct WasmScalarUdf {
     /// Mutable state.
     ///
@@ -430,6 +410,7 @@ pub struct WasmScalarUdf {
     store: Arc<Mutex<Store<WasmStateImpl>>>,
 
     /// Background task that keeps the WASM epoch timer running.
+    #[expect(dead_code)]
     epoch_task: Arc<JoinSet<()>>,
 
     /// Timeout for blocking tasks.
@@ -439,7 +420,7 @@ pub struct WasmScalarUdf {
     trusted_data_limits: TrustedDataLimits,
 
     /// WIT-based bindings that we resolved within the payload.
-    bindings: Arc<bindings::Datafusion>,
+    bindings: IgnoreDebug<Arc<bindings::Datafusion>>,
 
     /// Resource handle for the Scalar UDF within the VM.
     ///
@@ -543,7 +524,7 @@ impl WasmScalarUdf {
             vfs_state,
             limiter,
             stderr,
-            wasi_ctx: wasi_ctx_builder.build(),
+            wasi_ctx: wasi_ctx_builder.build().into(),
             wasi_http_ctx: WasiHttpCtx::new(),
             resource_table: ResourceTable::new(),
             http_validator: Arc::clone(&permissions.http),
@@ -669,7 +650,7 @@ impl WasmScalarUdf {
                 epoch_task: Arc::clone(&epoch_task),
                 inplace_blocking_timeout,
                 trusted_data_limits: permissions.trusted_data_limits.clone(),
-                bindings: Arc::clone(&bindings),
+                bindings: Arc::clone(&bindings).into(),
                 resource,
                 name,
                 id: Uuid::new_v4(),
@@ -713,36 +694,6 @@ impl WasmScalarUdf {
         }
 
         Ok(())
-    }
-}
-
-impl std::fmt::Debug for WasmScalarUdf {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self {
-            store,
-            epoch_task,
-            inplace_blocking_timeout,
-            trusted_data_limits,
-            bindings: _,
-            resource,
-            name,
-            id,
-            signature,
-            return_type,
-        } = self;
-
-        f.debug_struct("WasmScalarUdf")
-            .field("store", store)
-            .field("epoch_task", epoch_task)
-            .field("inplace_blocking_timeout", inplace_blocking_timeout)
-            .field("trusted_data_limits", trusted_data_limits)
-            .field("bindings", &"<BINDINGS>")
-            .field("resource", resource)
-            .field("name", name)
-            .field("id", id)
-            .field("signature", signature)
-            .field("return_type", return_type)
-            .finish()
     }
 }
 
