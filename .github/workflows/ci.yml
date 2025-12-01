@@ -30,7 +30,7 @@ jobs:
         run: pip install --requirement=.github/workflows/requirements.txt
 
       - name: Install `cargo-deny` & `just` & 'typos'
-        uses: taiki-e/install-action@763e3324d4fd026c9bd284c504378585777a87d5  # v2
+        uses: taiki-e/install-action@3575e532701a5fc614b0c842e4119af4cc5fd16d  # v2
         with:
           tool: cargo-deny,just,typos
 
@@ -45,7 +45,7 @@ jobs:
           targets: wasm32-wasip2
 
       - name: Rust Cache
-        uses: Swatinem/rust-cache@f13886b937689c021905a6b90929199931d60db1  # v2.8.1
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5  # v2.8.2
 
       # Swatinem/rust-cache does NOT cache docs, see
       # https://github.com/Swatinem/rust-cache/issues/208
