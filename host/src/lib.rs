@@ -4,7 +4,6 @@
 //! [DataFusion]: https://datafusion.apache.org/
 use std::{any::Any, collections::HashSet, hash::Hash, ops::DerefMut, sync::Arc, time::Duration};
 
-use ::http::HeaderName;
 use arrow::datatypes::DataType;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_execution::memory_pool::MemoryPool;
@@ -18,18 +17,8 @@ use wasmtime::{
     Engine, Store, UpdateDeadline,
     component::{Component, ResourceAny},
 };
-use wasmtime_wasi::{
-    ResourceTable, WasiCtx, WasiCtxView, WasiView, async_trait, p2::pipe::MemoryOutputPipe,
-};
-use wasmtime_wasi_http::{
-    HttpResult, WasiHttpCtx, WasiHttpView,
-    bindings::http::types::ErrorCode as HttpErrorCode,
-    body::HyperOutgoingBody,
-    types::{
-        DEFAULT_FORBIDDEN_HEADERS, HostFutureIncomingResponse, OutgoingRequestConfig,
-        default_send_request_handler,
-    },
-};
+use wasmtime_wasi::{ResourceTable, WasiCtx, async_trait, p2::pipe::MemoryOutputPipe};
+use wasmtime_wasi_http::WasiHttpCtx;
 
 use crate::{
     bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
@@ -38,8 +27,9 @@ use crate::{
     ignore_debug::IgnoreDebug,
     limiter::Limiter,
     linker::link,
+    state::WasmStateImpl,
     tokio_helpers::async_in_sync_context,
-    vfs::{VfsCtxView, VfsState, VfsView},
+    vfs::VfsState,
 };
 
 pub use crate::{
@@ -69,112 +59,9 @@ mod ignore_debug;
 mod limiter;
 mod linker;
 mod permissions;
+mod state;
 mod tokio_helpers;
 mod vfs;
-
-/// State of the WASM payload.
-#[derive(Debug)]
-struct WasmStateImpl {
-    /// Virtual filesystem for the WASM payload.
-    ///
-    /// This filesystem is provided to the payload in memory with read-write support.
-    vfs_state: VfsState,
-
-    /// Resource limiter.
-    limiter: Limiter,
-
-    /// A limited buffer for stderr.
-    ///
-    /// This is especially useful for when the payload crashes.
-    stderr: MemoryOutputPipe,
-
-    /// WASI context.
-    wasi_ctx: IgnoreDebug<WasiCtx>,
-
-    /// WASI HTTP context.
-    wasi_http_ctx: WasiHttpCtx,
-
-    /// Resource tables.
-    resource_table: ResourceTable,
-
-    /// HTTP request validator.
-    http_validator: Arc<dyn HttpRequestValidator>,
-
-    /// Handle to tokio I/O runtime.
-    io_rt: Handle,
-}
-
-impl WasiView for WasmStateImpl {
-    fn ctx(&mut self) -> WasiCtxView<'_> {
-        WasiCtxView {
-            ctx: &mut self.wasi_ctx,
-            table: &mut self.resource_table,
-        }
-    }
-}
-
-impl WasiHttpView for WasmStateImpl {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.wasi_http_ctx
-    }
-
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.resource_table
-    }
-
-    fn send_request(
-        &mut self,
-        mut request: hyper::Request<HyperOutgoingBody>,
-        config: OutgoingRequestConfig,
-    ) -> HttpResult<HostFutureIncomingResponse> {
-        let _guard = self.io_rt.enter();
-
-        // Python `requests` sends this so we allow it but later drop it from the actual request.
-        request.headers_mut().remove(hyper::header::CONNECTION);
-
-        // technically we could return an error straight away, but `urllib3` doesn't handle that super well, so we
-        // create a future and validate the error in there (before actually starting the request of course)
-
-        let validator = Arc::clone(&self.http_validator);
-        let handle = wasmtime_wasi::runtime::spawn(async move {
-            // yes, that's another layer of futures. The WASI interface is somewhat nested.
-            let fut = async {
-                validator
-                    .validate(&request, config.use_tls)
-                    .map_err(|_| HttpErrorCode::HttpRequestDenied)?;
-
-                log::debug!(
-                    "UDF HTTP request: {} {}",
-                    request.method().as_str(),
-                    request.uri(),
-                );
-                default_send_request_handler(request, config).await
-            };
-
-            Ok(fut.await)
-        });
-
-        Ok(HostFutureIncomingResponse::pending(handle))
-    }
-
-    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
-        // Python `requests` sends this so we allow it but later drop it from the actual request.
-        if name == hyper::header::CONNECTION {
-            return false;
-        }
-
-        DEFAULT_FORBIDDEN_HEADERS.contains(name)
-    }
-}
-
-impl VfsView for WasmStateImpl {
-    fn vfs(&mut self) -> VfsCtxView<'_> {
-        VfsCtxView {
-            table: &mut self.resource_table,
-            vfs_state: &mut self.vfs_state,
-        }
-    }
-}
 
 /// Create WASM engine.
 fn create_engine() -> DataFusionResult<Engine> {

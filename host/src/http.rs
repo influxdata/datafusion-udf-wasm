@@ -1,9 +1,21 @@
 //! Interfaces for HTTP interactions of the guest.
 
-use std::{borrow::Cow, collections::HashSet, fmt};
+use std::{borrow::Cow, collections::HashSet, fmt, sync::Arc};
 
+use http::HeaderName;
 pub use http::Method as HttpMethod;
-use wasmtime_wasi_http::body::HyperOutgoingBody;
+use wasmtime_wasi::ResourceTable;
+use wasmtime_wasi_http::{
+    HttpResult, WasiHttpCtx, WasiHttpView,
+    bindings::http::types::ErrorCode as HttpErrorCode,
+    body::HyperOutgoingBody,
+    types::{
+        DEFAULT_FORBIDDEN_HEADERS, HostFutureIncomingResponse, OutgoingRequestConfig,
+        default_send_request_handler,
+    },
+};
+
+use crate::state::WasmStateImpl;
 
 /// Validates if an outgoing HTTP interaction is allowed.
 ///
@@ -111,6 +123,60 @@ impl fmt::Display for HttpRequestRejected {
 }
 
 impl std::error::Error for HttpRequestRejected {}
+
+impl WasiHttpView for WasmStateImpl {
+    fn ctx(&mut self) -> &mut WasiHttpCtx {
+        &mut self.wasi_http_ctx
+    }
+
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.resource_table
+    }
+
+    fn send_request(
+        &mut self,
+        mut request: hyper::Request<HyperOutgoingBody>,
+        config: OutgoingRequestConfig,
+    ) -> HttpResult<HostFutureIncomingResponse> {
+        let _guard = self.io_rt.enter();
+
+        // Python `requests` sends this so we allow it but later drop it from the actual request.
+        request.headers_mut().remove(hyper::header::CONNECTION);
+
+        // technically we could return an error straight away, but `urllib3` doesn't handle that super well, so we
+        // create a future and validate the error in there (before actually starting the request of course)
+
+        let validator = Arc::clone(&self.http_validator);
+        let handle = wasmtime_wasi::runtime::spawn(async move {
+            // yes, that's another layer of futures. The WASI interface is somewhat nested.
+            let fut = async {
+                validator
+                    .validate(&request, config.use_tls)
+                    .map_err(|_| HttpErrorCode::HttpRequestDenied)?;
+
+                log::debug!(
+                    "UDF HTTP request: {} {}",
+                    request.method().as_str(),
+                    request.uri(),
+                );
+                default_send_request_handler(request, config).await
+            };
+
+            Ok(fut.await)
+        });
+
+        Ok(HostFutureIncomingResponse::pending(handle))
+    }
+
+    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
+        // Python `requests` sends this so we allow it but later drop it from the actual request.
+        if name == hyper::header::CONNECTION {
+            return false;
+        }
+
+        DEFAULT_FORBIDDEN_HEADERS.contains(name)
+    }
+}
 
 #[cfg(test)]
 mod test {
