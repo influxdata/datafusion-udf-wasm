@@ -44,7 +44,7 @@ sqlparser = { version = "0.58.0", default-features = false, features = [
 tar = { version = "0.4.44", default-features = false }
 tempfile = { version = "3.23.0", default-features = false }
 tokio = { version = "1.48.0", default-features = false }
-uuid = { version = "1.18.1", default-features = false, features = ["v4"] }
+uuid = { version = "1.19.0", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
 wasmtime = { version = "39.0.1", default-features = false, features = [
   "async",
