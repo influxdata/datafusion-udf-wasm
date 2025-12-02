@@ -1,4 +1,4 @@
-//! Conversion routes from/to WIT types.
+//! Conversion routes from/to [WIT types](crate::bindings).
 use std::collections::HashMap;
 
 use arrow::{
@@ -15,7 +15,7 @@ use crate::{
     error::DataFusionResultExt,
 };
 
-pub mod limits;
+pub(crate) mod limits;
 
 impl CheckedFrom<wit_types::DataFusionError> for DataFusionError {
     fn checked_from(

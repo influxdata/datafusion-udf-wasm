@@ -7,7 +7,7 @@ use arrow::{
 use datafusion_common::config::ConfigOptions;
 use datafusion_execution::memory_pool::{GreedyMemoryPool, UnboundedMemoryPool};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, async_udf::AsyncScalarUDFImpl};
-use datafusion_udf_wasm_host::{WasmPermissions, WasmScalarUdf, vfs::VfsLimits};
+use datafusion_udf_wasm_host::{VfsLimits, WasmPermissions, WasmScalarUdf};
 use regex::Regex;
 use tokio::runtime::Handle;
 

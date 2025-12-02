@@ -3,7 +3,7 @@ use std::sync::Arc;
 use arrow::datatypes::{DataType, Field};
 use datafusion_common::{DataFusionError, config::ConfigOptions};
 use datafusion_expr::{ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl};
-use datafusion_udf_wasm_host::{WasmPermissions, conversion::limits::TrustedDataLimits};
+use datafusion_udf_wasm_host::{TrustedDataLimits, WasmPermissions};
 
 use crate::integration_tests::evil::test_utils::{try_scalar_udfs, try_scalar_udfs_with_env};
 

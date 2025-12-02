@@ -12,7 +12,7 @@ use datafusion_expr::{
     async_udf::AsyncScalarUDFImpl,
 };
 use datafusion_udf_wasm_host::{
-    WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf, limiter::StaticResourceLimits,
+    StaticResourceLimits, WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf,
 };
 use tokio::{runtime::Handle, sync::OnceCell};
 
