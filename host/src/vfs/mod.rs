@@ -40,6 +40,7 @@ use wasmtime_wasi::{
 use crate::{
     error::LimitExceeded,
     limiter::Limiter,
+    state::WasmStateImpl,
     vfs::{
         limits::VfsLimits,
         path::{PathSegment, PathTraversal},
@@ -48,6 +49,15 @@ use crate::{
 
 pub(crate) mod limits;
 mod path;
+
+impl VfsView for WasmStateImpl {
+    fn vfs(&mut self) -> VfsCtxView<'_> {
+        VfsCtxView {
+            table: &mut self.resource_table,
+            vfs_state: &mut self.vfs_state,
+        }
+    }
+}
 
 /// Shared version of [`VfsNode`].
 type SharedVfsNode = Arc<RwLock<VfsNode>>;
