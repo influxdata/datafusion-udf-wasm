@@ -25,7 +25,10 @@ pub mod format;
 /// - it's a rather complex type
 /// - embedding it into a struct allows us to implement some convenience methods
 type ComponentFnInner<'a> = Box<
-    dyn Fn() -> Pin<Box<dyn Future<Output = &'a WasmComponentPrecompiled> + Send + 'a>> + Sync + 'a,
+    dyn Fn() -> Pin<Box<dyn Future<Output = &'a WasmComponentPrecompiled> + Send + 'a>>
+        + Send
+        + Sync
+        + 'a,
 >;
 
 /// A type-erased async function that returns a [`WasmComponentPrecompiled`].
@@ -62,7 +65,7 @@ impl<'a> ComponentFn<'a> {
     /// ```
     pub fn lazy<F, Fut>(f: F) -> Self
     where
-        F: Fn() -> Fut + Sync + 'a,
+        F: Fn() -> Fut + Send + Sync + 'a,
         Fut: Future<Output = &'a WasmComponentPrecompiled> + Send + 'a,
     {
         Self(Box::new(move || Box::pin(f())))
@@ -274,4 +277,19 @@ fn expression_into_str(expr: &Expr) -> DataFusionResult<&str> {
             "expected value expression".to_string(),
         )),
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    const fn assert_send<T: Send>() {}
+    const fn assert_sync<T: Sync>() {}
+
+    const _: () = assert_send::<ComponentFn<'static>>();
+    const _: () = assert_send::<ComponentFn<'static>>();
+    const _: () = assert_sync::<Lang<'static>>();
+    const _: () = assert_sync::<Lang<'static>>();
+    const _: () = assert_send::<UdfQueryParser<'static>>();
+    const _: () = assert_sync::<UdfQueryParser<'static>>();
 }
