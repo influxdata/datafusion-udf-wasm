@@ -3,11 +3,9 @@
 
 use std::collections::HashMap;
 use std::pin::Pin;
-use std::sync::Arc;
 
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
 use datafusion_execution::TaskContext;
-use datafusion_execution::memory_pool::MemoryPool;
 use datafusion_sql::parser::{DFParserBuilder, Statement};
 use sqlparser::ast::{CreateFunctionBody, Expr, Statement as SqlStatement, Value};
 use sqlparser::dialect::dialect_from_str;
@@ -130,7 +128,6 @@ impl<'a> UdfQueryParser<'a> {
         udf_query: &str,
         permissions: &WasmPermissions,
         io_rt: Handle,
-        memory_pool: &Arc<dyn MemoryPool>,
         task_ctx: &TaskContext,
     ) -> DataFusionResult<ParsedQuery> {
         let (code, sql) = Self::parse_inner(udf_query, task_ctx)?;
@@ -151,7 +148,7 @@ impl<'a> UdfQueryParser<'a> {
                         lang.component.get().await,
                         permissions,
                         io_rt.clone(),
-                        memory_pool,
+                        task_ctx.memory_pool(),
                         code,
                     )
                     .await?,

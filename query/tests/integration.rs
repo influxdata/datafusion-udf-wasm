@@ -7,11 +7,11 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use datafusion::prelude::{DataFrame, SessionContext};
+use datafusion::prelude::{DataFrame, SessionConfig, SessionContext};
 use datafusion_common::{
     Result as DataFusionResult, assert_batches_eq, test_util::batches_to_string,
 };
-use datafusion_execution::memory_pool::UnboundedMemoryPool;
+use datafusion_execution::{memory_pool::UnboundedMemoryPool, runtime_env::RuntimeEnv};
 use datafusion_udf_wasm_host::WasmPermissions;
 use datafusion_udf_wasm_query::{
     ComponentFn, Lang, ParsedQuery, UdfQueryParser,
@@ -52,7 +52,7 @@ def add_one(x: int) -> int:
 SELECT add_one(1);
 "#;
 
-    let ctx = SessionContext::new();
+    let ctx = session_ctx();
     let formatter = Box::new(NoOpFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
@@ -67,7 +67,6 @@ SELECT add_one(1);
             query,
             &WasmPermissions::new(),
             Handle::current(),
-            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -108,7 +107,7 @@ def multiply_two(x: int) -> int:
 SELECT add_one(1), multiply_two(3);
 "#;
 
-    let ctx = SessionContext::new();
+    let ctx = session_ctx();
     let formatter = Box::new(NoOpFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
@@ -123,7 +122,6 @@ SELECT add_one(1), multiply_two(3);
             query,
             &WasmPermissions::new(),
             Handle::current(),
-            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -160,7 +158,7 @@ def multiply_two(x: int) -> int:
 SELECT add_one(1), multiply_two(3);
 "#;
 
-    let ctx = SessionContext::new();
+    let ctx = session_ctx();
     let formatter = Box::new(NoOpFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
@@ -175,7 +173,6 @@ SELECT add_one(1), multiply_two(3);
             query,
             &WasmPermissions::new(),
             Handle::current(),
-            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -206,7 +203,7 @@ AS '';
 SELECT add_one(1)
 "#;
 
-    let ctx = SessionContext::new();
+    let ctx = session_ctx();
     let formatter = Box::new(NoOpFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
@@ -221,7 +218,6 @@ SELECT add_one(1)
             query,
             &WasmPermissions::new(),
             Handle::current(),
-            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -247,7 +243,7 @@ def add_one(x: int) -> int:
 EXPLAIN SELECT add_one(1);
 "#;
 
-    let ctx = SessionContext::new();
+    let ctx = session_ctx();
     let formatter = Box::new(NoOpFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
@@ -262,7 +258,6 @@ EXPLAIN SELECT add_one(1);
             query,
             &WasmPermissions::new(),
             Handle::current(),
-            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -303,7 +298,7 @@ async fn test_strip_indentation_everything_indented() {
     ];
     let query = query_lines.join("\n");
 
-    let ctx = SessionContext::new();
+    let ctx = session_ctx();
     let formatter = Box::new(StripIndentationFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
@@ -318,7 +313,6 @@ async fn test_strip_indentation_everything_indented() {
             &query,
             &WasmPermissions::new(),
             Handle::current(),
-            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -354,7 +348,7 @@ async fn test_strip_indentation_empty_lines_not_indented() {
     ];
     let query = query_lines.join("\n");
 
-    let ctx = SessionContext::new();
+    let ctx = session_ctx();
     let formatter = Box::new(StripIndentationFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
@@ -369,7 +363,6 @@ async fn test_strip_indentation_empty_lines_not_indented() {
             &query,
             &WasmPermissions::new(),
             Handle::current(),
-            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -404,7 +397,7 @@ async fn test_strip_indentation_python_further_indented() {
     ];
     let query = query_lines.join("\n");
 
-    let ctx = SessionContext::new();
+    let ctx = session_ctx();
     let formatter = Box::new(StripIndentationFormatter);
 
     let parser = UdfQueryParser::new(HashMap::from_iter([(
@@ -419,7 +412,6 @@ async fn test_strip_indentation_python_further_indented() {
             &query,
             &WasmPermissions::new(),
             Handle::current(),
-            &(Arc::new(UnboundedMemoryPool::default()) as _),
             ctx.task_ctx().as_ref(),
         )
         .await
@@ -438,4 +430,15 @@ async fn test_strip_indentation_python_further_indented() {
         ],
         &batch
     );
+}
+
+/// Get session context.
+fn session_ctx() -> SessionContext {
+    SessionContext::new_with_config_rt(
+        SessionConfig::new(),
+        Arc::new(RuntimeEnv {
+            memory_pool: Arc::new(UnboundedMemoryPool::default()),
+            ..Default::default()
+        }),
+    )
 }
