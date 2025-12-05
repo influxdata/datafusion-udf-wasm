@@ -16,7 +16,7 @@ Links:
 - <https://github.com/python/cpython/tree/main/Tools/wasm>
 - <https://devguide.python.org/getting-started/setup-building/#wasi>
 - <https://github.com/psf/webassembly>
-- <https://github.com/brettcannon/cpython-wasi-build/releases>
+- <https://github.com/influxdata/cpython-wasi-build/releases>
 
 Pros:
 - Official project, so it has a somewhat stable future and it is easier to get buy-in from the community
