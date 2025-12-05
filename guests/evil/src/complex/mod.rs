@@ -1,5 +1,4 @@
-//! UDF that spins forever when [`ScalarUDFImpl::return_type`] is called.
-use std::sync::Arc;
+//! Overly complex data emitted by the payload.
 
 use arrow::datatypes::DataType;
 use datafusion_common::{Result as DataFusionResult, ScalarValue};
@@ -7,19 +6,25 @@ use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature, Volatility,
 };
 
-use crate::spin::spin;
+pub(crate) mod error;
+pub(crate) mod many_inputs;
+pub(crate) mod return_type;
+pub(crate) mod return_value;
+pub(crate) mod udf_long_name;
+pub(crate) mod udfs_duplicate_names;
+pub(crate) mod udfs_many;
 
-/// UDF that spins.
+/// UDF with a name
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct SpinUdf;
+struct NamedUdf(String);
 
-impl ScalarUDFImpl for SpinUdf {
+impl ScalarUDFImpl for NamedUdf {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn name(&self) -> &str {
-        "spin"
+        &self.0
     }
 
     fn signature(&self) -> &Signature {
@@ -32,19 +37,10 @@ impl ScalarUDFImpl for SpinUdf {
     }
 
     fn return_type(&self, _arg_types: &[DataType]) -> DataFusionResult<DataType> {
-        spin();
         Ok(DataType::Null)
     }
 
     fn invoke_with_args(&self, _args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
         Ok(ColumnarValue::Scalar(ScalarValue::Null))
     }
-}
-
-/// Returns our evil UDFs.
-///
-/// The passed `source` is ignored.
-#[expect(clippy::unnecessary_wraps, reason = "public API through export! macro")]
-pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
-    Ok(vec![Arc::new(SpinUdf)])
 }

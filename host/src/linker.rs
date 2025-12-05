@@ -10,8 +10,8 @@ use wasmtime::{
 use wasmtime_wasi::{ResourceTable, WasiView};
 
 use crate::{
-    WasmStateImpl,
     bindings::Datafusion,
+    state::WasmStateImpl,
     vfs::{HasFs, VfsView},
 };
 

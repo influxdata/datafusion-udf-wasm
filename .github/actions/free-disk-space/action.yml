@@ -1,0 +1,9 @@
+---
+name: Free Disk Space
+description: Delete a bunch of unnecessary data from the pre-built GitHub runner images.
+runs:
+  using: "composite"
+  steps:
+    - name: Free Disk Space
+      run: ${{ github.action_path }}/free.sh
+      shell: bash

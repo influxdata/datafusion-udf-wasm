@@ -8,9 +8,11 @@ use datafusion_expr::ScalarUDFImpl;
 use datafusion_udf_wasm_guest::export;
 
 mod common;
+mod complex;
 mod env;
 mod fs;
 mod net;
+mod return_data;
 mod root;
 mod runtime;
 mod spin;
@@ -34,6 +36,34 @@ impl Evil {
     /// Get evil, multiplexed by env.
     fn get() -> Self {
         match std::env::var("EVIL").expect("evil specified").as_str() {
+            "complex::error" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::error::udfs),
+            },
+            "complex::many_inputs" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::many_inputs::udfs),
+            },
+            "complex::return_type" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::return_type::udfs),
+            },
+            "complex::return_value" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::return_value::udfs),
+            },
+            "complex::udf_long_name" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::udf_long_name::udfs),
+            },
+            "complex::udfs_duplicate_names" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::udfs_duplicate_names::udfs),
+            },
+            "complex::udfs_many" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::udfs_many::udfs),
+            },
             "env" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(env::udfs),
@@ -45,6 +75,10 @@ impl Evil {
             "net" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(net::udfs),
+            },
+            "return_data" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(return_data::udfs),
             },
             "root::invalid_entry" => Self {
                 root: Box::new(root::invalid_entry::root),

@@ -31,11 +31,11 @@ datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0" }
 datafusion-udf-wasm-host = { path = "host", version = "0.1.0" }
 datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0" }
 datafusion-udf-wasm-query = { path = "query", version = "0.1.0" }
-http = { version = "1.3.1", default-features = false }
+http = { version = "1.4.0", default-features = false }
 hyper = { version = "1.8", default-features = false }
-insta = { version = "1.44.1", "default-features" = false }
-log = { version = "0.4.28", default-features = false }
-pyo3 = { version = "0.27.1", default-features = false, features = ["macros"] }
+insta = { version = "1.44.3", "default-features" = false }
+log = { version = "0.4.29", default-features = false }
+pyo3 = { version = "0.27.2", default-features = false, features = ["macros"] }
 regex = { version = "1", default-features = false }
 sqlparser = { version = "0.58.0", default-features = false, features = [
   "std",
@@ -44,18 +44,18 @@ sqlparser = { version = "0.58.0", default-features = false, features = [
 tar = { version = "0.4.44", default-features = false }
 tempfile = { version = "3.23.0", default-features = false }
 tokio = { version = "1.48.0", default-features = false }
-uuid = { version = "1.18.1", default-features = false, features = ["v4"] }
+uuid = { version = "1.19.0", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
-wasmtime = { version = "39.0.0", default-features = false, features = [
+wasmtime = { version = "39.0.1", default-features = false, features = [
   "async",
   "cranelift"
 ] }
-wasmtime-wasi = { version = "39.0.0", default-features = false }
-wasmtime-wasi-http = { version = "39.0.0", default-features = false, features = [
+wasmtime-wasi = { version = "39.0.1", default-features = false }
+wasmtime-wasi-http = { version = "39.0.1", default-features = false, features = [
   "default-send-request"
 ] }
 wasmtime-wasi-io = { version = "39.0.0", default-features = false }
-wit-bindgen = { version = "0.48", default-features = false, features = [
+wit-bindgen = { version = "0.49", default-features = false, features = [
   "macros"
 ] }
 

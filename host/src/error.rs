@@ -2,6 +2,11 @@
 use datafusion_common::DataFusionError;
 use wasmtime_wasi::p2::FsError;
 
+use crate::{
+    bindings::exports::datafusion_udf_wasm::udf::types::{self as wit_types},
+    conversion::limits::{CheckedFrom, ComplexityToken, TrustedDataLimits},
+};
+
 /// Extension for [`wasmtime::Error`].
 pub(crate) trait WasmToDataFusionErrorExt {
     /// Add context to error.
@@ -63,6 +68,13 @@ pub(crate) trait DataFusionResultExt {
     ///
     /// See [`DataFusionError::context`].
     fn context(self, description: impl Into<String>) -> Result<Self::T, DataFusionError>;
+
+    /// Add description to error.
+    ///
+    /// See [`DataFusionError::context`].
+    fn with_context<F>(self, description: F) -> Result<Self::T, DataFusionError>
+    where
+        F: FnOnce() -> String;
 }
 
 impl<T, E> DataFusionResultExt for Result<T, E>
@@ -73,6 +85,36 @@ where
 
     fn context(self, description: impl Into<String>) -> Result<Self::T, DataFusionError> {
         self.map_err(|e| e.into().context(description))
+    }
+
+    fn with_context<F>(self, description: F) -> Result<Self::T, DataFusionError>
+    where
+        F: FnOnce() -> String,
+    {
+        self.map_err(|e| e.into().context(description()))
+    }
+}
+
+/// Extension trait for [`Result`] containing a [`wit_types::DataFusionError`].
+pub(crate) trait WitDataFusionResultExt {
+    /// [`Ok`] payload.
+    type T;
+
+    /// Convert error to [`DataFusionError`]
+    fn convert_err(self, limits: TrustedDataLimits) -> Result<Self::T, DataFusionError>;
+}
+
+impl<T> WitDataFusionResultExt for Result<T, wit_types::DataFusionError> {
+    type T = T;
+
+    fn convert_err(self, limits: TrustedDataLimits) -> Result<Self::T, DataFusionError> {
+        self.map_err(|e| DataFusionError::checked_from(e, ComplexityToken::new(limits)?))
+            .map_err(|e| match e {
+                // this is the error that we've got from the WASM guest
+                Ok(e) => e,
+                // the conversion failed, also with a DataFusionError
+                Err(e) => e.context("convert error from WASI"),
+            })
     }
 }
 

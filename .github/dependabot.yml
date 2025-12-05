@@ -23,13 +23,14 @@ updates:
           - "sqlparser"
       wasmtime:
         patterns:
+          - "cranelift-*"
+          - "pulley-*"
           - "wasmtime"
           - "wasmtime-*"
       # Catch-all group to bundle version updates (but not security updates) everything
       # else into a single PR.
       rust-other:
         patterns:
-          - "*"
           - "*"
   - package-ecosystem: "github-actions"
     directory: "/"

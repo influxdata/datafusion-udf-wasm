@@ -1,25 +1,24 @@
-//! UDF that spins forever when [`ScalarUDFImpl::return_type`] is called.
+//! Payload that returns invalid data.
+
 use std::sync::Arc;
 
-use arrow::datatypes::DataType;
-use datafusion_common::{Result as DataFusionResult, ScalarValue};
+use arrow::{array::StringArray, datatypes::DataType};
+use datafusion_common::error::Result as DataFusionResult;
 use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, TypeSignature, Volatility,
 };
 
-use crate::spin::spin;
-
-/// UDF that spins.
+/// UDF that return the wrong number of rows.
 #[derive(Debug, PartialEq, Eq, Hash)]
-struct SpinUdf;
+struct WrongNumberOfRows;
 
-impl ScalarUDFImpl for SpinUdf {
+impl ScalarUDFImpl for WrongNumberOfRows {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 
     fn name(&self) -> &str {
-        "spin"
+        "wrong-number-of-rows"
     }
 
     fn signature(&self) -> &Signature {
@@ -32,12 +31,15 @@ impl ScalarUDFImpl for SpinUdf {
     }
 
     fn return_type(&self, _arg_types: &[DataType]) -> DataFusionResult<DataType> {
-        spin();
-        Ok(DataType::Null)
+        Ok(DataType::Utf8)
     }
 
-    fn invoke_with_args(&self, _args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
-        Ok(ColumnarValue::Scalar(ScalarValue::Null))
+    fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
+        Ok(ColumnarValue::Array(Arc::new(
+            (0..=args.number_rows)
+                .map(|idx| Some(idx.to_string()))
+                .collect::<StringArray>(),
+        )))
     }
 }
 
@@ -46,5 +48,5 @@ impl ScalarUDFImpl for SpinUdf {
 /// The passed `source` is ignored.
 #[expect(clippy::unnecessary_wraps, reason = "public API through export! macro")]
 pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
-    Ok(vec![Arc::new(SpinUdf)])
+    Ok(vec![Arc::new(WrongNumberOfRows)])
 }
