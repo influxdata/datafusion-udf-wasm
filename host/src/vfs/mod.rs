@@ -1,11 +1,12 @@
 //! Virtual File System.
 //!
-//! This provides a very crude, read-only in-mem virtual file system for the WASM guests.
+//! This provides a basic in-memory virtual file system for the WASM guests with write support.
 //!
-//! The data gets populated via a TAR container.
+//! The initial data gets populated via a TAR container, and guests can then create, modify, and truncate files
+//! within the VFS. All changes are constrained by configurable limits to prevent DoS attacks.
 //!
-//! While this implementation has rather limited functionality, it is sufficient to get a Python guest interpreter
-//! running.
+//! While this implementation has limited functionality compared to a full filesystem, it supports
+//! the essential operations needed for Python guest interpreter and other use cases.
 
 use std::{
     collections::HashMap,
@@ -15,6 +16,7 @@ use std::{
         Arc, RwLock, Weak,
         atomic::{AtomicU64, Ordering},
     },
+    time::{Duration, Instant},
 };
 
 use rand::Rng;
@@ -260,12 +262,62 @@ pub(crate) struct VfsState {
 
     /// Current allocation of inodes.
     inodes_allocation: Allocation,
+
+    /// Current allocation of storage bytes.
+    storage_allocation: Allocation,
+
+    /// Write operation rate limiter.
+    write_rate_limiter: WriteRateLimiter,
+}
+
+/// Rate limiter for write operations to prevent DoS attacks.
+#[derive(Debug)]
+struct WriteRateLimiter {
+    /// Window start time.
+    window_start: Instant,
+    /// Number of operations in current window.
+    ops_count: u32,
+    /// Maximum operations per second.
+    max_ops_per_sec: u32,
+}
+
+impl WriteRateLimiter {
+    /// Create a new rate limiter.
+    fn new(max_ops_per_sec: u32) -> Self {
+        Self {
+            window_start: Instant::now(),
+            ops_count: 0,
+            max_ops_per_sec,
+        }
+    }
+
+    /// Check if a write operation is allowed.
+    fn check_write_allowed(&mut self) -> Result<(), FsError> {
+        let now = Instant::now();
+        let window_duration = Duration::from_secs(1);
+
+        // Reset window if needed
+        if now.duration_since(self.window_start) >= window_duration {
+            self.window_start = now;
+            self.ops_count = 0;
+        }
+
+        // Check rate limit
+        if self.ops_count >= self.max_ops_per_sec {
+            return Err(FsError::trap(ErrorCode::Busy));
+        }
+
+        self.ops_count += 1;
+        Ok(())
+    }
 }
 
 impl VfsState {
     /// Create a new empty VFS.
     pub(crate) fn new(limits: VfsLimits) -> Self {
         let inodes_allocation = Allocation::new("inodes", limits.inodes);
+        let storage_allocation = Allocation::new("storage", limits.max_storage_bytes);
+        let write_rate_limiter = WriteRateLimiter::new(limits.max_write_ops_per_sec);
 
         Self {
             root: Arc::new(RwLock::new(VfsNode {
@@ -277,6 +329,8 @@ impl VfsState {
             metadata_hash_key: rand::rng().random(),
             limits,
             inodes_allocation,
+            storage_allocation,
+            write_rate_limiter,
         }
     }
 
@@ -393,6 +447,81 @@ struct VfsDirectoryStream {
     entries: std::iter::Fuse<std::vec::IntoIter<DirectoryEntry>>,
 }
 
+/// In-memory output stream for VFS writes.
+#[derive(Debug)]
+struct VfsOutputStream {
+    /// File node being written to.
+    node: SharedVfsNode,
+    /// Current write offset.
+    offset: u64,
+    /// Buffer for collecting writes.
+    write_buffer: Vec<u8>,
+}
+
+impl VfsOutputStream {
+    /// Create a new VFS output stream.
+    fn new(node: SharedVfsNode, offset: u64) -> Self {
+        Self {
+            node,
+            offset,
+            write_buffer: Vec::new(),
+        }
+    }
+
+    /// Write data to the stream buffer.
+    fn write_data(&mut self, data: &[u8]) -> Result<u64, FsError> {
+        self.write_buffer.extend_from_slice(data);
+        Ok(data.len() as u64)
+    }
+
+    /// Flush buffered data to the file.
+    fn flush_to_file(&mut self, vfs_state: &mut VfsState) -> Result<(), FsError> {
+        if self.write_buffer.is_empty() {
+            return Ok(());
+        }
+
+        // Check rate limit
+        vfs_state.write_rate_limiter.check_write_allowed()?;
+
+        let mut node_guard = self.node.write().unwrap();
+        match &mut node_guard.kind {
+            VfsNodeKind::File { content } => {
+                let new_end = self.offset + self.write_buffer.len() as u64;
+
+                // Check file size limit
+                if new_end > vfs_state.limits.max_file_size {
+                    return Err(FsError::trap(ErrorCode::InsufficientMemory));
+                }
+
+                // Calculate storage change
+                let old_size = content.len() as u64;
+                let new_size = new_end.max(old_size);
+                let size_change = new_size.saturating_sub(old_size);
+
+                // Check storage limit
+                if size_change > 0 {
+                    vfs_state.storage_allocation.inc(size_change)?;
+                }
+
+                // Resize content if needed
+                if new_end as usize > content.len() {
+                    content.resize(new_end as usize, 0);
+                }
+
+                // Write the data
+                let start_offset = self.offset as usize;
+                let end_offset = start_offset + self.write_buffer.len();
+                content[start_offset..end_offset].copy_from_slice(&self.write_buffer);
+
+                self.offset = new_end;
+                self.write_buffer.clear();
+                Ok(())
+            }
+            VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
+        }
+    }
+}
+
 /// Provide file system access to given state.
 pub(crate) trait VfsView {
     /// Provide vfs access.
@@ -434,6 +563,52 @@ impl<'a> VfsCtxView<'a> {
         };
         VfsNode::traverse(start, directions)
     }
+
+    /// Create a new file at the given path.
+    fn create_node_at(&mut self, res: Resource<Descriptor>, path: &str) -> FsResult<SharedVfsNode> {
+        let parent = self.node(res)?;
+        let (is_root, directions) = PathTraversal::parse(path, &self.vfs_state.limits)?;
+
+        let mut directions = directions.collect::<Vec<_>>();
+
+        let name = match directions
+            .pop()
+            .ok_or_else(|| FsError::trap(ErrorCode::Invalid))??
+        {
+            PathTraversal::Down(segment) => segment,
+            _ => return Err(FsError::trap(ErrorCode::Invalid)),
+        };
+
+        let parent_start = if is_root {
+            Arc::clone(&self.vfs_state.root)
+        } else {
+            parent
+        };
+        let parent_node = VfsNode::traverse(parent_start, directions.into_iter())?;
+
+        // Check if file already exists
+        let mut parent_guard = parent_node.write().unwrap();
+        match &mut parent_guard.kind {
+            VfsNodeKind::Directory { children } => {
+                if children.contains_key(&name) {
+                    return Err(FsError::trap(ErrorCode::Exist));
+                }
+
+                let file_node = Arc::new(RwLock::new(VfsNode {
+                    kind: VfsNodeKind::File {
+                        content: Vec::new(),
+                    },
+                    parent: Some(Arc::downgrade(&parent_node)),
+                }));
+
+                self.vfs_state.inodes_allocation.inc(1)?;
+
+                children.insert(name, Arc::clone(&file_node));
+                Ok(file_node)
+            }
+            VfsNodeKind::File { .. } => Err(FsError::trap(ErrorCode::NotDirectory)),
+        }
+    }
 }
 
 impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
@@ -471,6 +646,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         _self_: Resource<Descriptor>,
         _offset: Filesize,
     ) -> FsResult<Resource<OutputStream>> {
+        // For now, return ReadOnly until we fully implement stream-based writes
         Err(FsError::trap(ErrorCode::ReadOnly))
     }
 
@@ -478,6 +654,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         &mut self,
         _self_: Resource<Descriptor>,
     ) -> FsResult<Resource<OutputStream>> {
+        // For now, return ReadOnly until we fully implement stream-based writes
         Err(FsError::trap(ErrorCode::ReadOnly))
     }
 
@@ -509,8 +686,42 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         })
     }
 
-    async fn set_size(&mut self, _self_: Resource<Descriptor>, _size: Filesize) -> FsResult<()> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+    async fn set_size(&mut self, self_: Resource<Descriptor>, size: Filesize) -> FsResult<()> {
+        // Check if descriptor has write permissions
+        let desc = self.get_descriptor(self_)?;
+        if !desc.flags.contains(DescriptorFlags::WRITE) {
+            return Err(FsError::trap(ErrorCode::BadDescriptor));
+        }
+
+        let node = Arc::clone(&desc.node);
+
+        // Check rate limit
+        self.vfs_state.write_rate_limiter.check_write_allowed()?;
+
+        let mut node_guard = node.write().unwrap();
+        match &mut node_guard.kind {
+            VfsNodeKind::File { content } => {
+                // Check file size limit
+                if size > self.vfs_state.limits.max_file_size {
+                    return Err(FsError::trap(ErrorCode::InsufficientMemory));
+                }
+
+                let old_size = content.len() as u64;
+                let new_size = size;
+
+                if new_size > old_size {
+                    // Growing the file - check storage limit
+                    let size_increase = new_size - old_size;
+                    self.vfs_state.storage_allocation.inc(size_increase)?;
+                }
+
+                // Resize the content
+                content.resize(size as usize, 0);
+
+                Ok(())
+            }
+            VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
+        }
     }
 
     async fn set_times(
@@ -549,11 +760,55 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     async fn write(
         &mut self,
-        _self_: Resource<Descriptor>,
-        _buffer: Vec<u8>,
-        _offset: Filesize,
+        self_: Resource<Descriptor>,
+        buffer: Vec<u8>,
+        offset: Filesize,
     ) -> FsResult<Filesize> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        // Check if descriptor has write permissions
+        let desc = self.get_descriptor(self_)?;
+        if !desc.flags.contains(DescriptorFlags::WRITE) {
+            return Err(FsError::trap(ErrorCode::BadDescriptor));
+        }
+
+        let node = Arc::clone(&desc.node);
+
+        // Check rate limit
+        self.vfs_state.write_rate_limiter.check_write_allowed()?;
+
+        let mut node_guard = node.write().unwrap();
+        match &mut node_guard.kind {
+            VfsNodeKind::File { content } => {
+                let new_end = offset + buffer.len() as u64;
+
+                // Check file size limit
+                if new_end > self.vfs_state.limits.max_file_size {
+                    return Err(FsError::trap(ErrorCode::InsufficientMemory));
+                }
+
+                // Calculate storage change
+                let old_size = content.len() as u64;
+                let new_size = new_end.max(old_size);
+                let size_change = new_size.saturating_sub(old_size);
+
+                // Check storage limit
+                if size_change > 0 {
+                    self.vfs_state.storage_allocation.inc(size_change)?;
+                }
+
+                // Resize content if needed
+                if new_end as usize > content.len() {
+                    content.resize(new_end as usize, 0);
+                }
+
+                // Write the data
+                let start_offset = offset as usize;
+                let end_offset = start_offset + buffer.len();
+                content[start_offset..end_offset].copy_from_slice(&buffer);
+
+                Ok(buffer.len() as u64)
+            }
+            VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
+        }
     }
 
     async fn read_directory(
@@ -648,15 +903,93 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         open_flags: OpenFlags,
         flags: DescriptorFlags,
     ) -> FsResult<Resource<Descriptor>> {
-        // Handle write-like flags
-        if open_flags.intersects(OpenFlags::CREATE | OpenFlags::TRUNCATE)
-            || flags.intersects(DescriptorFlags::MUTATE_DIRECTORY | DescriptorFlags::WRITE)
-        {
-            return Err(FsError::trap(ErrorCode::ReadOnly));
-        }
+        // Get the base node we're working from
+        let base_node = self.node(self_)?;
 
-        // get node
-        let node = self.node_at(self_, &path)?;
+        // Parse the path
+        let (is_root, directions) = PathTraversal::parse(&path, &self.vfs_state.limits)?;
+        let start = if is_root {
+            Arc::clone(&self.vfs_state.root)
+        } else {
+            base_node
+        };
+
+        // Handle CREATE flag - create new file if it doesn't exist
+        let node = if open_flags.contains(OpenFlags::CREATE) {
+            match VfsNode::traverse(Arc::clone(&start), directions) {
+                Ok(existing_node) => {
+                    // File exists, handle EXCLUSIVE flag
+                    if open_flags.contains(OpenFlags::EXCLUSIVE) {
+                        return Err(FsError::trap(ErrorCode::Exist));
+                    }
+                    existing_node
+                }
+                Err(_) => {
+                    // File doesn't exist, create it
+                    if flags.intersects(DescriptorFlags::MUTATE_DIRECTORY) {
+                        return Err(FsError::trap(ErrorCode::ReadOnly));
+                    }
+
+                    // Parse path again for creation
+                    let (is_root, directions) =
+                        PathTraversal::parse(&path, &self.vfs_state.limits)?;
+                    let mut directions = directions.collect::<Vec<_>>();
+                    let name = match directions
+                        .pop()
+                        .ok_or_else(|| FsError::trap(ErrorCode::Invalid))??
+                    {
+                        PathTraversal::Down(segment) => segment,
+                        _ => return Err(FsError::trap(ErrorCode::Invalid)),
+                    };
+
+                    let parent_start = if is_root {
+                        Arc::clone(&self.vfs_state.root)
+                    } else {
+                        Arc::clone(&start)
+                    };
+                    let parent_node = VfsNode::traverse(parent_start, directions.into_iter())?;
+
+                    // Check if file already exists
+                    let mut parent_guard = parent_node.write().unwrap();
+                    match &mut parent_guard.kind {
+                        VfsNodeKind::Directory { children } => {
+                            if children.contains_key(&name) {
+                                return Err(FsError::trap(ErrorCode::Exist));
+                            }
+
+                            let file_node = Arc::new(RwLock::new(VfsNode {
+                                kind: VfsNodeKind::File {
+                                    content: Vec::new(),
+                                },
+                                parent: Some(Arc::downgrade(&parent_node)),
+                            }));
+
+                            self.vfs_state.inodes_allocation.inc(1)?;
+                            children.insert(name, Arc::clone(&file_node));
+                            file_node
+                        }
+                        VfsNodeKind::File { .. } => {
+                            return Err(FsError::trap(ErrorCode::NotDirectory));
+                        }
+                    }
+                }
+            }
+        } else {
+            // No CREATE flag, file must exist
+            VfsNode::traverse(start, directions)?
+        };
+
+        // Handle TRUNCATE flag
+        if open_flags.contains(OpenFlags::TRUNCATE) && flags.contains(DescriptorFlags::WRITE) {
+            let mut node_guard = node.write().unwrap();
+            match &mut node_guard.kind {
+                VfsNodeKind::File { content } => {
+                    content.clear();
+                    content.shrink_to_fit();
+                }
+                VfsNodeKind::Directory { .. } => return Err(FsError::trap(ErrorCode::IsDirectory)),
+            }
+        }
 
         // Create descriptor
         let new_desc = VfsDescriptor { node, flags };
@@ -838,4 +1171,302 @@ pub(crate) struct HasFs;
 
 impl HasData for HasFs {
     type Data<'a> = VfsCtxView<'a>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasmtime::component::Resource;
+    use wasmtime_wasi::ResourceTable;
+
+    #[tokio::test]
+    async fn test_vfs_write_functionality() {
+        use filesystem::types::HostDescriptor;
+
+        // Create VFS with default limits
+        let limits = VfsLimits::default();
+        let mut vfs_state = VfsState::new(limits);
+        let mut resource_table = ResourceTable::new();
+
+        // Create VfsCtxView
+        let mut vfs_ctx = VfsCtxView {
+            table: &mut resource_table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // Helper function to create a new root descriptor
+        let create_root_descriptor = |vfs_ctx: &mut VfsCtxView<'_>| -> Resource<Descriptor> {
+            let root_desc = VfsDescriptor {
+                node: Arc::clone(&vfs_ctx.vfs_state.root),
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            };
+            let root_resource = vfs_ctx.table.push(root_desc).unwrap();
+            root_resource.cast()
+        };
+
+        // Test 1: Create a new file using open_at with CREATE flag
+        let file_path = "test_file.txt".to_string();
+        let open_flags = OpenFlags::CREATE;
+        let file_flags = DescriptorFlags::READ | DescriptorFlags::WRITE;
+
+        let root_descriptor1 = create_root_descriptor(&mut vfs_ctx);
+        let file_descriptor = vfs_ctx
+            .open_at(
+                root_descriptor1,
+                PathFlags::empty(),
+                file_path.clone(),
+                open_flags,
+                file_flags,
+            )
+            .await
+            .expect("Failed to create file");
+
+        // Create multiple file descriptors since Resources are moved when used
+        let file_descriptor_write1 = file_descriptor;
+        let root_descriptor2 = create_root_descriptor(&mut vfs_ctx);
+        let file_descriptor_read1 = vfs_ctx
+            .open_at(
+                root_descriptor2,
+                PathFlags::empty(),
+                file_path.clone(),
+                open_flags,
+                file_flags,
+            )
+            .await
+            .expect("Failed to open file for reading");
+
+        // Test 2: Write data to the file
+        let test_data = b"Hello, VFS World!".to_vec();
+        let bytes_written = vfs_ctx
+            .write(file_descriptor_write1, test_data.clone(), 0)
+            .await
+            .expect("Failed to write data");
+
+        assert_eq!(bytes_written, test_data.len() as u64);
+
+        // Test 3: Read the data back
+        let (read_data, eof) = vfs_ctx
+            .read(file_descriptor_read1, test_data.len() as u64, 0)
+            .await
+            .expect("Failed to read data");
+
+        assert_eq!(read_data, test_data);
+        assert!(eof);
+
+        // Create new descriptors for append test
+        let root_descriptor3 = create_root_descriptor(&mut vfs_ctx);
+        let file_descriptor_write2 = vfs_ctx
+            .open_at(
+                root_descriptor3,
+                PathFlags::empty(),
+                file_path.clone(),
+                open_flags,
+                file_flags,
+            )
+            .await
+            .expect("Failed to open file for appending");
+        let root_descriptor4 = create_root_descriptor(&mut vfs_ctx);
+        let file_descriptor_read2 = vfs_ctx
+            .open_at(
+                root_descriptor4,
+                PathFlags::empty(),
+                file_path.clone(),
+                open_flags,
+                file_flags,
+            )
+            .await
+            .expect("Failed to open file for reading");
+
+        // Test 4: Append more data
+        let append_data = b" More content!".to_vec();
+        let bytes_written = vfs_ctx
+            .write(
+                file_descriptor_write2,
+                append_data.clone(),
+                test_data.len() as u64,
+            )
+            .await
+            .expect("Failed to append data");
+
+        assert_eq!(bytes_written, append_data.len() as u64);
+
+        // Test 5: Read all data
+        let total_len = test_data.len() + append_data.len();
+        let (all_data, eof) = vfs_ctx
+            .read(file_descriptor_read2, total_len as u64, 0)
+            .await
+            .expect("Failed to read all data");
+
+        let expected_data = [test_data, append_data].concat();
+        assert_eq!(all_data, expected_data);
+        assert!(eof);
+
+        // Test 6: Test file truncation with set_size
+        let root_descriptor5 = create_root_descriptor(&mut vfs_ctx);
+        let file_descriptor_truncate = vfs_ctx
+            .open_at(
+                root_descriptor5,
+                PathFlags::empty(),
+                file_path.clone(),
+                open_flags,
+                file_flags,
+            )
+            .await
+            .expect("Failed to open file for truncation");
+        let root_descriptor6 = create_root_descriptor(&mut vfs_ctx);
+        let file_descriptor_read_truncated = vfs_ctx
+            .open_at(
+                root_descriptor6,
+                PathFlags::empty(),
+                file_path.clone(),
+                open_flags,
+                file_flags,
+            )
+            .await
+            .expect("Failed to open file for reading after truncation");
+
+        vfs_ctx
+            .set_size(file_descriptor_truncate, 5)
+            .await
+            .expect("Failed to truncate file");
+
+        let (truncated_data, eof) = vfs_ctx
+            .read(file_descriptor_read_truncated, 100, 0)
+            .await
+            .expect("Failed to read truncated data");
+
+        assert_eq!(truncated_data, b"Hello");
+        assert!(eof);
+
+        // Test 7: Test CREATE with TRUNCATE flag
+        let root_descriptor7 = create_root_descriptor(&mut vfs_ctx);
+        let truncate_flags = OpenFlags::CREATE | OpenFlags::TRUNCATE;
+        let file_descriptor2 = vfs_ctx
+            .open_at(
+                root_descriptor7,
+                PathFlags::empty(),
+                file_path.clone(),
+                truncate_flags,
+                file_flags,
+            )
+            .await
+            .expect("Failed to open with truncate");
+
+        // File should be empty after TRUNCATE
+        let (empty_data, eof) = vfs_ctx
+            .read(file_descriptor2, 100, 0)
+            .await
+            .expect("Failed to read truncated file");
+
+        assert!(empty_data.is_empty());
+        assert!(eof);
+
+        println!("All VFS write tests passed!");
+    }
+
+    #[tokio::test]
+    async fn test_vfs_write_permissions() {
+        use filesystem::types::HostDescriptor;
+
+        let limits = VfsLimits::default();
+        let mut vfs_state = VfsState::new(limits);
+        let mut resource_table = ResourceTable::new();
+
+        let mut vfs_ctx = VfsCtxView {
+            table: &mut resource_table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // Create root descriptor with READ-ONLY permissions
+        let root_desc = VfsDescriptor {
+            node: Arc::clone(&vfs_ctx.vfs_state.root),
+            flags: DescriptorFlags::READ, // No WRITE flag
+        };
+        let root_resource = vfs_ctx.table.push(root_desc).unwrap();
+        let root_descriptor: Resource<Descriptor> = root_resource.cast();
+
+        // Try to create a file with read-only descriptor
+        let file_path = "readonly_test.txt".to_string();
+        let open_flags = OpenFlags::CREATE;
+        let file_flags = DescriptorFlags::READ; // No WRITE flag
+
+        let file_descriptor = vfs_ctx
+            .open_at(
+                root_descriptor,
+                PathFlags::empty(),
+                file_path,
+                open_flags,
+                file_flags,
+            )
+            .await
+            .expect("Failed to create file");
+
+        // Try to write to read-only file - should fail
+        let test_data = b"This should fail".to_vec();
+        let write_result = vfs_ctx.write(file_descriptor, test_data, 0).await;
+
+        match write_result {
+            Err(err) => {
+                // Should get BadDescriptor error for lack of write permissions
+                println!("Expected error for read-only file: {:?}", err);
+            }
+            Ok(_) => panic!("Write should have failed on read-only file"),
+        }
+
+        println!("VFS permission tests passed!");
+    }
+
+    #[tokio::test]
+    async fn test_vfs_limits() {
+        use filesystem::types::HostDescriptor;
+
+        // Create VFS with very small limits for testing
+        let limits = VfsLimits {
+            inodes: 10,
+            max_path_length: 255,
+            max_path_segment_size: 50,
+            max_storage_bytes: 100,   // Very small storage limit
+            max_file_size: 50,        // Small file size limit
+            max_write_ops_per_sec: 2, // Low rate limit
+        };
+        let mut vfs_state = VfsState::new(limits);
+        let mut resource_table = ResourceTable::new();
+
+        let mut vfs_ctx = VfsCtxView {
+            table: &mut resource_table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let root_desc = VfsDescriptor {
+            node: Arc::clone(&vfs_ctx.vfs_state.root),
+            flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+        };
+        let root_resource = vfs_ctx.table.push(root_desc).unwrap();
+        let root_descriptor: Resource<Descriptor> = root_resource.cast();
+
+        // Create a file
+        let file_descriptor = vfs_ctx
+            .open_at(
+                root_descriptor,
+                PathFlags::empty(),
+                "test_limits.txt".to_string(),
+                OpenFlags::CREATE,
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .expect("Failed to create file");
+
+        // Try to write data exceeding file size limit
+        let large_data = vec![b'X'; 100]; // Larger than max_file_size (50)
+        let write_result = vfs_ctx.write(file_descriptor, large_data, 0).await;
+
+        match write_result {
+            Err(err) => {
+                println!("Expected error for file size limit: {:?}", err);
+            }
+            Ok(_) => panic!("Write should have failed due to file size limit"),
+        }
+
+        println!("VFS limits tests passed!");
+    }
 }
