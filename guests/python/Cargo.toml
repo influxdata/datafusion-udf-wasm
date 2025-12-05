@@ -18,7 +18,7 @@ uuid.workspace = true
 wasip2.workspace = true
 
 [build-dependencies]
-flate2 = "1.0.35"
+flate2 = "1.1.7"
 sha2 = "0.10.8"
 tar.workspace = true
 ureq = "3.1.4"
