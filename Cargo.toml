@@ -59,6 +59,20 @@ wit-bindgen = { version = "0.49", default-features = false, features = [
   "macros"
 ] }
 
+[workspace.lints.rust]
+missing_copy_implementations = "deny"
+missing_debug_implementations = "deny"
+missing_docs = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+unexpected_cfgs = "deny"
+unreachable_pub = "deny"
+unused_crate_dependencies = "deny"
+
+[workspace.lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+private_intra_doc_links = "deny"
+
 [workspace.lints.clippy]
 allow_attributes = "deny"
 clone_on_ref_ptr = "deny"
@@ -77,20 +91,6 @@ unnecessary_wraps = "deny"
 unused_async = "deny"
 unused_self = "deny"
 use_self = "deny"
-
-[workspace.lints.rust]
-missing_copy_implementations = "deny"
-missing_debug_implementations = "deny"
-missing_docs = "deny"
-rust_2018_idioms = { level = "deny", priority = -1 }
-unexpected_cfgs = "deny"
-unreachable_pub = "deny"
-unused_crate_dependencies = "deny"
-
-[workspace.lints.rustdoc]
-bare_urls = "deny"
-broken_intra_doc_links = "deny"
-private_intra_doc_links = "deny"
 
 # faster tests
 [profile.dev.package]
