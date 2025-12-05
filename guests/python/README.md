@@ -14,7 +14,7 @@ just build-release
 ```
 
 ## Python Version
-We currently bundle [Python 3.14.1], [build for WASI](https://docs.python.org/3/library/intro.html#webassembly-platforms).
+We currently bundle [Python 3.14.0], [build for WASI](https://docs.python.org/3/library/intro.html#webassembly-platforms).
 
 ## Custom CPython Configuration
 You can configure the build to use a custom CPython source by setting the following environment variables:
@@ -267,7 +267,7 @@ There is NO other I/O available that escapes the sandbox.
 [`Duration`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Duration
 [`Microsecond`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.TimeUnit.html#variant.Microsecond
 [`os.environ`]: https://docs.python.org/3/library/os.html#os.environ
-[Python 3.14.1]: https://www.python.org/downloads/release/python-3141
+[Python 3.14.0]: https://www.python.org/downloads/release/python-3140
 [Python Standard Library]: https://docs.python.org/3/library/index.html
 [`requests`]: https://pypi.org/project/requests/
 [Scalar UDF]: https://docs.rs/datafusion/latest/datafusion/logical_expr/struct.ScalarUDF.html
