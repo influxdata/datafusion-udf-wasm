@@ -19,6 +19,8 @@ to_delete=(
   "/opt/hostedtoolcache/node"
   "/opt/microsoft"
   "/opt/pipx"
+  "/usr/local/.ghcup"
+  "/usr/local/lib/android"
   "/usr/share/swift"
 )
 
