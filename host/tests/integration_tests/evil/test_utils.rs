@@ -2,7 +2,9 @@ use std::sync::{Arc, LazyLock};
 
 use datafusion_common::DataFusionError;
 use datafusion_execution::memory_pool::GreedyMemoryPool;
-use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf};
+use datafusion_udf_wasm_host::{
+    CompilationFlags, WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf,
+};
 use tokio::{runtime::Runtime, sync::OnceCell};
 
 /// Static memory limit.
@@ -17,9 +19,12 @@ static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
 pub(crate) async fn component() -> &'static WasmComponentPrecompiled {
     COMPONENT
         .get_or_init(async || {
-            WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_EVIL.into())
-                .await
-                .unwrap()
+            WasmComponentPrecompiled::compile(
+                datafusion_udf_wasm_bundle::BIN_EVIL.into(),
+                &CompilationFlags::default(),
+            )
+            .await
+            .unwrap()
         })
         .await
 }

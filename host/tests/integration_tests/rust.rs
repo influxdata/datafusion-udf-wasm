@@ -12,7 +12,8 @@ use datafusion_expr::{
     async_udf::AsyncScalarUDFImpl,
 };
 use datafusion_udf_wasm_host::{
-    StaticResourceLimits, WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf,
+    CompilationFlags, StaticResourceLimits, WasmComponentPrecompiled, WasmPermissions,
+    WasmScalarUdf,
 };
 use tokio::{runtime::Handle, sync::OnceCell};
 
@@ -274,14 +275,95 @@ async fn test_limit_initial_n_memories() {
     );
 }
 
+#[tokio::test]
+async fn test_match_target() {
+    let component = WasmComponentPrecompiled::compile(
+        datafusion_udf_wasm_bundle::BIN_EXAMPLE.into(),
+        &CompilationFlags {
+            target: Some(target_lexicon::HOST.to_string()),
+        },
+    )
+    .await
+    .unwrap();
+
+    // instantiating works
+    WasmScalarUdf::new(
+        &component,
+        &Default::default(),
+        Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
+        "".to_owned(),
+    )
+    .await
+    .unwrap();
+
+    // and load->store also works
+    let data = component.store().to_vec();
+    // SAFETY: we just compiled that
+    let res = unsafe { WasmComponentPrecompiled::load(data) };
+    res.unwrap();
+}
+
+#[cfg(feature = "all-arch")]
+#[tokio::test]
+async fn test_mismatch_target() {
+    let component = WasmComponentPrecompiled::compile(
+        datafusion_udf_wasm_bundle::BIN_EXAMPLE.into(),
+        &CompilationFlags {
+            // It's unlikely that someone is gonna run the tests on a RISC-V 64bit host, but if they do, we need to
+            // make the test code smarter. It won't fail as expected.
+            target: Some("riscv64gc-unknown-linux-gnu".to_owned()),
+        },
+    )
+    .await
+    .unwrap();
+
+    // instantiating doesn't work
+    let err = WasmScalarUdf::new(
+        &component,
+        &Default::default(),
+        Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
+        "".to_owned(),
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @r"
+    create WASM component
+    caused by
+    External error: Module was compiled for architecture 'riscv64gc'
+    "
+    );
+
+    // and load->store also fails
+    let data = component.store().to_vec();
+    // SAFETY: we just compiled that
+    let res = unsafe { WasmComponentPrecompiled::load(data) };
+
+    insta::assert_snapshot!(
+        res.unwrap_err(),
+        @r"
+    create WASM component
+    caused by
+    External error: Module was compiled for architecture 'riscv64gc'
+    "
+    );
+}
+
 async fn component() -> &'static WasmComponentPrecompiled {
     static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
 
     COMPONENT
         .get_or_init(async || {
-            WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_EXAMPLE.into())
-                .await
-                .unwrap()
+            WasmComponentPrecompiled::compile(
+                datafusion_udf_wasm_bundle::BIN_EXAMPLE.into(),
+                &CompilationFlags::default(),
+            )
+            .await
+            .unwrap()
         })
         .await
 }
