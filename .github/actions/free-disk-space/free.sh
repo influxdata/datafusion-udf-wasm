@@ -21,8 +21,20 @@ to_delete=(
   "/opt/pipx"
   "/usr/share/swift"
 )
+
 for d in "${to_delete[@]}"; do
   echo "delete $d"
+
+  if [ ! -d "$d" ]; then
+    echo "directory does NOT exist"
+    exit 1
+  fi
+
+  if [ -L "$d" ]; then
+    echo "directory is a symlink, but we should delete the original source"
+    exit 1
+  fi
+
   sudo rm -rf "$d"
 done
 
