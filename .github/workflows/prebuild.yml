@@ -75,6 +75,30 @@ jobs:
           mv target/wasm32-wasip2/debug/datafusion_udf_wasm_python.wasm   out/datafusion_udf_wasm_python.debug.wasm
           mv target/wasm32-wasip2/release/datafusion_udf_wasm_python.wasm out/datafusion_udf_wasm_python.release.wasm
 
+      - name: compile WASM to machine code
+        run: |
+          targets=(
+            "aarch64-apple-darwin"
+            "aarch64-pc-windows-msvc"
+            "aarch64-unknown-linux-gnu"
+            "x86_64-pc-windows-msvc"
+            "x86_64-unknown-linux-gnu"
+          )
+
+          for wasm_file in out/*.wasm; do
+            wasm_file="$(basename "$wasm_file" .wasm)"
+            for target in "${targets[@]}"; do
+              out_file="${wasm_file}.${target}.so"
+              echo "$out_file"
+              cargo run --bin=compile --features="all-arch" -- "out/${wasm_file}.wasm" "out/${out_file}" "$target"
+            done
+          done
+
+      - name: calculate checksums
+        run: |
+          sha256sum * > sha256sum.txt
+        working-directory: ./out
+
       - name: read wasmtime version
         id: wasmtime
         run: |
@@ -86,7 +110,7 @@ jobs:
         id: attestation
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a  # v3
         with:
-          subject-path: out/*.wasm
+          subject-path: out/*
 
       - name: publish release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2
@@ -94,12 +118,30 @@ jobs:
           body: |
             WASM guest binaries.
 
+            # Build Metadata
+
             **Commit:** [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/tree/${{ github.sha }})
             **Wasmtime:** `${{ steps.wasmtime.outputs.VERSION }}`
             **Build Timestamp:** `${{ steps.timestamp.outputs.TIMESTAMP_ISO }}`
             **Build Attestation:** <${{ steps.attestation.outputs.attestation-url }}>
+
+            # WASM Binaries
+            We build the following targets:
+
+            - `example_add_one`: "add one" Rust example UDF
+            - `datafusion_udf_wasm_python`: Guest for Python-based UDFs, bundles CPython.
+
+            Each of them is provided `debug` and `release` build. The artifacts have the file extension `.wasm`.
+
+            # Machine-Code Binaries
+            In addition to the WASM binary blobs, we also provide pre-compiled guests for various targets to be used with `wasmtime`. The artifacts have the file extension `.so`.
+
+            **⚠️ Using pre-build binaries requires you to validate the source and trust the binary. Using a binary blindly can lead to remote code execution, memory and data corruption, and all kinds of bad things. You can use the provided build attestation. ⚠️**
+
+            # Checksums & Attestation
+            We provide sha256 checksums for all artifacts in `sha256sum.txt`. You can use that file -- either directly or indirectly via its own checksum -- to safely pin all artifacts of this release. We also provide [build attestation]({{ steps.attestation.outputs.attestation-url }}).
           preserve_order: true
-          files: out/*.wasm
+          files: out/*
           name: "WASM Binaries ${{ steps.timestamp.outputs.TIMESTAMP_ISO }}"
           tag_name: "wasm-binaries/${{ steps.timestamp.outputs.TIMESTAMP_TAG }}/${{ github.sha }}"
           fail_on_unmatched_files: true
