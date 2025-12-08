@@ -35,5 +35,9 @@ regex.workspace = true
 tokio = { workspace = true, features = ["fs", "macros"] }
 wiremock = "0.6.5"
 
+[features]
+# enable all architectures in cranelift/wasmtime
+all-arch = ["wasmtime/all-arch"]
+
 [lints]
 workspace = true

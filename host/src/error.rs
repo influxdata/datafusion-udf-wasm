@@ -43,19 +43,42 @@ pub(crate) trait WasmToDataFusionResultExt {
     /// [`Ok`] payload.
     type T;
 
+    /// [`Err`] payload
+    type E;
+
     /// Add context to error.
     ///
     /// The context has:
     /// - `msg`: a human-readable context description
     /// - `stderr`: stderr output of the WASM payload if available
     fn context(self, msg: &str, stderr: Option<&[u8]>) -> Result<Self::T, DataFusionError>;
+
+    /// Add context to error.
+    ///
+    /// The context has:
+    /// - `msg`: a human-readable context description
+    /// - `stderr`: stderr output of the WASM payload if available
+    fn with_context<F>(self, msg: F, stderr: Option<&[u8]>) -> Result<Self::T, DataFusionError>
+    where
+        F: for<'a> FnOnce(&'a Self::E) -> String;
 }
 
 impl<T> WasmToDataFusionResultExt for Result<T, wasmtime::Error> {
     type T = T;
+    type E = wasmtime::Error;
 
     fn context(self, msg: &str, stderr: Option<&[u8]>) -> Result<Self::T, DataFusionError> {
         self.map_err(|err| WasmToDataFusionErrorExt::context(err, msg, stderr))
+    }
+
+    fn with_context<F>(self, msg: F, stderr: Option<&[u8]>) -> Result<Self::T, DataFusionError>
+    where
+        F: for<'a> FnOnce(&'a Self::E) -> String,
+    {
+        self.map_err(|err| {
+            let msg = msg(&err);
+            WasmToDataFusionErrorExt::context(err, &msg, stderr)
+        })
     }
 }
 
