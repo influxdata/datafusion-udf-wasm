@@ -21,17 +21,35 @@ use crate::{
 };
 
 /// Create WASM engine.
-fn create_engine() -> DataFusionResult<Engine> {
-    Engine::new(
-        wasmtime::Config::new()
-            .async_support(true)
-            .epoch_interruption(true)
-            .memory_init_cow(true)
-            // Disable backtraces for now since debug info parsing doesn't seem to work and hence error
-            // messages are nondeterministic.
-            .wasm_backtrace(false),
-    )
-    .context("create WASM engine", None)
+fn create_engine(flags: &CompilationFlags) -> DataFusionResult<Engine> {
+    let CompilationFlags { target } = flags;
+
+    let mut config = wasmtime::Config::new();
+    config.async_support(true);
+    config.epoch_interruption(true);
+    config.memory_init_cow(true);
+    // Disable backtraces for now since debug info parsing doesn't seem to work and hence error
+    // messages are nondeterministic.
+    config.wasm_backtrace(false);
+
+    if let Some(target) = &target {
+        config
+            .target(target)
+            .with_context(|_| format!("cannot set target: {target}"), None)?;
+    }
+
+    Engine::new(&config).context("create WASM engine", None)
+}
+
+/// Code compilation flags.
+///
+/// This is used when [compiling a component](WasmComponentPrecompiled::compile).
+#[derive(Debug, Default, Clone)]
+pub struct CompilationFlags {
+    /// Target (triplet).
+    ///
+    /// Set to [`None`] to use the host configuration. Note that this may lead to unportable compiled code.
+    pub target: Option<String>,
 }
 
 /// Pre-compiled WASM component.
@@ -51,11 +69,14 @@ impl WasmComponentPrecompiled {
     ///
     ///
     /// [binary format]: https://webassembly.github.io/spec/core/binary/index.html
-    pub async fn new(wasm_binary: Arc<[u8]>) -> DataFusionResult<Self> {
-        tokio::task::spawn_blocking(move || {
-            // Create temporary engine that we need for compilation.
-            let engine = create_engine()?;
+    pub async fn compile(
+        wasm_binary: Arc<[u8]>,
+        flags: &CompilationFlags,
+    ) -> DataFusionResult<Self> {
+        // Create temporary engine that we need for compilation.
+        let engine = create_engine(flags)?;
 
+        tokio::task::spawn_blocking(move || {
             let compiled_component = engine
                 .precompile_component(&wasm_binary)
                 .context("pre-compile component", None)?;
@@ -83,7 +104,7 @@ impl WasmComponentPrecompiled {
     ///
     /// # Exposure
     /// It is generally safe to leak/expose the pre-compiled data to the user that provided the WASM bytecode (see
-    /// [`new`](Self::new)). However, you must prevent the user from tampering the data, see "safety" section of
+    /// [`compile`](Self::compile)). However, you must prevent the user from tampering the data, see "safety" section of
     /// [`load`](Self::load).
     ///
     /// The exposed data is opaque and we make no guarantees about the internal structure of it.
@@ -139,7 +160,7 @@ impl WasmComponentPrecompiled {
         };
 
         // test hydration
-        let engine = create_engine()?;
+        let engine = create_engine(&CompilationFlags::default())?;
         this.hydrate(&engine)?;
 
         Ok(this)
@@ -187,7 +208,7 @@ impl WasmComponentInstance {
         io_rt: Handle,
         memory_pool: &Arc<dyn MemoryPool>,
     ) -> DataFusionResult<Self> {
-        let engine = create_engine()?;
+        let engine = create_engine(&CompilationFlags::default())?;
 
         // set up epoch timer
         let mut epoch_task = JoinSet::new();

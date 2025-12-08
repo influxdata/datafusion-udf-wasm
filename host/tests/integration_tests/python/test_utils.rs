@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use datafusion_common::DataFusionError;
 use datafusion_execution::memory_pool::GreedyMemoryPool;
-use datafusion_udf_wasm_host::{WasmComponentPrecompiled, WasmScalarUdf};
+use datafusion_udf_wasm_host::{CompilationFlags, WasmComponentPrecompiled, WasmScalarUdf};
 use tokio::{runtime::Handle, sync::OnceCell};
 
 /// Memory limit in bytes.
@@ -17,9 +17,12 @@ static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
 pub(crate) async fn python_component() -> &'static WasmComponentPrecompiled {
     COMPONENT
         .get_or_init(async || {
-            WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_PYTHON.into())
-                .await
-                .unwrap()
+            WasmComponentPrecompiled::compile(
+                datafusion_udf_wasm_bundle::BIN_PYTHON.into(),
+                &CompilationFlags::default(),
+            )
+            .await
+            .unwrap()
         })
         .await
 }

@@ -12,7 +12,8 @@ use datafusion_expr::{
     async_udf::AsyncScalarUDFImpl,
 };
 use datafusion_udf_wasm_host::{
-    StaticResourceLimits, WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf,
+    CompilationFlags, StaticResourceLimits, WasmComponentPrecompiled, WasmPermissions,
+    WasmScalarUdf,
 };
 use tokio::{runtime::Handle, sync::OnceCell};
 
@@ -279,9 +280,12 @@ async fn component() -> &'static WasmComponentPrecompiled {
 
     COMPONENT
         .get_or_init(async || {
-            WasmComponentPrecompiled::new(datafusion_udf_wasm_bundle::BIN_EXAMPLE.into())
-                .await
-                .unwrap()
+            WasmComponentPrecompiled::compile(
+                datafusion_udf_wasm_bundle::BIN_EXAMPLE.into(),
+                &CompilationFlags::default(),
+            )
+            .await
+            .unwrap()
         })
         .await
 }

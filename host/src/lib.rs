@@ -4,7 +4,7 @@
 //! [DataFusion]: https://datafusion.apache.org/
 
 pub use crate::{
-    component::WasmComponentPrecompiled,
+    component::{CompilationFlags, WasmComponentPrecompiled},
     conversion::limits::TrustedDataLimits,
     http::{
         AllowCertainHttpRequests, HttpMethod, HttpRequestMatcher, HttpRequestRejected,
