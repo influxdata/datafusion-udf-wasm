@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v6.0.0
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8  # v6.0.1
         with:
           fetch-depth: 1
 
@@ -30,7 +30,7 @@ jobs:
         run: pip install --requirement=.github/workflows/requirements.txt
 
       - name: Install `cargo-deny` & `just` & 'typos'
-        uses: taiki-e/install-action@3575e532701a5fc614b0c842e4119af4cc5fd16d  # v2
+        uses: taiki-e/install-action@50708e9ba8d7b6587a2cb575ddaa9a62e927bc06  # v2
         with:
           tool: cargo-deny,just,typos
 
