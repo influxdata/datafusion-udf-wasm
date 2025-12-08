@@ -31,7 +31,7 @@ You can configure the build to use a custom CPython source by setting the follow
   `libpython3.14.a`, `libmpdec.a`, etc.) needed for static linking. Will override
   `PYTHON_SDK_BASE_URL` if set.
 
-If these environment variables are not set, the build will use the default URLs pointing to the official [CPython WASI build releases](https://github.com/brettcannon/cpython-wasi-build/releases).
+If these environment variables are not set, the build will use the default URLs pointing to Influx's [CPython WASI build releases](https://github.com/influxdata/cpython-wasi-build/releases).
 
 Example usage:
 ```console
