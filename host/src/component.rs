@@ -86,7 +86,7 @@ impl WasmComponentPrecompiled {
     /// [`new`](Self::new)). However, you must prevent the user from tampering the data, see "safety" section of
     /// [`load`](Self::load).
     ///
-    /// The exposed data is opaque and we make not guarantees about the internal structure of it.
+    /// The exposed data is opaque and we make no guarantees about the internal structure of it.
     ///
     ///
     /// [build script]: https://doc.rust-lang.org/cargo/reference/build-scripts.html
