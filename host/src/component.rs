@@ -71,6 +71,90 @@ impl WasmComponentPrecompiled {
         .await
         .map_err(|e| DataFusionError::External(Box::new(e)))?
     }
+
+    /// Get raw, pre-compiled component data.
+    ///
+    /// See [`load`](Self::load) too.
+    ///
+    /// # Usage
+    /// Compiling larger components can be relatively expensive. If you know that you are gonna use a fixed guest,
+    /// then it might be worth pre-compiling the component once, e.g. as part of a [build script] or when a UDF is
+    /// registered in a cluster environment.
+    ///
+    /// # Exposure
+    /// It is generally safe to leak/expose the pre-compiled data to the user that provided the WASM bytecode (see
+    /// [`new`](Self::new)). However, you must prevent the user from tampering the data, see "safety" section of
+    /// [`load`](Self::load).
+    ///
+    /// The exposed data is opaque and we make no guarantees about the internal structure of it.
+    ///
+    ///
+    /// [build script]: https://doc.rust-lang.org/cargo/reference/build-scripts.html
+    pub fn store(&self) -> &[u8] {
+        &self.compiled_component
+    }
+
+    /// Load pre-compiled component.
+    ///
+    /// # Safety
+    /// The caller MUST ensure that the input is trusted, e.g. because it is part of the compilation pipeline or via
+    /// some form of code signing. Loading untrusted input can lead to memory unsafety, data corruption and exposure,
+    /// as well as remote code execution; in a similar way that executing an untrusted binary or calling [`dlopen`]
+    /// on untrusted data would.
+    ///
+    /// # Version Stability
+    /// You may feed pre-compiled data of older or newer version of [`datafusion_udf_wasm_host`](crate) or its
+    /// dependencies. Doing so will lead to an error. It is safe to cache pre-compiled results and re-compile in the
+    /// error case:
+    ///
+    /// ```
+    /// # use datafusion_udf_wasm_host::WasmComponentPrecompiled;
+    /// let res = unsafe {
+    ///     WasmComponentPrecompiled::load(b"OLD".to_vec())
+    /// };
+    ///
+    /// assert_eq!(
+    ///     res.unwrap_err().to_string(),
+    ///     "
+    /// create WASM component
+    /// caused by
+    /// External error: failed to parse precompiled artifact as an ELF
+    ///     ".trim(),
+    /// );
+    /// ```
+    ///
+    /// # Different Hosts
+    /// It is safe to move a pre-compiled component from one host to another. However, loading may fail with an error
+    /// if the source and target host have:
+    /// - different architectures (e.g. `x64` vs `ARM64`, but also "has AVX512 vs no AVX512"),
+    /// - different operating systems
+    /// - different tunables or compilation flags
+    /// - different WASM features
+    ///
+    ///
+    /// [`dlopen`]: https://pubs.opengroup.org/onlinepubs/009696799/functions/dlopen.html
+    pub unsafe fn load(data: Vec<u8>) -> DataFusionResult<Self> {
+        let this = Self {
+            compiled_component: data,
+        };
+
+        // test hydration
+        let engine = create_engine()?;
+        this.hydrate(&engine)?;
+
+        Ok(this)
+    }
+
+    /// Hydrate wasmtime component from raw data.
+    fn hydrate(&self, engine: &Engine) -> DataFusionResult<Component> {
+        let Self { compiled_component } = self;
+
+        // SAFETY: Either we just produced this data ourselves within the same process (i.e. it is NOT external input)
+        //         OR the API user promised us that the data is safe (see [`WasmComponentPrecompiled::load`]).
+        let component_res = unsafe { Component::deserialize(engine, compiled_component) };
+        let component = component_res.context("create WASM component", None)?;
+        Ok(component)
+    }
 }
 
 /// Stateful instance of a WASM component.
@@ -103,8 +187,6 @@ impl WasmComponentInstance {
         io_rt: Handle,
         memory_pool: &Arc<dyn MemoryPool>,
     ) -> DataFusionResult<Self> {
-        let WasmComponentPrecompiled { compiled_component } = component;
-
         let engine = create_engine()?;
 
         // set up epoch timer
@@ -137,9 +219,7 @@ impl WasmComponentInstance {
             .epoch_tick_time
             .saturating_mul(permissions.inplace_blocking_max_ticks);
 
-        // SAFETY: the compiled version was produced by us with the same engine. This is NOT external/untrusted input.
-        let component_res = unsafe { Component::deserialize(&engine, compiled_component) };
-        let component = component_res.context("create WASM component", None)?;
+        let component = component.hydrate(&engine)?;
 
         // resource/mem limiter
         let mut limiter = Limiter::new(permissions.resource_limits.clone(), memory_pool);
