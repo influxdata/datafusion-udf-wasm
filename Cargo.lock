@@ -1379,6 +1379,7 @@ dependencies = [
  "regex",
  "siphasher",
  "tar",
+ "target-lexicon",
  "tokio",
  "uuid",
  "wasmtime",

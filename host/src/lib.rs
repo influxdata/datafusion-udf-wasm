@@ -4,7 +4,7 @@
 //! [DataFusion]: https://datafusion.apache.org/
 
 pub use crate::{
-    component::WasmComponentPrecompiled,
+    component::{CompilationFlags, WasmComponentPrecompiled},
     conversion::limits::TrustedDataLimits,
     http::{
         AllowCertainHttpRequests, HttpMethod, HttpRequestMatcher, HttpRequestRejected,
@@ -21,6 +21,8 @@ pub use crate::{
 use datafusion_udf_wasm_bundle as _;
 #[cfg(test)]
 use regex as _;
+#[cfg(test)]
+use target_lexicon as _;
 #[cfg(test)]
 use wiremock as _;
 
