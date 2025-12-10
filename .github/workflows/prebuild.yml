@@ -131,7 +131,7 @@ jobs:
             - `example_add_one`: "add one" Rust example UDF
             - `datafusion_udf_wasm_python`: Guest for Python-based UDFs, bundles CPython.
 
-            Each of them is provided `debug` and `release` build. The artifacts have the file extension `.wasm`.
+            Each of them is provided in `debug` and `release` builds. The artifacts have the file extension `.wasm`.
 
             # Machine-Code Binaries
             In addition to the WASM binary blobs, we also provide pre-compiled guests for various targets to be used with `wasmtime`. The artifacts have the file extension `.so`.
@@ -139,7 +139,7 @@ jobs:
             **⚠️ Using pre-build binaries requires you to validate the source and trust the binary. Using a binary blindly can lead to remote code execution, memory and data corruption, and all kinds of bad things. You can use the provided build attestation. ⚠️**
 
             # Checksums & Attestation
-            We provide sha256 checksums for all artifacts in `sha256sum.txt`. You can use that file -- either directly or indirectly via its own checksum -- to safely pin all artifacts of this release. We also provide [build attestation]({{ steps.attestation.outputs.attestation-url }}).
+            We provide sha256 checksums for all artifacts in `sha256sum.txt`. You can use that file -- either directly or indirectly via its own checksum -- to safely pin all artifacts of this release. We also provide [build attestation](${{ steps.attestation.outputs.attestation-url }}).
           preserve_order: true
           files: out/*
           name: "WASM Binaries ${{ steps.timestamp.outputs.TIMESTAMP_ISO }}"
