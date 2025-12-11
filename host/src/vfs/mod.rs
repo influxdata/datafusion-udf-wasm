@@ -69,7 +69,7 @@ struct VfsNode {
     kind: VfsNodeKind,
 
     /// Pointer to parent node.
-    parent: Option<Weak<RwLock<VfsNode>>>,
+    parent: Option<Weak<RwLock<Self>>>,
 }
 
 /// A kind node in the virtual filesystem tree.
