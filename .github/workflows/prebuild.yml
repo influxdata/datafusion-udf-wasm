@@ -85,12 +85,12 @@ jobs:
             "x86_64-unknown-linux-gnu"
           )
 
-          for wasm_file in out/*.wasm; do
-            wasm_file="$(basename "$wasm_file" .wasm)"
+          for wasm_path in out/*.wasm; do
+            wasm_basename="$(basename "$wasm_path" .wasm)"
             for target in "${targets[@]}"; do
-              out_file="${wasm_file}.${target}.so"
+              out_file="${wasm_basename}.${target}.so"
               echo "$out_file"
-              cargo run --bin=compile --features="all-arch" -- "out/${wasm_file}.wasm" "out/${out_file}" "$target"
+              cargo run --bin=compile --features="all-arch" -- "$wasm_path" "out/${out_file}" "$target"
             done
           done
 
