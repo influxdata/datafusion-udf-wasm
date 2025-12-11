@@ -88,7 +88,7 @@ jobs:
           for wasm_path in out/*.wasm; do
             wasm_basename="$(basename "$wasm_path" .wasm)"
             for target in "${targets[@]}"; do
-              out_file="${wasm_basename}.${target}.so"
+              out_file="${wasm_basename}.${target}.elf"
               echo "$out_file"
               cargo run --bin=compile --features="all-arch" -- "$wasm_path" "out/${out_file}" "$target"
             done
@@ -134,7 +134,7 @@ jobs:
             Each of them is provided in `debug` and `release` builds. The artifacts have the file extension `.wasm`.
 
             # Machine-Code Binaries
-            In addition to the WASM binary blobs, we also provide pre-compiled guests for various targets to be used with `wasmtime`. The artifacts have the file extension `.so`.
+            In addition to the WASM binary blobs, we also provide pre-compiled guests for various targets to be used with `wasmtime`. The artifacts have the file extension `.elf`.
 
             **⚠️ Using pre-build binaries requires you to validate the source and trust the binary. Using a binary blindly can lead to remote code execution, memory and data corruption, and all kinds of bad things. You can use the provided build attestation. ⚠️**
 
