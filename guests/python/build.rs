@@ -16,6 +16,7 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::PathBuf,
+    time::Duration,
 };
 
 fn main() {
@@ -81,9 +82,25 @@ fn download_wasi_sdk() -> Result<Option<String>, Box<dyn std::error::Error>> {
     let tar_gz_path = downloads_dir.join("wasi-sysroot.tar.gz");
 
     // Download the file
-    let response = ureq::get(&url)
-        .call()
-        .map_err(|e| format!("failed to download WASI SDK: {}", e))?;
+    let mut n_retries = 0;
+    let response = loop {
+        // make it rather long, but we should have some end
+        if n_retries >= 100 {
+            return Err("download WASI SDK after too many retries".into());
+        }
+
+        match ureq::get(&url).call() {
+            Ok(resp) => break resp,
+            Err(ureq::Error::StatusCode(code)) if (500..600).contains(&code) => {
+                println!("cargo:warning=failed to download WASI SDK (status={code}), retrying...",);
+                std::thread::sleep(Duration::from_secs(1));
+                n_retries += 1;
+            }
+            Err(e) => {
+                return Err(format!("failed to download WASI SDK: {}", e).into());
+            }
+        }
+    };
 
     let mut file = File::create(&tar_gz_path)?;
     let mut reader = response.into_body().into_reader();

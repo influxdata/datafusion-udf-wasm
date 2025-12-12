@@ -52,6 +52,7 @@ download-python-sdk:
         --tlsv1.2 \
         --location \
         --output "python-sdk.zip" \
+        --retry 5 \
         "{{PYTHON_SDK_URL}}"
 
     curl \
@@ -62,6 +63,7 @@ download-python-sdk:
         --tlsv1.2 \
         --location \
         --output "build-python-sdk.zip" \
+        --retry 5 \
         "{{BUILD_PYTHON_SDK_URL}}"
 
     echo "{{SHA256_PYTHON_SDK}} python-sdk.zip" | sha256sum -c
