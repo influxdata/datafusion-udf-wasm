@@ -19,6 +19,7 @@ use std::{
 
 use rand::Rng;
 use siphasher::sip128::{Hasher128, SipHasher24};
+use tokio::sync::Mutex;
 use wasmtime::component::{HasData, Resource};
 use wasmtime_wasi::{
     ResourceTable,
@@ -42,7 +43,7 @@ use crate::{
     limiter::Limiter,
     state::WasmStateImpl,
     vfs::{
-        limits::VfsLimits,
+        limits::{VfsLimits, WriteRateLimiter},
         path::{PathSegment, PathTraversal},
     },
 };
@@ -260,13 +261,17 @@ pub(crate) struct VfsState {
 
     /// Current allocation of inodes.
     inodes_allocation: Allocation,
+
+    /// A write rate limiter to prevent guests from DoS attacking the host via
+    /// excessive write operations.
+    _write_rate_limiter: Mutex<WriteRateLimiter>,
 }
 
 impl VfsState {
     /// Create a new empty VFS.
     pub(crate) fn new(limits: VfsLimits) -> Self {
         let inodes_allocation = Allocation::new("inodes", limits.inodes);
-
+        let _write_rate_limiter = Mutex::new(WriteRateLimiter::new(limits.max_write_ops_per_sec));
         Self {
             root: Arc::new(RwLock::new(VfsNode {
                 kind: VfsNodeKind::Directory {
@@ -277,6 +282,7 @@ impl VfsState {
             metadata_hash_key: rand::rng().random(),
             limits,
             inodes_allocation,
+            _write_rate_limiter,
         }
     }
 
