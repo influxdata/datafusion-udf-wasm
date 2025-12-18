@@ -81,7 +81,7 @@ impl WriteRateLimiter {
     }
 
     /// Check if a write operation is allowed.
-    pub(crate) fn _check_write_allowed(&mut self) -> Result<(), FsError> {
+    pub(crate) fn check_write_allowed(&mut self) -> Result<(), FsError> {
         let now = Instant::now();
         let window_duration = Duration::from_secs(1);
 
@@ -117,7 +117,7 @@ mod tests {
                 let limiter = Arc::clone(&limiter);
                 async move {
                     let mut limiter = limiter.lock().await;
-                    limiter._check_write_allowed()
+                    limiter.check_write_allowed()
                 }
             });
         }
@@ -141,7 +141,7 @@ mod tests {
                         tokio::time::sleep(Duration::from_secs(2)).await;
                     }
                     let mut limiter = limiter.lock().await;
-                    limiter._check_write_allowed()
+                    limiter.check_write_allowed()
                 }
             });
         }

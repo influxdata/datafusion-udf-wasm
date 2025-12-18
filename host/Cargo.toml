@@ -29,6 +29,7 @@ wasmtime-wasi-http.workspace = true
 wasmtime-wasi-io.workspace = true
 
 [dev-dependencies]
+assert_matches = "1.5.0"
 datafusion-udf-wasm-bundle = { workspace = true, features = [
   "evil",
   "example",
