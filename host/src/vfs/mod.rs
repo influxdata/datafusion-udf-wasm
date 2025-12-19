@@ -1185,15 +1185,16 @@ mod tests {
         //
         // "pinarello,canyon,factorbianchi,look,merida"
         //  -----------------------^------------------
-        //         23 bytes               19 bytes
+        //  23 bytes               19 bytes
         //
         // After the overwrite, it should contain the same number of bytes, with
         // the first 24 bytes having been overwritten. This implies that of the
-        // last 19 bytes, only the last 18 remain, EG:
+        // original 19 bytes appended, only 18 remain, with the first having
+        // been overwritten. EG:
         //
         // "specialized,trek,cerveloianchi,look,merida"
         //  ------------------------^-----------------
-        //  24 bytes                 18 bytes
+        //  24 bytes                18 bytes
         let stored = vfs_ctx.vfs_state.storage_allocation.get();
         let partially_overwritten = appended[1..].to_vec();
         let expected = [overwritten, partially_overwritten].concat();
@@ -1344,5 +1345,210 @@ mod tests {
 
         assert!(res.is_err());
         assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::Io));
+    }
+
+    #[tokio::test]
+    async fn truncate_releases_storage_allocation() {
+        let limits = VfsLimits::default();
+        let mut vfs_state = VfsState::new(limits);
+        let mut resource_table = ResourceTable::new();
+
+        let mut vfs_ctx = VfsCtxView {
+            table: &mut resource_table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let root_descriptor = create_rw_root_descriptor(&mut vfs_ctx);
+        let file_descriptor = vfs_ctx
+            .open_at(
+                root_descriptor,
+                PathFlags::empty(),
+                "truncate_me.txt".to_string(),
+                OpenFlags::CREATE,
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .expect("create file");
+
+        let payload = b"0123456789ABCDEF".to_vec();
+        let payload_size = payload.len() as u64;
+        vfs_ctx
+            .write(file_descriptor, payload, 0)
+            .await
+            .expect("write data");
+        let storage_after_write = vfs_ctx.vfs_state.storage_allocation.get();
+        assert_eq!(storage_after_write, payload_size);
+
+        // Reopen with TRUNCATE to clear contents and ensure accounting shrinks.
+        let root_descriptor = create_rw_root_descriptor(&mut vfs_ctx);
+        vfs_ctx
+            .open_at(
+                root_descriptor,
+                PathFlags::empty(),
+                "truncate_me.txt".to_string(),
+                OpenFlags::TRUNCATE,
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .expect("truncate file");
+
+        assert_eq!(vfs_ctx.vfs_state.storage_allocation.get(), 0);
+    }
+
+    #[tokio::test]
+    async fn opening_descriptor_does_not_consume_inodes() {
+        let limits = VfsLimits::default();
+        let mut vfs_state = VfsState::new(limits);
+        let mut resource_table = ResourceTable::new();
+
+        let mut vfs_ctx = VfsCtxView {
+            table: &mut resource_table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_inodes = vfs_ctx.vfs_state.inodes_allocation.get();
+
+        // Create a file; this should consume exactly one inode.
+        let root_descriptor = create_rw_root_descriptor(&mut vfs_ctx);
+        vfs_ctx
+            .open_at(
+                root_descriptor,
+                PathFlags::empty(),
+                "inode_count.txt".to_string(),
+                OpenFlags::CREATE,
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .expect("create file");
+
+        let after_create = vfs_ctx.vfs_state.inodes_allocation.get();
+        let storage_after_create = vfs_ctx.vfs_state.storage_allocation.get();
+        assert_eq!(after_create, initial_inodes + 1);
+        assert_eq!(storage_after_create, 0); // No storage used yet.
+
+        // Opening existing files must not consume additional inode budget.
+        let root_descriptor = create_rw_root_descriptor(&mut vfs_ctx);
+        vfs_ctx
+            .open_at(
+                root_descriptor,
+                PathFlags::empty(),
+                "inode_count.txt".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .expect("open existing file");
+
+        let after_reopen = vfs_ctx.vfs_state.inodes_allocation.get();
+        assert_eq!(after_reopen, after_create);
+        let storage_after_reopen = vfs_ctx.vfs_state.storage_allocation.get();
+        assert_eq!(storage_after_reopen, storage_after_create); // Still no storage
+    }
+
+    #[tokio::test]
+    async fn test_vfs_exclusive_flag() {
+        let limits = VfsLimits::default();
+        let mut vfs_state = VfsState::new(limits);
+        let mut resource_table = ResourceTable::new();
+
+        let mut vfs_ctx = VfsCtxView {
+            table: &mut resource_table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let file_path = "exclusive_test.txt".to_string();
+        let file_flags = DescriptorFlags::READ | DescriptorFlags::WRITE;
+
+        // *******************************************************************
+        // Test 1: Creating a file with CREATE | EXCLUSIVE should succeed when
+        // file doesn't exist
+        // *******************************************************************
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let exclusive_flags = OpenFlags::CREATE | OpenFlags::EXCLUSIVE;
+
+        let file_desc = vfs_ctx
+            .open_at(
+                root_desc,
+                PathFlags::empty(),
+                file_path.clone(),
+                exclusive_flags,
+                file_flags,
+            )
+            .await
+            .expect("Creating file with CREATE | EXCLUSIVE should succeed when file doesn't exist");
+
+        let exclusive = b"exclusive bikes only".to_vec();
+        vfs_ctx
+            .write(file_desc, exclusive.clone(), 0)
+            .await
+            .expect("Should be able to write to exclusively created file");
+
+        // ********************************************************************
+        // Test 2: Opening an existing file with CREATE | EXCLUSIVE should fail
+        // with ErrorCode::Exist
+        // ********************************************************************
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let res = vfs_ctx
+            .open_at(
+                root_desc,
+                PathFlags::empty(),
+                file_path.clone(),
+                exclusive_flags,
+                file_flags,
+            )
+            .await;
+
+        assert!(res.is_err());
+        assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::Exist));
+
+        // ********************************************************************
+        // Test 3: Verify that opening with just CREATE (no EXCLUSIVE) succeeds
+        // for existing file
+        // ********************************************************************
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let create_only_flags = OpenFlags::CREATE;
+
+        let file_descriptor_reopen = vfs_ctx
+            .open_at(
+                root_desc,
+                PathFlags::empty(),
+                file_path.clone(),
+                create_only_flags,
+                file_flags,
+            )
+            .await
+            .expect("Opening existing file with CREATE (no EXCLUSIVE) should succeed");
+
+        let (create_not_exclusive, eof) = vfs_ctx
+            .read(file_descriptor_reopen, 100, 0)
+            .await
+            .expect("Should be able to read from reopened file");
+
+        assert_eq!(create_not_exclusive, exclusive);
+        assert!(eof);
+
+        // ********************************************************************
+        // Test 4: Create a new file in a subdirectory with EXCLUSIVE flag
+        // First, we need to verify EXCLUSIVE works with paths, not just simple
+        // filenames
+        // ********************************************************************
+        let subdir_path = "subdir/exclusive_file.txt".to_string();
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+
+        let subdir_result = vfs_ctx
+            .open_at(
+                root_desc,
+                PathFlags::empty(),
+                subdir_path.clone(),
+                exclusive_flags,
+                file_flags,
+            )
+            .await;
+
+        assert!(subdir_result.is_err());
+        assert_matches!(
+            subdir_result.err().unwrap().downcast_ref(),
+            Some(ErrorCode::NoEntry)
+        );
     }
 }
