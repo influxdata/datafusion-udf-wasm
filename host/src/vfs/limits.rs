@@ -46,7 +46,7 @@ impl Default for VfsLimits {
             inodes: 10_000,
             max_path_length: 255,
             max_path_segment_size: 50,
-            max_storage_bytes: 10 * 1024 * 1024, // 10 MB
+            max_storage_bytes: 15 * 1024 * 1024, // 15 MB
             max_file_size: 1024 * 1024,          // 1 MB
             max_write_ops_per_sec: 1000,
         }
