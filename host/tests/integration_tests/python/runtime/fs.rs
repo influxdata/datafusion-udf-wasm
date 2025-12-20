@@ -189,11 +189,12 @@ async fn test_write() {
     const CODE: &str = r#"
 def write(path: str) -> str:
     try:
-        open(path, "w")
+        with open(path, "w") as fp:
+            fp.write("data")
+            data = fp.read()
+            return "OK: {data}"
     except Exception as e:
         return f"ERR: {e}"
-
-    raise Exception("unreachable")
 "#;
 
     let udf = python_scalar_udf(CODE).await.unwrap();
@@ -205,15 +206,15 @@ def write(path: str) -> str:
     const CASES: &[TestCase] = &[
         TestCase {
             path: "/",
-            err: "[Errno 69] Read-only file system: '/'",
+            err: "ERR: [Errno 31] Is a directory: '/'",
         },
         TestCase {
             path: "/lib",
-            err: "[Errno 69] Read-only file system: '/lib'",
+            err: "ERR: [Errno 31] Is a directory: '/lib'",
         },
         TestCase {
             path: "/test",
-            err: "[Errno 69] Read-only file system: '/test'",
+            err: "ERR: [Errno 69] Read-only file system",
         },
     ];
 
@@ -233,8 +234,7 @@ def write(path: str) -> str:
 
     assert_eq!(
         array.as_ref(),
-        &StringArray::from_iter(CASES.iter().map(|c| Some(format!("ERR: {}", c.err))))
-            as &dyn Array,
+        &StringArray::from_iter(CASES.iter().map(|c| Some(c.err))) as &dyn Array,
     );
 }
 
