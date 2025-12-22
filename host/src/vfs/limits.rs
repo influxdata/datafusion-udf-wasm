@@ -46,7 +46,7 @@ impl Default for VfsLimits {
             inodes: 10_000,
             max_path_length: 255,
             max_path_segment_size: 50,
-            max_storage_bytes: 10 * 1024 * 1024, // 10 MB
+            max_storage_bytes: 15 * 1024 * 1024, // 15 MB
             max_file_size: 1024 * 1024,          // 1 MB
             max_write_ops_per_sec: 1000,
         }
@@ -81,7 +81,7 @@ impl WriteRateLimiter {
     }
 
     /// Check if a write operation is allowed.
-    pub(crate) fn _check_write_allowed(&mut self) -> Result<(), FsError> {
+    pub(crate) fn check_write_allowed(&mut self) -> Result<(), FsError> {
         let now = Instant::now();
         let window_duration = Duration::from_secs(1);
 
@@ -117,7 +117,7 @@ mod tests {
                 let limiter = Arc::clone(&limiter);
                 async move {
                     let mut limiter = limiter.lock().await;
-                    limiter._check_write_allowed()
+                    limiter.check_write_allowed()
                 }
             });
         }
@@ -141,7 +141,7 @@ mod tests {
                         tokio::time::sleep(Duration::from_secs(2)).await;
                     }
                     let mut limiter = limiter.lock().await;
-                    limiter._check_write_allowed()
+                    limiter.check_write_allowed()
                 }
             });
         }
