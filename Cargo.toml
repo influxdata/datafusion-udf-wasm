@@ -33,7 +33,7 @@ datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0" }
 datafusion-udf-wasm-query = { path = "query", version = "0.1.0" }
 http = { version = "1.4.0", default-features = false }
 hyper = { version = "1.8", default-features = false }
-insta = { version = "1.44.3", "default-features" = false }
+insta = { version = "1.45.1", "default-features" = false }
 log = { version = "0.4.29", default-features = false }
 pyo3 = { version = "0.27.2", default-features = false, features = ["macros"] }
 regex = { version = "1", default-features = false }
@@ -56,7 +56,7 @@ wasmtime-wasi-http = { version = "40.0.0", default-features = false, features = 
   "default-send-request"
 ] }
 wasmtime-wasi-io = { version = "40.0.0", default-features = false }
-wit-bindgen = { version = "0.49", default-features = false, features = [
+wit-bindgen = { version = "0.50", default-features = false, features = [
   "macros"
 ] }
 
