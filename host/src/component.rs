@@ -21,11 +21,10 @@ use crate::{
 };
 
 /// Create WASM engine.
-fn create_engine(flags: &CompilationFlags) -> DataFusionResult<Engine> {
-    // TODO: Once https://github.com/bytecodealliance/wasmtime/pull/12089 is released, make this an `Option` and treat
-    //       `None` as `Config::without_compiler`.
-    let CompilationFlags { target } = flags;
-
+fn create_engine<F>(flags: &F) -> DataFusionResult<Engine>
+where
+    F: CompilationFlagsInterface,
+{
     let mut config = wasmtime::Config::new();
     config.async_support(true);
     config.epoch_interruption(true);
@@ -34,24 +33,61 @@ fn create_engine(flags: &CompilationFlags) -> DataFusionResult<Engine> {
     // messages are nondeterministic.
     config.wasm_backtrace(false);
 
-    if let Some(target) = &target {
-        config
-            .target(target)
-            .with_context(|_| format!("cannot set target: {target}"), None)?;
-    }
+    flags.apply(&mut config)?;
 
     Engine::new(&config).context("create WASM engine", None)
+}
+
+/// Interface for different ways of conveying compilation flags.
+trait CompilationFlagsInterface {
+    /// Apply compilation flags.
+    fn apply(&self, config: &mut wasmtime::Config) -> DataFusionResult<()>;
+}
+
+/// Disable WASM bytecode -> machine code compiler.
+struct NoCompilation;
+
+impl CompilationFlagsInterface for NoCompilation {
+    #[cfg(feature = "compiler")]
+    fn apply(&self, config: &mut wasmtime::Config) -> DataFusionResult<()> {
+        config.enable_compiler(false);
+        Ok(())
+    }
+
+    #[cfg(not(feature = "compiler"))]
+    fn apply(&self, _config: &mut wasmtime::Config) -> DataFusionResult<()> {
+        // `config` has no interface in this case
+        Ok(())
+    }
 }
 
 /// Code compilation flags.
 ///
 /// This is used when [compiling a component](WasmComponentPrecompiled::compile).
+#[cfg(feature = "compiler")]
 #[derive(Debug, Default, Clone)]
 pub struct CompilationFlags {
     /// Target (triplet).
     ///
     /// Set to [`None`] to use the host configuration. Note that this may lead to unportable compiled code.
     pub target: Option<String>,
+}
+
+#[cfg(feature = "compiler")]
+impl CompilationFlagsInterface for CompilationFlags {
+    fn apply(&self, config: &mut wasmtime::Config) -> DataFusionResult<()> {
+        let Self { target } = self;
+
+        config.enable_compiler(true);
+
+        if let Some(target) = &target {
+            config
+                .target(target)
+                .with_context(|_| format!("cannot set target: {target}"), None)?;
+        }
+
+        Ok(())
+    }
 }
 
 /// Pre-compiled WASM component.
@@ -71,6 +107,7 @@ impl WasmComponentPrecompiled {
     ///
     ///
     /// [binary format]: https://webassembly.github.io/spec/core/binary/index.html
+    #[cfg(feature = "compiler")]
     pub async fn compile(
         wasm_binary: Arc<[u8]>,
         flags: &CompilationFlags,
@@ -162,7 +199,7 @@ impl WasmComponentPrecompiled {
         };
 
         // test hydration
-        let engine = create_engine(&CompilationFlags::default())?;
+        let engine = create_engine(&NoCompilation)?;
         this.hydrate(&engine)?;
 
         Ok(this)
@@ -210,7 +247,7 @@ impl WasmComponentInstance {
         io_rt: Handle,
         memory_pool: &Arc<dyn MemoryPool>,
     ) -> DataFusionResult<Self> {
-        let engine = create_engine(&CompilationFlags::default())?;
+        let engine = create_engine(&NoCompilation)?;
 
         // set up epoch timer
         let mut epoch_task = JoinSet::new();

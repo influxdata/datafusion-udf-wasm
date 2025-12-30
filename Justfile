@@ -7,9 +7,15 @@ default:
 # check Rust files via `cargo build`
 check-rust-build: guests::rust::check-build guests::python::check-build
 
-# check Rust files via `cargo check`
-check-rust-check $JUSTCHECK="1":
-    @echo ::group::check-rust-check
+# check Rust files via `cargo check` and no default features
+check-rust-check-no-default-features $JUSTCHECK="1":
+    @echo ::group::check-rust-check-no-default-features
+    cargo check --workspace --no-default-features
+    @echo ::endgroup::
+
+# check Rust files via `cargo check` and all features
+check-rust-check-all-features $JUSTCHECK="1":
+    @echo ::group::check-rust-check-all-features
     cargo check --workspace --all-features
     @echo ::endgroup::
 
@@ -50,7 +56,7 @@ check-rust-deny:
     @echo ::endgroup::
 
 # run ALL Rust checks
-check-rust: check-rust-fmt check-rust-check check-rust-build check-rust-clippy check-rust-test check-rust-doc check-rust-bench check-rust-deny
+check-rust: check-rust-fmt check-rust-check-no-default-features check-rust-check-all-features check-rust-build check-rust-clippy check-rust-test check-rust-doc check-rust-bench check-rust-deny
 
 # check spelling
 check-spelling:
