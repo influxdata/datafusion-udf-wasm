@@ -152,6 +152,7 @@ impl TryFrom<datafusion_expr::Signature> for wit_types::Signature {
         Ok(Self {
             type_signature: value.type_signature.try_into()?,
             volatility: value.volatility.into(),
+            parameter_names: value.parameter_names,
         })
     }
 }

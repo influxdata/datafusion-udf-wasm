@@ -1,8 +1,9 @@
-//! Long UDF names.
+//! UDF with many parameters.
+
 use std::sync::Arc;
 
 use datafusion_common::Result as DataFusionResult;
-use datafusion_expr::ScalarUDFImpl;
+use datafusion_expr::{ScalarUDFImpl, Signature, TypeSignature, Volatility};
 
 use crate::complex::TestUdf;
 
@@ -14,16 +15,12 @@ pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImp
     let limit: usize = std::env::var("limit").unwrap().parse().unwrap();
     let name = std::iter::repeat_n('x', limit + 1).collect::<String>();
 
-    Ok(vec![
-        // Emit twice. This shouldn't trigger the "duplicate names" detection though because the length MUST be
-        // checked BEFORE potentially hashing the names.
-        Arc::new(TestUdf {
-            name: name.clone(),
-            ..Default::default()
-        }),
-        Arc::new(TestUdf {
-            name,
-            ..Default::default()
-        }),
-    ])
+    Ok(vec![Arc::new(TestUdf {
+        signature: Signature {
+            type_signature: TypeSignature::Uniform(1, vec![]),
+            volatility: Volatility::Immutable,
+            parameter_names: Some(vec![name]),
+        },
+        ..Default::default()
+    })])
 }

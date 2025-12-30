@@ -44,6 +44,14 @@ impl Evil {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(complex::many_inputs::udfs),
             },
+            "complex::params_long_name" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::params_long_name::udfs),
+            },
+            "complex::params_many" => Self {
+                root: Box::new(common::root_empty),
+                udfs: Box::new(complex::params_many::udfs),
+            },
             "complex::return_type" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(complex::return_type::udfs),

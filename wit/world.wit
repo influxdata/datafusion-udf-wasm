@@ -1,4 +1,4 @@
-package datafusion-udf-wasm:udf@0.1.0;
+package datafusion-udf-wasm:udf@0.2.0;
 
 interface types {
     // TODO: add more variants
@@ -70,6 +70,7 @@ interface types {
     record signature {
         type-signature: type-signature,
         volatility: volatility,
+        parameter-names: option<list<string>>,
     }
 
     variant columnar-value {

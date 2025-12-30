@@ -4,7 +4,7 @@ use std::sync::Arc;
 use datafusion_common::Result as DataFusionResult;
 use datafusion_expr::ScalarUDFImpl;
 
-use crate::complex::NamedUdf;
+use crate::complex::TestUdf;
 
 /// Returns our evil UDFs.
 ///
@@ -12,8 +12,17 @@ use crate::complex::NamedUdf;
 #[expect(clippy::unnecessary_wraps, reason = "public API through export! macro")]
 pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
     Ok(vec![
-        Arc::new(NamedUdf("foo".to_owned())),
-        Arc::new(NamedUdf("bar".to_owned())),
-        Arc::new(NamedUdf("foo".to_owned())),
+        Arc::new(TestUdf {
+            name: "foo".to_owned(),
+            ..Default::default()
+        }),
+        Arc::new(TestUdf {
+            name: "bar".to_owned(),
+            ..Default::default()
+        }),
+        Arc::new(TestUdf {
+            name: "foo".to_owned(),
+            ..Default::default()
+        }),
     ])
 }
