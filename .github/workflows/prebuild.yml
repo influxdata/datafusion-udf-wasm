@@ -44,7 +44,7 @@ jobs:
         uses: ./.github/actions/free-disk-space
 
       - name: Install `just`
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f  # v2
+        uses: taiki-e/install-action@0e76c5c569f13f7eb21e8e5b26fe710062b57b62  # v2
         with:
           tool: just
 

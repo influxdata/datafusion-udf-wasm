@@ -30,12 +30,12 @@ jobs:
         run: pip install --requirement=.github/workflows/requirements.txt
 
       - name: Install `cargo-deny` & `just` & 'typos'
-        uses: taiki-e/install-action@b9c5db3aef04caffaf95a1d03931de10fb2a140f  # v2
+        uses: taiki-e/install-action@0e76c5c569f13f7eb21e8e5b26fe710062b57b62  # v2
         with:
           tool: cargo-deny,just,typos
 
       - name: Install `tombi`
-        uses: tombi-toml/setup-tombi@2119ac80a557c9fb2e7012858e63c22d8bf26cdb  # v1
+        uses: tombi-toml/setup-tombi@f7cb38e77d9a62bc27a8445bf50e660e9496b893  # v1
         env:
           # need token to prevent potential rate limiting, see https://github.com/tombi-toml/setup-tombi/issues/9
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
