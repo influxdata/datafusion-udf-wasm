@@ -33,7 +33,7 @@ datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0" }
 datafusion-udf-wasm-query = { path = "query", version = "0.1.0" }
 http = { version = "1.4.0", default-features = false }
 hyper = { version = "1.8", default-features = false }
-insta = { version = "1.45.1", "default-features" = false }
+insta = { version = "1.46.0", "default-features" = false }
 log = { version = "0.4.29", default-features = false }
 pyo3 = { version = "0.27.2", default-features = false, features = ["macros"] }
 regex = { version = "1", default-features = false }
@@ -44,7 +44,7 @@ sqlparser = { version = "0.58.0", default-features = false, features = [
 tar = { version = "0.4.44", default-features = false }
 target-lexicon = { version = "0.13", default-features = false }
 tempfile = { version = "3.23.0", default-features = false }
-tokio = { version = "1.48.0", default-features = false }
+tokio = { version = "1.49.0", default-features = false }
 uuid = { version = "1.19.0", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
 wasmtime = { version = "40.0.0", default-features = false, features = [
