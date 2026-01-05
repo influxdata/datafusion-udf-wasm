@@ -19,7 +19,6 @@ use std::{
 
 use rand::Rng;
 use siphasher::sip128::{Hasher128, SipHasher24};
-use tokio::sync::Mutex;
 use wasmtime::component::{HasData, Resource};
 use wasmtime_wasi::{
     ResourceTable,
@@ -43,7 +42,7 @@ use crate::{
     limiter::Limiter,
     state::WasmStateImpl,
     vfs::{
-        limits::{VfsLimits, WriteRateLimiter},
+        limits::VfsLimits,
         path::{PathSegment, PathTraversal},
     },
 };
@@ -272,10 +271,6 @@ pub(crate) struct VfsState {
     /// Current allocation of inodes.
     inodes_allocation: Allocation,
 
-    /// A write rate limiter to prevent guests from DoS attacking the host via
-    /// excessive write operations.
-    write_rate_limiter: Mutex<WriteRateLimiter>,
-
     /// Current allocation of storage in bytes.
     storage_allocation: Allocation,
 }
@@ -284,7 +279,6 @@ impl VfsState {
     /// Create a new empty VFS.
     pub(crate) fn new(limits: VfsLimits) -> Self {
         let inodes_allocation = Allocation::new("inodes", limits.inodes);
-        let write_rate_limiter = Mutex::new(WriteRateLimiter::new(limits.max_write_ops_per_sec));
         let storage_allocation = Allocation::new("storage", limits.max_storage_bytes);
         Self {
             root: Arc::new(RwLock::new(VfsNode {
@@ -296,7 +290,6 @@ impl VfsState {
             metadata_hash_key: rand::rng().random(),
             limits,
             inodes_allocation,
-            write_rate_limiter,
             storage_allocation,
         }
     }
@@ -409,12 +402,6 @@ impl VfsState {
         );
 
         Ok(())
-    }
-
-    /// Wait until a write operation is allowed by the rate limiter.
-    async fn check_write_allowed(&mut self) -> Result<(), FsError> {
-        let mut limiter = self.write_rate_limiter.lock().await;
-        limiter.check_write_allowed()
     }
 }
 
@@ -600,8 +587,6 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         }
 
         let node = Arc::clone(&d.node);
-
-        self.vfs_state.check_write_allowed().await?;
 
         match &mut node.write().unwrap().kind {
             VfsNodeKind::File { content } => {
@@ -811,8 +796,6 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         };
 
         if open_flags.contains(OpenFlags::TRUNCATE) && flags.contains(DescriptorFlags::WRITE) {
-            // Truncation mutates file contents and must be rate-limited like other write operations.
-            self.vfs_state.check_write_allowed().await?;
             let mut node_guard = node.write().unwrap();
             match &mut node_guard.kind {
                 VfsNodeKind::File { content } => {
