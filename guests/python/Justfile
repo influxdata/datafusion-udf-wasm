@@ -1,12 +1,12 @@
 PYTHON_VERSION_MAJOR := "3"
 PYTHON_VERSION_MINOR := "14"
-PYTHON_VERSION_MICRO := "0"
+PYTHON_VERSION_MICRO := "2"
 
 WASI_SDK_VERSION_MAJOR := "24"
 WASI_SDK_VERSION_MINOR := "0"
 
-SHA256_PYTHON_SDK := "a312c0a7dc744f456622ba03e1fb6c9e69f65bfe551c44a94ec58f6f06704826"
-SHA256_PYTHON_SDK_BUILD := "9d7169578526aa99561e0be20d0268fcc126d16d368c3a49080465376b78dcc2"
+SHA256_PYTHON_SDK := "de3e74bdde5793f20894c7de18e3e429cbbc82b86417f067d83c2f764432cce3"
+SHA256_PYTHON_SDK_BUILD := "a23ecdd0812161f03f0653f88d8825d0d73e2edeb67db6d4fdbf140866f6977c"
 SHA256_WASI_SDK_SYSROOT := "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99153a50888f08"
 
 PYTHON_VERSION_FULL := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR + "." + PYTHON_VERSION_MICRO
@@ -71,6 +71,11 @@ download-python-sdk:
 
     unzip -d python-sdk python-sdk.zip
     unzip -d build-python-sdk build-python-sdk.zip
+
+    # the python SDK puts the library under /lib, but the python executable wants it under /lib/python3.x
+    mv python-sdk/lib python-sdk/lib.tmp
+    mkdir python-sdk/lib
+    mv python-sdk/lib.tmp python-sdk/lib/python{{PYTHON_VERSION_MAJOR}}.{{PYTHON_VERSION_MINOR}}
 
     mv build-python-sdk/libpython{{PYTHON_VERSION_MAJOR}}.{{PYTHON_VERSION_MINOR}}.a python-sdk/
     mv build-python-sdk/Modules/_decimal/libmpdec/libmpdec.a python-sdk/
