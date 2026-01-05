@@ -24,13 +24,13 @@ datafusion-common = { version = "50.3.0", default-features = false }
 datafusion-execution = { version = "50.3.0", default-features = false }
 datafusion-expr = { version = "50.3.0", default-features = false }
 datafusion-sql = { version = "50.3.0", default-features = false }
-datafusion-udf-wasm-arrow2bytes = { path = "arrow2bytes", version = "0.1.0" }
-datafusion-udf-wasm-bundle = { path = "guests/bundle", version = "0.1.0" }
-datafusion-udf-wasm-evil = { path = "guests/evil", version = "0.1.0" }
-datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0" }
-datafusion-udf-wasm-host = { path = "host", version = "0.1.0" }
-datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0" }
-datafusion-udf-wasm-query = { path = "query", version = "0.1.0" }
+datafusion-udf-wasm-arrow2bytes = { path = "arrow2bytes", version = "0.1.0", default-features = false }
+datafusion-udf-wasm-bundle = { path = "guests/bundle", version = "0.1.0", default-features = false }
+datafusion-udf-wasm-evil = { path = "guests/evil", version = "0.1.0", default-features = false }
+datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0", default-features = false }
+datafusion-udf-wasm-host = { path = "host", version = "0.1.0", default-features = false }
+datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0", default-features = false }
+datafusion-udf-wasm-query = { path = "query", version = "0.1.0", default-features = false }
 http = { version = "1.4.0", default-features = false }
 hyper = { version = "1.8", default-features = false }
 insta = { version = "1.45.1", "default-features" = false }
@@ -49,7 +49,6 @@ uuid = { version = "1.19.0", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
 wasmtime = { version = "40.0.0", default-features = false, features = [
   "async",
-  "cranelift"
 ] }
 wasmtime-wasi = { version = "40.0.0", default-features = false }
 wasmtime-wasi-http = { version = "40.0.0", default-features = false, features = [
