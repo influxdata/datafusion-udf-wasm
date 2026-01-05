@@ -4,7 +4,7 @@
 //! [DataFusion]: https://datafusion.apache.org/
 
 pub use crate::{
-    component::{CompilationFlags, WasmComponentPrecompiled},
+    component::WasmComponentPrecompiled,
     conversion::limits::TrustedDataLimits,
     http::{
         AllowCertainHttpRequests, HttpMethod, HttpRequestMatcher, HttpRequestRejected,
@@ -15,6 +15,9 @@ pub use crate::{
     udf::WasmScalarUdf,
     vfs::limits::VfsLimits,
 };
+
+#[cfg(feature = "compiler")]
+pub use crate::component::CompilationFlags;
 
 // unused-crate-dependencies false positives
 #[cfg(test)]

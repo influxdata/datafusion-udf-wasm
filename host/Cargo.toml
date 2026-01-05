@@ -42,8 +42,11 @@ tokio = { workspace = true, features = ["fs", "macros"] }
 wiremock = "0.6.5"
 
 [features]
+default = ["compiler"]
 # enable all architectures in cranelift/wasmtime
-all-arch = ["wasmtime/all-arch"]
+all-arch = ["compiler", "wasmtime/all-arch"]
+# allow compilation of WASM bytecode to machine code
+compiler = ["wasmtime/cranelift"]
 
 [lints]
 workspace = true
