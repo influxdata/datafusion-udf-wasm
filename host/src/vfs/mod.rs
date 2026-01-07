@@ -675,14 +675,19 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         open_flags: OpenFlags,
         flags: DescriptorFlags,
     ) -> FsResult<Resource<Descriptor>> {
-        let (_, directions) = PathTraversal::parse(&path, &self.vfs_state.limits)?;
-        let mut directions = directions.collect::<Vec<_>>();
+        let node = self.node(self_)?;
 
-        let start = self.node_at(self_, &path);
+        // Parse the path
+        let (is_root, directions) = PathTraversal::parse(&path, &self.vfs_state.limits)?;
+        let start = if is_root {
+            Arc::clone(&self.vfs_state.root)
+        } else {
+            node
+        };
 
         // Handle CREATE flag - create new file if it doesn't exist
         let node = if open_flags.contains(OpenFlags::CREATE) {
-            match start {
+            match VfsNode::traverse(Arc::clone(&start), directions) {
                 Ok(existing_node) => {
                     // File exists, handle EXCLUSIVE flag
                     if open_flags.contains(OpenFlags::EXCLUSIVE) {
@@ -696,6 +701,10 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                         return Err(FsError::trap(ErrorCode::ReadOnly));
                     }
 
+                    // Parse path again for creation
+                    let (is_root, directions) =
+                        PathTraversal::parse(&path, &self.vfs_state.limits)?;
+                    let mut directions = directions.collect::<Vec<_>>();
                     let name = match directions
                         .pop()
                         .ok_or_else(|| FsError::trap(ErrorCode::Invalid))??
@@ -704,7 +713,12 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                         _ => return Err(FsError::trap(ErrorCode::Invalid)),
                     };
 
-                    let parent_node = VfsNode::traverse(start?, directions.into_iter())?;
+                    let parent_start = if is_root {
+                        Arc::clone(&self.vfs_state.root)
+                    } else {
+                        Arc::clone(&start)
+                    };
+                    let parent_node = VfsNode::traverse(parent_start, directions.into_iter())?;
 
                     // Check if file already exists
                     let mut parent_guard = parent_node.write().unwrap();
@@ -732,7 +746,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 }
             }
         } else {
-            VfsNode::traverse(start?, directions.into_iter())?
+            VfsNode::traverse(start, directions)?
         };
 
         if open_flags.contains(OpenFlags::TRUNCATE) && flags.contains(DescriptorFlags::WRITE) {
