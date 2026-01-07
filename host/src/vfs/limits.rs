@@ -19,6 +19,21 @@ pub struct VfsLimits {
     ///
     /// Keep this to a rather small size to prevent super-linear complexity due to string hashing.
     pub max_path_segment_size: u64,
+
+    /// Maximum total VFS storage in bytes.
+    ///
+    /// This limits the total amount of data that can be stored in the VFS to prevent DoS attacks.
+    pub max_storage_bytes: u64,
+
+    /// Maximum size of a single file in bytes.
+    ///
+    /// This prevents a single file from consuming all available storage.
+    pub max_file_size: u64,
+
+    /// Maximum number of write operations per second.
+    ///
+    /// This rate-limits write operations to prevent DoS attacks through excessive I/O.
+    pub max_write_ops_per_sec: u32,
 }
 
 impl Default for VfsLimits {
@@ -27,6 +42,9 @@ impl Default for VfsLimits {
             inodes: 10_000,
             max_path_length: 255,
             max_path_segment_size: 50,
+            max_storage_bytes: 15 * 1024 * 1024, // 15 MB
+            max_file_size: 1024 * 1024,          // 1 MB
+            max_write_ops_per_sec: 1000,
         }
     }
 }

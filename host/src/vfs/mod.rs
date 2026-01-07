@@ -244,6 +244,16 @@ impl Allocation {
                 requested: n,
             })
     }
+
+    /// Decrease allocation by given amount.
+    fn dec(&self, n: u64) -> Result<(), u64> {
+        self.n
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |old| {
+                let new = old.checked_sub(n)?;
+                Some(new)
+            })
+            .map(|_| ())
+    }
 }
 
 /// State for the virtual filesystem.
@@ -260,12 +270,16 @@ pub(crate) struct VfsState {
 
     /// Current allocation of inodes.
     inodes_allocation: Allocation,
+
+    /// Current allocation of storage in bytes.
+    storage_allocation: Allocation,
 }
 
 impl VfsState {
     /// Create a new empty VFS.
     pub(crate) fn new(limits: VfsLimits) -> Self {
         let inodes_allocation = Allocation::new("inodes", limits.inodes);
+        let storage_allocation = Allocation::new("storage", limits.max_storage_bytes);
         Self {
             root: Arc::new(RwLock::new(VfsNode {
                 kind: VfsNodeKind::Directory {
@@ -276,6 +290,7 @@ impl VfsState {
             metadata_hash_key: rand::rng().random(),
             limits,
             inodes_allocation,
+            storage_allocation,
         }
     }
 
@@ -299,6 +314,17 @@ impl VfsState {
                 },
                 tar::EntryType::Regular => {
                     let expected_size = entry.header().size()?;
+                    if expected_size > self.limits.max_file_size {
+                        return Err(LimitExceeded {
+                            name: "tar file entry",
+                            limit: self.limits.max_file_size,
+                            current: 0,
+                            requested: expected_size,
+                        }
+                        .into());
+                    }
+                    // Pre-allocate storage
+                    self.storage_allocation.inc(expected_size)?;
                     let mut content = Vec::new();
                     entry.read_to_end(&mut content)?;
                     // Ensure that we read exactly expected_size bytes
@@ -567,7 +593,19 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 let old_size = content.len() as u64;
                 let new_size = offset + buffer.len() as u64;
 
+                if new_size > self.vfs_state.limits.max_file_size {
+                    let requested = new_size - old_size;
+                    return Err(LimitExceeded {
+                        name: "vfs write",
+                        limit: self.vfs_state.limits.max_file_size,
+                        current: old_size,
+                        requested,
+                    }
+                    .into());
+                }
+
                 if new_size > old_size {
+                    self.vfs_state.storage_allocation.inc(new_size - old_size)?;
                     content.resize(new_size as usize, 0);
                 }
 
@@ -575,6 +613,14 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                     let start = offset as usize;
                     let end = start + buffer.len();
                     content[start..end].copy_from_slice(&buffer);
+                }
+
+                // Only decrement if we actually shrunk the file
+                if old_size > content.len() as u64 {
+                    self.vfs_state
+                        .storage_allocation
+                        .dec(old_size - content.len() as u64)
+                        .expect("shrink should always succeed");
                 }
 
                 Ok(buffer.len() as u64)
@@ -753,8 +799,14 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
             let mut node_guard = node.write().unwrap();
             match &mut node_guard.kind {
                 VfsNodeKind::File { content } => {
+                    let old_size = content.len() as u64;
                     content.clear();
                     content.shrink_to_fit();
+
+                    self.vfs_state
+                        .storage_allocation
+                        .dec(old_size)
+                        .expect("shrink should always succeed");
                 }
                 VfsNodeKind::Directory { .. } => return Err(FsError::trap(ErrorCode::IsDirectory)),
             }
@@ -958,7 +1010,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_write() {
+    async fn basic_vfs_writes() {
+        use filesystem::types::HostDescriptor;
+
         let limits = VfsLimits::default();
         let mut vfs_state = VfsState::new(limits);
         let mut resource_table = ResourceTable::new();
@@ -968,6 +1022,9 @@ mod tests {
             vfs_state: &mut vfs_state,
         };
 
+        // ********************************************************
+        // Test 1: Create and write to a new file
+        // ********************************************************
         let file_path = "bikes.txt".to_string();
         let open_flags = OpenFlags::CREATE;
         let file_flags = DescriptorFlags::READ | DescriptorFlags::WRITE;
@@ -1011,48 +1068,15 @@ mod tests {
             .await
             .expect("Failed to read data");
 
+        let stored = vfs_ctx.vfs_state.storage_allocation.get();
+
+        assert_eq!(stored, data.len() as u64);
         assert_eq!(read_data, data);
         assert!(eof);
-    }
 
-    #[tokio::test]
-    async fn test_append_and_overwrite() {
-        let limits = VfsLimits::default();
-        let mut vfs_state = VfsState::new(limits);
-        let mut resource_table = ResourceTable::new();
-
-        let mut vfs_ctx = VfsCtxView {
-            table: &mut resource_table,
-            vfs_state: &mut vfs_state,
-        };
-
-        let file_path = "bikes.txt".to_string();
-        let open_flags = OpenFlags::CREATE;
-        let file_flags = DescriptorFlags::READ | DescriptorFlags::WRITE;
-
-        // Create the file
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-        let write_desc = vfs_ctx
-            .open_at(
-                root_desc,
-                PathFlags::empty(),
-                file_path.clone(),
-                open_flags,
-                file_flags,
-            )
-            .await
-            .expect("Failed to create file");
-
-        // Write to it!
-        let data = b"pinarello,canyon,factor".to_vec(); // 23 bytes
-        let bytes_written = vfs_ctx
-            .write(write_desc, data.clone(), 0)
-            .await
-            .expect("Failed to write data");
-
-        assert_eq!(bytes_written, data.len() as u64);
-
-        // Open the file for appending
+        // ********************************************************
+        // Test 2: Append data to the file
+        // ********************************************************
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
         let write_desc = vfs_ctx
             .open_at(
@@ -1074,7 +1098,7 @@ mod tests {
 
         assert_eq!(bytes_written, appended.len() as u64);
 
-        // Can we read the appended data back?
+        // Can read the appended data back?
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
         let read_desc = vfs_ctx
             .open_at(
@@ -1092,11 +1116,16 @@ mod tests {
             .await
             .expect("Failed to read all data");
 
+        let stored = vfs_ctx.vfs_state.storage_allocation.get();
+        assert_eq!(stored, total_len as u64);
+
         let expected = [data, appended.clone()].concat();
         assert_eq!(expected, actual);
         assert!(eof);
 
-        // Open the file for overwriting
+        // ********************************************************
+        // Test 2: Overwrite contents of file
+        // ********************************************************
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
         let write_desc = vfs_ctx
             .open_at(
@@ -1148,14 +1177,16 @@ mod tests {
         // "specialized,trek,cerveloianchi,look,merida"
         //  ------------------------^-----------------
         //  24 bytes                 18 bytes
+        let stored = vfs_ctx.vfs_state.storage_allocation.get();
         let partially_overwritten = appended[1..].to_vec();
         let expected = [overwritten, partially_overwritten].concat();
+        assert_eq!(stored, total_len as u64);
         assert_eq!(expected, actual);
         assert!(eof);
     }
 
     #[tokio::test]
-    async fn test_write_permissions() {
+    async fn write_permissions() {
         let limits = VfsLimits::default();
         let mut vfs_state = VfsState::new(limits);
         let mut resource_table = ResourceTable::new();
@@ -1196,7 +1227,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_vfs_limits() {
+    async fn vfs_limits() {
         use filesystem::types::HostDescriptor;
 
         // Create VFS with very small limits for testing
@@ -1204,6 +1235,9 @@ mod tests {
             inodes: 10,
             max_path_length: 255,
             max_path_segment_size: 50,
+            max_storage_bytes: 100,     // Very small storage limit
+            max_file_size: 50,          // Small file size limit
+            max_write_ops_per_sec: 100, // High enough to not interfere with storage/file size tests
         };
         let mut vfs_state = VfsState::new(limits);
         let mut resource_table = ResourceTable::new();
