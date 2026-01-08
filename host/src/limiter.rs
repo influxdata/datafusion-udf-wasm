@@ -6,6 +6,7 @@ use anyhow::Context;
 use datafusion_common::DataFusionError;
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryPool, MemoryReservation};
 use wasmtime::ResourceLimiter;
+use wasmtime_wasi::TrappableError;
 
 use crate::error::LimitExceeded;
 
@@ -75,6 +76,11 @@ impl Limiter {
             log::debug!("failed to grow memory: {e}");
             GrowthError(e)
         })
+    }
+
+    /// Shrink memory usage.
+    pub(crate) fn shrink(&mut self, bytes: usize) {
+        self.memory_reservation.shrink(bytes);
     }
 
     /// Get current allocation size.
@@ -197,5 +203,13 @@ impl From<GrowthError> for DataFusionError {
 impl From<GrowthError> for std::io::Error {
     fn from(e: GrowthError) -> Self {
         Self::new(std::io::ErrorKind::QuotaExceeded, e.0)
+    }
+}
+
+impl From<GrowthError>
+    for TrappableError<wasmtime_wasi::p2::bindings::filesystem::types::ErrorCode>
+{
+    fn from(e: GrowthError) -> Self {
+        Self::trap(Box::new(e.0))
     }
 }

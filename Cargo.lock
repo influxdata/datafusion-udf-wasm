@@ -1373,6 +1373,7 @@ dependencies = [
  "anyhow",
  "arrow",
  "assert_matches",
+ "datafusion",
  "datafusion-common",
  "datafusion-execution",
  "datafusion-expr",

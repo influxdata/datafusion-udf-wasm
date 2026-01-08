@@ -244,16 +244,6 @@ impl Allocation {
                 requested: n,
             })
     }
-
-    /// Decrease allocation by given amount.
-    fn dec(&self, n: u64) -> Result<(), u64> {
-        self.n
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |old| {
-                let new = old.checked_sub(n)?;
-                Some(new)
-            })
-            .map(|_| ())
-    }
 }
 
 /// State for the virtual filesystem.
@@ -272,14 +262,13 @@ pub(crate) struct VfsState {
     inodes_allocation: Allocation,
 
     /// Current allocation of storage in bytes.
-    storage_allocation: Allocation,
+    storage_limiter: Limiter,
 }
 
 impl VfsState {
     /// Create a new empty VFS.
-    pub(crate) fn new(limits: VfsLimits) -> Self {
+    pub(crate) fn new(limits: VfsLimits, storage_limiter: Limiter) -> Self {
         let inodes_allocation = Allocation::new("inodes", limits.inodes);
-        let storage_allocation = Allocation::new("storage", limits.max_storage_bytes);
         Self {
             root: Arc::new(RwLock::new(VfsNode {
                 kind: VfsNodeKind::Directory {
@@ -290,17 +279,13 @@ impl VfsState {
             metadata_hash_key: rand::rng().random(),
             limits,
             inodes_allocation,
-            storage_allocation,
+            storage_limiter,
         }
     }
 
     /// Populate the VFS from a tar archive.
-    pub(crate) fn populate_from_tar(
-        &mut self,
-        tar_data: &[u8],
-        limiter: &mut Limiter,
-    ) -> Result<(), std::io::Error> {
-        let size_pre = limiter.size();
+    pub(crate) fn populate_from_tar(&mut self, tar_data: &[u8]) -> Result<(), std::io::Error> {
+        let size_pre = self.storage_limiter.size();
         let cursor = Cursor::new(tar_data);
         let mut archive = tar::Archive::new(cursor);
 
@@ -314,23 +299,12 @@ impl VfsState {
                 },
                 tar::EntryType::Regular => {
                     let expected_size = entry.header().size()?;
-                    if expected_size > self.limits.max_file_size {
-                        return Err(LimitExceeded {
-                            name: "tar file entry",
-                            limit: self.limits.max_file_size,
-                            current: 0,
-                            requested: expected_size,
-                        }
-                        .into());
-                    }
-                    // Pre-allocate storage
-                    self.storage_allocation.inc(expected_size)?;
                     let mut content = Vec::new();
                     entry.read_to_end(&mut content)?;
                     // Ensure that we read exactly expected_size bytes
                     assert!(content.len() as u64 == expected_size);
                     content.shrink_to_fit();
-                    limiter.grow(content.capacity())?;
+                    self.storage_limiter.grow(content.capacity())?;
                     VfsNodeKind::File { content }
                 }
                 other => {
@@ -378,8 +352,8 @@ impl VfsState {
             }));
 
             self.inodes_allocation.inc(1)?;
-            limiter.grow(name.len())?;
-            limiter.grow(std::mem::size_of_val(&child))?;
+            self.storage_limiter.grow(name.len())?;
+            self.storage_limiter.grow(std::mem::size_of_val(&child))?;
 
             match &mut node.write().unwrap().kind {
                 VfsNodeKind::File { .. } => {
@@ -397,7 +371,7 @@ impl VfsState {
         log::info!(
             "unpacked WASM guest root filesystem from {} bytes TAR, consuming {} bytes and {} inodes",
             tar_data.len(),
-            limiter.size() - size_pre,
+            self.storage_limiter.size() - size_pre,
             self.inodes_allocation.get()
         );
 
@@ -590,23 +564,12 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
         match &mut node.write().unwrap().kind {
             VfsNodeKind::File { content } => {
-                let old_size = content.len() as u64;
-                let new_size = offset + buffer.len() as u64;
-
-                if new_size > self.vfs_state.limits.max_file_size {
-                    let requested = new_size - old_size;
-                    return Err(LimitExceeded {
-                        name: "vfs write",
-                        limit: self.vfs_state.limits.max_file_size,
-                        current: old_size,
-                        requested,
-                    }
-                    .into());
-                }
+                let old_size = content.len();
+                let new_size: usize = (offset + buffer.len() as u64).try_into().unwrap();
 
                 if new_size > old_size {
-                    self.vfs_state.storage_allocation.inc(new_size - old_size)?;
-                    content.resize(new_size as usize, 0);
+                    self.vfs_state.storage_limiter.grow(new_size - old_size)?;
+                    content.resize(new_size, 0);
                 }
 
                 if new_size != old_size {
@@ -616,11 +579,10 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 }
 
                 // Only decrement if we actually shrunk the file
-                if old_size > content.len() as u64 {
+                if old_size > content.len() {
                     self.vfs_state
-                        .storage_allocation
-                        .dec(old_size - content.len() as u64)
-                        .expect("shrink should always succeed");
+                        .storage_limiter
+                        .shrink(old_size - content.len());
                 }
 
                 Ok(buffer.len() as u64)
@@ -799,14 +761,11 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
             let mut node_guard = node.write().unwrap();
             match &mut node_guard.kind {
                 VfsNodeKind::File { content } => {
-                    let old_size = content.len() as u64;
+                    let old_size = content.len();
                     content.clear();
                     content.shrink_to_fit();
 
-                    self.vfs_state
-                        .storage_allocation
-                        .dec(old_size)
-                        .expect("shrink should always succeed");
+                    self.vfs_state.storage_limiter.shrink(old_size);
                 }
                 VfsNodeKind::Directory { .. } => return Err(FsError::trap(ErrorCode::IsDirectory)),
             }
@@ -993,9 +952,13 @@ impl HasData for HasFs {
 
 #[cfg(test)]
 mod tests {
+    use crate::StaticResourceLimits;
+
     use super::*;
 
     use assert_matches::assert_matches;
+    use datafusion::prelude::{SessionConfig, SessionContext};
+    use datafusion_execution::{memory_pool::GreedyMemoryPool, runtime_env::RuntimeEnv};
     use filesystem::types::HostDescriptor;
     use wasmtime::component::Resource;
     use wasmtime_wasi::ResourceTable;
@@ -1011,10 +974,15 @@ mod tests {
 
     #[tokio::test]
     async fn basic_vfs_writes() {
-        use filesystem::types::HostDescriptor;
-
         let limits = VfsLimits::default();
-        let mut vfs_state = VfsState::new(limits);
+
+        let ctx = session_ctx_with_fixed_pool_size(1024 * 1024);
+        let limiter = Limiter::new(
+            StaticResourceLimits::default(),
+            ctx.task_ctx().memory_pool(),
+        );
+
+        let mut vfs_state = VfsState::new(limits, limiter);
         let mut resource_table = ResourceTable::new();
 
         let mut vfs_ctx = VfsCtxView {
@@ -1068,9 +1036,9 @@ mod tests {
             .await
             .expect("Failed to read data");
 
-        let stored = vfs_ctx.vfs_state.storage_allocation.get();
+        let stored = vfs_ctx.vfs_state.storage_limiter.size();
 
-        assert_eq!(stored, data.len() as u64);
+        assert_eq!(stored, data.len());
         assert_eq!(read_data, data);
         assert!(eof);
 
@@ -1116,8 +1084,8 @@ mod tests {
             .await
             .expect("Failed to read all data");
 
-        let stored = vfs_ctx.vfs_state.storage_allocation.get();
-        assert_eq!(stored, total_len as u64);
+        let stored = vfs_ctx.vfs_state.storage_limiter.size();
+        assert_eq!(stored, total_len);
 
         let expected = [data, appended.clone()].concat();
         assert_eq!(expected, actual);
@@ -1177,10 +1145,10 @@ mod tests {
         // "specialized,trek,cerveloianchi,look,merida"
         //  ------------------------^-----------------
         //  24 bytes                 18 bytes
-        let stored = vfs_ctx.vfs_state.storage_allocation.get();
+        let stored = vfs_ctx.vfs_state.storage_limiter.size();
         let partially_overwritten = appended[1..].to_vec();
         let expected = [overwritten, partially_overwritten].concat();
-        assert_eq!(stored, total_len as u64);
+        assert_eq!(stored, total_len);
         assert_eq!(expected, actual);
         assert!(eof);
     }
@@ -1188,7 +1156,14 @@ mod tests {
     #[tokio::test]
     async fn write_permissions() {
         let limits = VfsLimits::default();
-        let mut vfs_state = VfsState::new(limits);
+
+        let ctx = session_ctx_with_fixed_pool_size(1024 * 1024);
+        let limiter = Limiter::new(
+            StaticResourceLimits::default(),
+            ctx.task_ctx().memory_pool(),
+        );
+
+        let mut vfs_state = VfsState::new(limits, limiter);
         let mut resource_table = ResourceTable::new();
 
         let mut vfs_ctx = VfsCtxView {
@@ -1228,18 +1203,19 @@ mod tests {
 
     #[tokio::test]
     async fn vfs_limits() {
-        use filesystem::types::HostDescriptor;
-
         // Create VFS with very small limits for testing
         let limits = VfsLimits {
             inodes: 10,
             max_path_length: 255,
             max_path_segment_size: 50,
-            max_storage_bytes: 100,     // Very small storage limit
-            max_file_size: 50,          // Small file size limit
-            max_write_ops_per_sec: 100, // High enough to not interfere with storage/file size tests
         };
-        let mut vfs_state = VfsState::new(limits);
+        let ctx = session_ctx_with_fixed_pool_size(100);
+        let limiter = Limiter::new(
+            StaticResourceLimits::default(),
+            ctx.task_ctx().memory_pool(),
+        );
+
+        let mut vfs_state = VfsState::new(limits, limiter);
         let mut resource_table = ResourceTable::new();
 
         let mut vfs_ctx = VfsCtxView {
@@ -1262,8 +1238,8 @@ mod tests {
             .await
             .expect("Failed to create file");
 
-        // Try to write data exceeding file size limit, should get Io error
-        let exceed_limit = vec![b'X'; 100]; // Larger than max_file_size (50)
+        // Try to write data exceeding storage limit, should get Io error
+        let exceed_limit = vec![b'X'; 110]; // Larger than max_storage_bytes (100)
         let res = vfs_ctx.write(file_desc, exceed_limit, 0).await;
         assert!(res.is_err());
         assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::Io));
@@ -1327,5 +1303,16 @@ mod tests {
 
         assert!(res.is_err());
         assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::Io));
+    }
+
+    /// Get session context.
+    fn session_ctx_with_fixed_pool_size(size: usize) -> SessionContext {
+        SessionContext::new_with_config_rt(
+            SessionConfig::new(),
+            Arc::new(RuntimeEnv {
+                memory_pool: Arc::new(GreedyMemoryPool::new(size)),
+                ..Default::default()
+            }),
+        )
     }
 }
