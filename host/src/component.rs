@@ -282,13 +282,10 @@ impl WasmComponentInstance {
         let component = component.hydrate(&engine)?;
 
         // resource/mem limiter
-        // NOTE: We create two limiters here since the VFS can do allocations on its own that we want to
-        // account for separately.
-        let mut limiter = Limiter::new(permissions.resource_limits.clone(), memory_pool);
-        let vfs_limiter = Limiter::new(permissions.resource_limits.clone(), memory_pool);
+        let limiter = Arc::new(Limiter::new(permissions.resource_limits.clone(), memory_pool));
 
         // Create in-memory VFS
-        let vfs_state = VfsState::new(permissions.vfs.clone(), vfs_limiter);
+        let vfs_state = VfsState::new(permissions.vfs.clone(), Arc::clone(&limiter));
 
         // set up WASI p2 context
         limiter.grow(permissions.stderr_bytes)?;
@@ -324,7 +321,7 @@ impl WasmComponentInstance {
                 Box::pin(tokio::task::consume_budget()),
             ))
         });
-        store.limiter(|state| &mut state.limiter);
+        store.limiter(|state| state.limiter.as_ref());
 
         let bindings = link(&engine, &component, &mut store)
             .await

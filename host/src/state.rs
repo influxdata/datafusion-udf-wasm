@@ -17,7 +17,7 @@ pub(crate) struct WasmStateImpl {
     pub(crate) vfs_state: VfsState,
 
     /// Resource limiter.
-    pub(crate) limiter: Limiter,
+    pub(crate) limiter: Arc<Limiter>,
 
     /// A limited buffer for stderr.
     ///

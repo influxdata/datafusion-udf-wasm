@@ -5,6 +5,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use datafusion_common::DataFusionError;
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryPool, MemoryReservation};
+use std::sync::Mutex;
 use wasmtime::ResourceLimiter;
 use wasmtime_wasi::TrappableError;
 
@@ -53,7 +54,7 @@ pub(crate) struct Limiter {
     /// DataFusion memory reservation.
     ///
     /// This is ONLY used for bytes, not for any other resources.
-    memory_reservation: MemoryReservation,
+    memory_reservation: Mutex<MemoryReservation>,
 
     /// Limits.
     limits: StaticResourceLimits,
@@ -62,7 +63,8 @@ pub(crate) struct Limiter {
 impl Limiter {
     /// Create new limiter.
     pub(crate) fn new(limits: StaticResourceLimits, pool: &Arc<dyn MemoryPool>) -> Self {
-        let memory_reservation = MemoryConsumer::new("WASM UDF resources").register(pool);
+        let memory_reservation =
+            Mutex::new(MemoryConsumer::new("WASM UDF resources").register(pool));
 
         Self {
             memory_reservation,
@@ -71,21 +73,25 @@ impl Limiter {
     }
 
     /// Grow memory usage.
-    pub(crate) fn grow(&mut self, bytes: usize) -> Result<(), GrowthError> {
-        self.memory_reservation.try_grow(bytes).map_err(|e| {
-            log::debug!("failed to grow memory: {e}");
-            GrowthError(e)
-        })
+    pub(crate) fn grow(&self, bytes: usize) -> Result<(), GrowthError> {
+        self.memory_reservation
+            .lock()
+            .unwrap()
+            .try_grow(bytes)
+            .map_err(|e| {
+                log::debug!("failed to grow memory: {e}");
+                GrowthError(e)
+            })
     }
 
     /// Shrink memory usage.
-    pub(crate) fn shrink(&mut self, bytes: usize) {
-        self.memory_reservation.shrink(bytes);
+    pub(crate) fn shrink(&self, bytes: usize) {
+        self.memory_reservation.lock().unwrap().shrink(bytes);
     }
 
     /// Get current allocation size.
     pub(crate) fn size(&self) -> usize {
-        self.memory_reservation.size()
+        self.memory_reservation.lock().unwrap().size()
     }
 
     /// Inner implementation of [`ResourceLimiter::table_growing`]
