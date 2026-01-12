@@ -282,10 +282,10 @@ impl WasmComponentInstance {
         let component = component.hydrate(&engine)?;
 
         // resource/mem limiter
-        let limiter = Arc::new(Limiter::new(permissions.resource_limits.clone(), memory_pool));
+        let limiter = Limiter::new(permissions.resource_limits.clone(), memory_pool);
 
         // Create in-memory VFS
-        let vfs_state = VfsState::new(permissions.vfs.clone(), Arc::clone(&limiter));
+        let vfs_state = VfsState::new(permissions.vfs.clone(), limiter.clone());
 
         // set up WASI p2 context
         limiter.grow(permissions.stderr_bytes)?;
@@ -321,7 +321,7 @@ impl WasmComponentInstance {
                 Box::pin(tokio::task::consume_budget()),
             ))
         });
-        store.limiter(|state| state.limiter.as_ref());
+        store.limiter(|state| &mut state.limiter);
 
         let bindings = link(&engine, &component, &mut store)
             .await

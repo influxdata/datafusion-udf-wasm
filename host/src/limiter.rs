@@ -54,17 +54,26 @@ pub(crate) struct Limiter {
     /// DataFusion memory reservation.
     ///
     /// This is ONLY used for bytes, not for any other resources.
-    memory_reservation: Mutex<MemoryReservation>,
+    memory_reservation: Arc<Mutex<MemoryReservation>>,
 
     /// Limits.
     limits: StaticResourceLimits,
 }
 
+impl Clone for Limiter {
+    fn clone(&self) -> Self {
+        Self {
+            memory_reservation: Arc::clone(&self.memory_reservation),
+            limits: self.limits.clone(),
+        }
+    }
+}
 impl Limiter {
     /// Create new limiter.
     pub(crate) fn new(limits: StaticResourceLimits, pool: &Arc<dyn MemoryPool>) -> Self {
-        let memory_reservation =
-            Mutex::new(MemoryConsumer::new("WASM UDF resources").register(pool));
+        let memory_reservation = Arc::new(Mutex::new(
+            MemoryConsumer::new("WASM UDF resources").register(pool),
+        ));
 
         Self {
             memory_reservation,

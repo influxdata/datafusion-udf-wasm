@@ -262,12 +262,12 @@ pub(crate) struct VfsState {
     inodes_allocation: Allocation,
 
     /// Resource limiter.
-    limiter: Arc<Limiter>,
+    limiter: Limiter,
 }
 
 impl VfsState {
     /// Create a new empty VFS.
-    pub(crate) fn new(limits: VfsLimits, limiter: Arc<Limiter>) -> Self {
+    pub(crate) fn new(limits: VfsLimits, limiter: Limiter) -> Self {
         let inodes_allocation = Allocation::new("inodes", limits.inodes);
         Self {
             root: Arc::new(RwLock::new(VfsNode {
@@ -566,11 +566,13 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
             VfsNodeKind::File { content } => {
                 let old_size = content.len();
 
-                if offset <= u64::MAX {
+                if offset == u64::MAX {
                     return Err(FsError::trap(ErrorCode::Overflow));
                 }
 
-                let new_size: usize = (offset + buffer.len() as u64).try_into().expect("offset + buffer.len() fits into usize");
+                let new_size: usize = (offset + buffer.len() as u64)
+                    .try_into()
+                    .expect("offset + buffer.len() fits into usize");
 
                 if new_size > old_size {
                     self.vfs_state.limiter.grow(new_size - old_size)?;
@@ -701,7 +703,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 }
                 Err(_) => {
                     // File doesn't exist, create it
-                    if !flags.intersects(DescriptorFlags::MUTATE_DIRECTORY) {
+                    if flags.intersects(DescriptorFlags::MUTATE_DIRECTORY) {
                         return Err(FsError::trap(ErrorCode::ReadOnly));
                     }
 
@@ -973,10 +975,10 @@ mod tests {
         let limits = VfsLimits::default();
 
         let ctx = session_ctx_with_fixed_pool_size(1024 * 1024);
-        let limiter = Arc::new(Limiter::new(
+        let limiter = Limiter::new(
             StaticResourceLimits::default(),
             ctx.task_ctx().memory_pool(),
-        ));
+        );
 
         let mut vfs_state = VfsState::new(limits, limiter);
         let mut resource_table = ResourceTable::new();
@@ -1154,10 +1156,10 @@ mod tests {
         let limits = VfsLimits::default();
 
         let ctx = session_ctx_with_fixed_pool_size(1024 * 1024);
-        let limiter = Arc::new(Limiter::new(
+        let limiter = Limiter::new(
             StaticResourceLimits::default(),
             ctx.task_ctx().memory_pool(),
-        ));
+        );
 
         let mut vfs_state = VfsState::new(limits, limiter);
         let mut resource_table = ResourceTable::new();
@@ -1206,10 +1208,10 @@ mod tests {
             max_path_segment_size: 50,
         };
         let ctx = session_ctx_with_fixed_pool_size(100);
-        let limiter = Arc::new(Limiter::new(
+        let limiter = Limiter::new(
             StaticResourceLimits::default(),
             ctx.task_ctx().memory_pool(),
-        ));
+        );
 
         let mut vfs_state = VfsState::new(limits, limiter);
         let mut resource_table = ResourceTable::new();
