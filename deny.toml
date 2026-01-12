@@ -8,6 +8,10 @@ ignore = [
   # paste is unmaintained but does not have any known issues;
   # there is no replacement at this time
   "RUSTSEC-2024-0436",
+  # bincode is unmaintained but does not have any known issues;
+  # this is only used by our dependencies, most notably
+  # `gungraun`, which is only used for testing/benchmarking.
+  "RUSTSEC-2025-0141",
 ]
 git-fetch-with-cli = true
 

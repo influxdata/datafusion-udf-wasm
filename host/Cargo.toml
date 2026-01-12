@@ -8,6 +8,11 @@ license.workspace = true
 name = "compile"
 required-features = ["all-arch"]
 
+[[bench]]
+harness = false
+name = "udf_overhead"
+required-features = ["all-arch"]
+
 [dependencies]
 anyhow.workspace = true
 arrow.workspace = true
@@ -34,6 +39,7 @@ datafusion-udf-wasm-bundle = { workspace = true, features = [
   "example",
   "python"
 ] }
+gungraun.workspace = true
 insta.workspace = true
 regex.workspace = true
 target-lexicon.workspace = true

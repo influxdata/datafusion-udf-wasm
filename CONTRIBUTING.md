@@ -28,6 +28,9 @@ Install [tombi] to format and lint [TOML] files.
 ### Spellcheck
 Install [typos] to run an automatic spellcheck.
 
+### Valgrind
+We require [Valgrind] to run our benchmark. However, if you only want to "smoke test" benchmarks (via `just check-rust-bench`), [Valgrind] is NOT required.
+
 
 ## Checks
 There is one "run everything" [just] recipe:
@@ -65,6 +68,29 @@ If tests fail due to outdated snapshots, review them using:
 ```console
 cargo insta review
 ```
+
+## Benchmarks
+We use [Valgrind] + [gungraun] for our benchmarks. This approach should result in less flakiness compared to wall-clock based micro-benchmarks (e.g. via [Criterion.rs]). It also yields more useful data (e.g. to fit linear regressions for cost models) than paired benchmarks like [Tango.rs].
+
+To run a benchmark (e.g. `udf_overhead`), use:
+
+```console
+cargo bench --features=all-arch --package=datafusion-udf-wasm-host --bench=udf_overhead
+```
+
+You can also see all benchmarks CLI options if you pass `--help` to the benchmark binary (note the extra `--` separator):
+
+```console
+cargo bench --features=all-arch --package=datafusion-udf-wasm-host --bench=udf_overhead -- --help
+```
+
+If you just want to smoke-test the benchmarks w/o any actual measurement, you can use:
+
+```console
+just check-rust-bench
+```
+
+Smoke-testing does NOT require [Valgrind].
 
 ## Troubleshooting
 Here are some tips for when things don't work.
@@ -122,6 +148,8 @@ $ gh workflow run Prebuild --ref <BRANCH_NAME>
 
 
 [cargo-deny]: https://embarkstudios.github.io/cargo-deny/
+[Criterion.rs]: https://github.com/criterion-rs/criterion.rs
+[gungraun]: https://gungraun.github.io/gungraun/
 [GitHub CLI]: https://cli.github.com/
 [insta]: https://insta.rs/
 [just]: https://github.com/casey/just
@@ -129,7 +157,10 @@ $ gh workflow run Prebuild --ref <BRANCH_NAME>
 [Python Standard Library]: https://docs.python.org/3/library/index.html
 [Rust]: https://www.rust-lang.org/
 [rustup]: https://rustup.rs/
+[Tango.rs]: https://github.com/bazhenov/tango
 [tombi]: https://tombi-toml.github.io/tombi
 [TOML]: https://toml.io/
 [typos]: https://github.com/crate-ci/typos
 [uv]: https://docs.astral.sh/uv/
+[Valgrind]: https://valgrind.org/
+[yamllint]: https://github.com/adrienverge/yamllint
