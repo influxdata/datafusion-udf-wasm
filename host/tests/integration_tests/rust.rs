@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use arrow::{
-    array::{Array, Int32Array},
+    array::{Array, Int64Array},
     datatypes::{DataType, Field},
 };
 use datafusion_common::ScalarValue;
@@ -34,12 +34,12 @@ async fn test_add_one() {
 
     assert_eq!(
         udf.signature(),
-        &Signature::uniform(1, vec![DataType::Int32], Volatility::Immutable),
+        &Signature::uniform(1, vec![DataType::Int64], Volatility::Immutable),
     );
 
     assert_eq!(
-        udf.return_type(&[DataType::Int32]).unwrap(),
-        DataType::Int32,
+        udf.return_type(&[DataType::Int64]).unwrap(),
+        DataType::Int64,
     );
     insta::assert_snapshot!(
         udf.return_type(&[]).unwrap_err(),
@@ -48,14 +48,14 @@ async fn test_add_one() {
 
     let array = udf
         .invoke_async_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(Int32Array::from_iter([
+            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
                 Some(3),
                 None,
                 Some(1),
             ])))],
-            arg_fields: vec![Arc::new(Field::new("a1", DataType::Int32, true))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Int64, true))],
             number_rows: 3,
-            return_field: Arc::new(Field::new("r", DataType::Int32, true)),
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
             config_options: Arc::new(ConfigOptions::default()),
         })
         .await
@@ -63,21 +63,21 @@ async fn test_add_one() {
         .unwrap_array();
     assert_eq!(
         array.as_ref(),
-        &Int32Array::from_iter([Some(4), None, Some(2)]) as &dyn Array,
+        &Int64Array::from_iter([Some(4), None, Some(2)]) as &dyn Array,
     );
 
     let scalar = udf
         .invoke_async_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Scalar(ScalarValue::Int32(Some(3)))],
-            arg_fields: vec![Arc::new(Field::new("a1", DataType::Int32, true))],
+            args: vec![ColumnarValue::Scalar(ScalarValue::Int64(Some(3)))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Int64, true))],
             number_rows: 3,
-            return_field: Arc::new(Field::new("r", DataType::Int32, true)),
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
             config_options: Arc::new(ConfigOptions::default()),
         })
         .await
         .unwrap()
         .unwrap_scalar();
-    assert_eq!(scalar, ScalarValue::Int32(Some(4)));
+    assert_eq!(scalar, ScalarValue::Int64(Some(4)));
 }
 
 #[tokio::test]
@@ -85,10 +85,10 @@ async fn test_invoke_with_args_returns_error() {
     let udf = udf().await;
 
     let result = udf.invoke_with_args(ScalarFunctionArgs {
-        args: vec![ColumnarValue::Scalar(ScalarValue::Int32(Some(3)))],
-        arg_fields: vec![Arc::new(Field::new("a1", DataType::Int32, true))],
+        args: vec![ColumnarValue::Scalar(ScalarValue::Int64(Some(3)))],
+        arg_fields: vec![Arc::new(Field::new("a1", DataType::Int64, true))],
         number_rows: 3,
-        return_field: Arc::new(Field::new("r", DataType::Int32, true)),
+        return_field: Arc::new(Field::new("r", DataType::Int64, true)),
         config_options: Arc::new(ConfigOptions::default()),
     });
 

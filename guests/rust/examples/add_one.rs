@@ -5,7 +5,7 @@
 
 use std::sync::Arc;
 
-use arrow::{array::Int32Array, datatypes::DataType};
+use arrow::{array::Int64Array, datatypes::DataType};
 use datafusion_common::{
     Result as DataFusionResult, ScalarValue, exec_datafusion_err, exec_err, plan_err,
 };
@@ -24,7 +24,7 @@ struct AddOne {
 impl Default for AddOne {
     fn default() -> Self {
         Self {
-            signature: Signature::uniform(1, vec![DataType::Int32], Volatility::Immutable),
+            signature: Signature::uniform(1, vec![DataType::Int64], Volatility::Immutable),
         }
     }
 }
@@ -46,10 +46,10 @@ impl ScalarUDFImpl for AddOne {
         if arg_types.len() != 1 {
             return plan_err!("add_one expects exactly one argument");
         }
-        if !matches!(arg_types.first(), Some(&DataType::Int32)) {
-            return plan_err!("add_one only accepts Int32 arguments");
+        if !matches!(arg_types.first(), Some(&DataType::Int64)) {
+            return plan_err!("add_one only accepts Int64 arguments");
         }
-        Ok(DataType::Int32)
+        Ok(DataType::Int64)
     }
 
     fn invoke_with_args(&self, args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
@@ -69,23 +69,23 @@ impl ScalarUDFImpl for AddOne {
             ColumnarValue::Array(array) => {
                 let array = array
                     .as_any()
-                    .downcast_ref::<Int32Array>()
+                    .downcast_ref::<Int64Array>()
                     .ok_or_else(|| exec_datafusion_err!("invalid array type"))?;
 
                 // perform calculation
                 let array = array
                     .iter()
                     .map(|x| x.and_then(|x| x.checked_add(1)))
-                    .collect::<Int32Array>();
+                    .collect::<Int64Array>();
 
                 // create output
                 Ok(ColumnarValue::Array(Arc::new(array)))
             }
             ColumnarValue::Scalar(scalar) => {
-                let ScalarValue::Int32(x) = scalar else {
-                    return exec_err!("add_one only accepts Int32 arguments");
+                let ScalarValue::Int64(x) = scalar else {
+                    return exec_err!("add_one only accepts Int64 arguments");
                 };
-                Ok(ColumnarValue::Scalar(ScalarValue::Int32(
+                Ok(ColumnarValue::Scalar(ScalarValue::Int64(
                     x.and_then(|x| x.checked_add(1)),
                 )))
             }
