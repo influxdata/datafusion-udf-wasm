@@ -4,7 +4,7 @@ use std::sync::Arc;
 use datafusion_common::Result as DataFusionResult;
 use datafusion_expr::ScalarUDFImpl;
 
-use crate::complex::NamedUdf;
+use crate::complex::TestUdf;
 
 /// Returns our evil UDFs.
 ///
@@ -14,6 +14,11 @@ pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImp
     let limit: usize = std::env::var("limit").unwrap().parse().unwrap();
 
     Ok((0..=limit)
-        .map(|i| Arc::new(NamedUdf(i.to_string())) as _)
+        .map(|i| {
+            Arc::new(TestUdf {
+                name: i.to_string(),
+                ..Default::default()
+            }) as _
+        })
         .collect())
 }

@@ -361,6 +361,22 @@ impl CheckedFrom<wit_types::Signature> for datafusion_expr::Signature {
                 .volatility
                 .checked_into(&token)
                 .context("volatility")?,
+            parameter_names: value
+                .parameter_names
+                .map(|names| {
+                    names
+                        .into_iter()
+                        .enumerate()
+                        .map(|(idx, name)| {
+                            let token = token.sub().context("parameters")?;
+                            token
+                                .check_identifier(&name)
+                                .with_context(|| format!("parameter {idx}"))?;
+                            Ok(name)
+                        })
+                        .collect::<datafusion_common::Result<_>>()
+                })
+                .transpose()?,
         })
     }
 }
