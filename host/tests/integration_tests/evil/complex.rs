@@ -72,11 +72,61 @@ async fn test_many_inputs() {
     insta::assert_snapshot!(
         err,
         @r"
+    signature
+    caused by
     type signature
     caused by
     exact signature
     caused by
     child 48
+    caused by
+    Resources exhausted: data structure complexity: limit=100
+    ");
+}
+
+#[tokio::test]
+async fn test_params_long_name() {
+    let err = try_scalar_udfs_with_env(
+        "complex::params_long_name",
+        &[(
+            "limit",
+            &TrustedDataLimits::default()
+                .max_identifier_length
+                .to_string(),
+        )],
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @r"
+    signature
+    caused by
+    parameter 0
+    caused by
+    Resources exhausted: identifier length: got=51, limit=50
+    ");
+}
+
+#[tokio::test]
+async fn test_params_many() {
+    let err = try_scalar_udfs_with_env(
+        "complex::params_many",
+        &[(
+            "limit",
+            &TrustedDataLimits::default().max_complexity.to_string(),
+        )],
+    )
+    .await
+    .unwrap_err();
+
+    insta::assert_snapshot!(
+        err,
+        @r"
+    signature
+    caused by
+    parameters
     caused by
     Resources exhausted: data structure complexity: limit=100
     ");

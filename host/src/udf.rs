@@ -143,7 +143,8 @@ impl WasmScalarUdf {
                 .call_signature(&mut state, resource)
                 .await
                 .context("call ScalarUdf::signature", Some(&state.stderr.contents()))?
-                .checked_into_root(&permissions.trusted_data_limits)?;
+                .checked_into_root(&permissions.trusted_data_limits)
+                .context("signature")?;
 
             let return_type = match &signature.type_signature {
                 TypeSignature::Exact(t) => {

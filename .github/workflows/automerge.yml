@@ -1,0 +1,31 @@
+---
+name: Auto-merge Bot PR
+
+# yamllint disable-line rule:truthy
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'influxdata/datafusion-udf-wasm'
+    steps:
+      - name: Dependabot metadata
+        id: dependabot-metadata
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a  # v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Approve & Merge
+        # "value IS IN array" is a bit weird, see
+        # https://docs.github.com/en/actions/reference/workflows-and-actions/expressions#example-matching-an-array-of-strings
+        if: contains(fromJSON('["rust-other", "wasmtime"]'), steps.dependabot-metadata.outputs.dependency-group)
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --merge "$PR_URL"
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}

@@ -170,7 +170,7 @@ impl<'a> UdfQueryParser<'a> {
     ) -> DataFusionResult<(HashMap<String, Vec<String>>, String)> {
         let options = task_ctx.session_config().options();
 
-        let dialect = dialect_from_str(options.sql_parser.dialect.clone()).expect("valid dialect");
+        let dialect = dialect_from_str(options.sql_parser.dialect).expect("valid dialect");
         let recursion_limit = options.sql_parser.recursion_limit;
 
         let statements = DFParserBuilder::new(query)

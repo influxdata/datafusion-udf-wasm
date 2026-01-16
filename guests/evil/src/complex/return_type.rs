@@ -38,6 +38,7 @@ impl ScalarUDFImpl for ReturnTypeUDF {
         static S: Signature = Signature {
             type_signature: TypeSignature::Uniform(0, vec![]),
             volatility: Volatility::Immutable,
+            parameter_names: None,
         };
 
         &S
