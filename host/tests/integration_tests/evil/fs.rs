@@ -838,33 +838,33 @@ async fn test_create_dir() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | ERR: Read-only file system (os error 69)        |
-    | .           | ERR: Read-only file system (os error 69)        |
-    | ..          | ERR: Read-only file system (os error 69)        |
-    | /           | ERR: Read-only file system (os error 69)        |
-    | /bin        | ERR: Read-only file system (os error 69)        |
-    | /boot       | ERR: Read-only file system (os error 69)        |
-    | /dev        | ERR: Read-only file system (os error 69)        |
-    | /etc        | ERR: Read-only file system (os error 69)        |
-    | /etc/group  | ERR: Read-only file system (os error 69)        |
-    | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    | /home       | ERR: Read-only file system (os error 69)        |
-    | /lib        | ERR: Read-only file system (os error 69)        |
-    | /lib64      | ERR: Read-only file system (os error 69)        |
-    | /opt        | ERR: Read-only file system (os error 69)        |
-    | /proc       | ERR: Read-only file system (os error 69)        |
-    | /proc/self  | ERR: Read-only file system (os error 69)        |
-    | /root       | ERR: Read-only file system (os error 69)        |
-    | /run        | ERR: Read-only file system (os error 69)        |
-    | /sbin       | ERR: Read-only file system (os error 69)        |
-    | /srv        | ERR: Read-only file system (os error 69)        |
-    | /sys        | ERR: Read-only file system (os error 69)        |
-    | /tmp        | ERR: Read-only file system (os error 69)        |
-    | /usr        | ERR: Read-only file system (os error 69)        |
-    | /var        | ERR: Read-only file system (os error 69)        |
+    |             | ERR: Invalid argument (os error 28)             |
+    | .           | ERR: Invalid argument (os error 28)             |
+    | ..          | ERR: Invalid argument (os error 28)             |
+    | /           | ERR: Invalid argument (os error 28)             |
+    | /bin        | OK: created                                     |
+    | /boot       | OK: created                                     |
+    | /dev        | OK: created                                     |
+    | /etc        | OK: created                                     |
+    | /etc/group  | OK: created                                     |
+    | /etc/passwd | OK: created                                     |
+    | /etc/shadow | OK: created                                     |
+    | /home       | OK: created                                     |
+    | /lib        | OK: created                                     |
+    | /lib64      | OK: created                                     |
+    | /opt        | OK: created                                     |
+    | /proc       | OK: created                                     |
+    | /proc/self  | OK: created                                     |
+    | /root       | OK: created                                     |
+    | /run        | OK: created                                     |
+    | /sbin       | OK: created                                     |
+    | /srv        | OK: created                                     |
+    | /sys        | OK: created                                     |
+    | /tmp        | OK: created                                     |
+    | /usr        | OK: created                                     |
+    | /var        | OK: created                                     |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Read-only file system (os error 69)        |
+    | /x/..       | ERR: Invalid argument (os error 28)             |
     +-------------+-------------------------------------------------+
     ",
     );

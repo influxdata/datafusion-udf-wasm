@@ -632,10 +632,59 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     async fn create_directory_at(
         &mut self,
-        _self_: Resource<Descriptor>,
-        _path: String,
+        self_: Resource<Descriptor>,
+        path: String,
     ) -> FsResult<()> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        let node = self.node(self_)?;
+
+        // Parse the path
+        let (is_root, directions) = PathTraversal::parse(&path, &self.vfs_state.limits)?;
+        let mut directions = directions.collect::<Vec<_>>();
+
+        // Extract the directory name from the path
+        let name = match directions
+            .pop()
+            .ok_or_else(|| FsError::trap(ErrorCode::Invalid))??
+        {
+            PathTraversal::Down(segment) => segment,
+            _ => return Err(FsError::trap(ErrorCode::Invalid)),
+        };
+
+        // Determine the parent directory
+        let parent_start = if is_root {
+            Arc::clone(&self.vfs_state.root)
+        } else {
+            node
+        };
+        let parent_node = VfsNode::traverse(parent_start, directions.into_iter())?;
+
+        // Create the new directory
+        let mut parent_guard = parent_node.write().unwrap();
+        match &mut parent_guard.kind {
+            VfsNodeKind::Directory { children } => {
+                // Check if directory already exists
+                if children.contains_key(&name) {
+                    return Err(FsError::trap(ErrorCode::Exist));
+                }
+
+                let dir_node = Arc::new(RwLock::new(VfsNode {
+                    kind: VfsNodeKind::Directory {
+                        children: HashMap::new(),
+                    },
+                    parent: Some(Arc::downgrade(&parent_node)),
+                }));
+
+                self.vfs_state.inodes_allocation.inc(1)?;
+                self.vfs_state.limiter.grow(name.len())?;
+                self.vfs_state
+                    .limiter
+                    .grow(std::mem::size_of_val(&dir_node))?;
+
+                children.insert(name, dir_node);
+                Ok(())
+            }
+            VfsNodeKind::File { .. } => Err(FsError::trap(ErrorCode::NotDirectory)),
+        }
     }
 
     async fn stat(&mut self, self_: Resource<Descriptor>) -> FsResult<DescriptorStat> {
@@ -1240,117 +1289,8 @@ mod tests {
         let exceed_limit = vec![b'X'; 110]; // Larger than max_storage_bytes (100)
         let res = vfs_ctx.write(file_desc, exceed_limit, 0).await;
         assert!(res.is_err());
-        insta::assert_snapshot!(format!("{:?}", res), @r"
-        Err(Resources exhausted: Failed to allocate additional 110.0 B for WASM UDF resources with 0.0 B already allocated for this reservation - 100.0 B remain available for the total pool
-
-        Stack backtrace:
-           0: anyhow::error::<impl core::convert::From<E> for anyhow::Error>::from
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anyhow-1.0.100/src/backtrace.rs:27:14
-           1: <T as core::convert::Into<U>>::into
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/convert/mod.rs:778:9
-           2: wasmtime_wasi::error::TrappableError<T>::trap
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-wasi-40.0.0/src/error.rs:53:22
-           3: datafusion_udf_wasm_host::limiter::<impl core::convert::From<datafusion_udf_wasm_host::limiter::GrowthError> for wasmtime_wasi::error::TrappableError<wasmtime_wasi::p2::bindings::async_io::wasi::filesystem::types::ErrorCode>>::from
-                     at ./src/limiter.rs:228:9
-           4: <core::result::Result<T,F> as core::ops::try_trait::FromResidual<core::result::Result<core::convert::Infallible,E>>>::from_residual
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:2177:27
-           5: <datafusion_udf_wasm_host::vfs::VfsCtxView as wasmtime_wasi::p2::bindings::async_io::wasi::filesystem::types::HostDescriptor>::write::{{closure}}
-                     at ./src/vfs/mod.rs:578:21
-           6: datafusion_udf_wasm_host::vfs::tests::vfs_limits::{{closure}}
-                     at ./src/vfs/mod.rs:1241:61
-           7: <core::pin::Pin<P> as core::future::future::Future>::poll
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/future/future.rs:133:9
-           8: <core::pin::Pin<P> as core::future::future::Future>::poll
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/future/future.rs:133:9
-           9: tokio::runtime::scheduler::current_thread::CoreGuard::block_on::{{closure}}::{{closure}}::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:753:70
-          10: tokio::task::coop::with_budget
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/task/coop/mod.rs:167:5
-          11: tokio::task::coop::budget
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/task/coop/mod.rs:133:5
-          12: tokio::runtime::scheduler::current_thread::CoreGuard::block_on::{{closure}}::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:753:25
-          13: tokio::runtime::scheduler::current_thread::Context::enter
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:442:19
-          14: tokio::runtime::scheduler::current_thread::CoreGuard::block_on::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:752:44
-          15: tokio::runtime::scheduler::current_thread::CoreGuard::enter::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:840:68
-          16: tokio::runtime::context::scoped::Scoped<T>::set
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/context/scoped.rs:40:9
-          17: tokio::runtime::context::set_scheduler::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/context.rs:176:38
-          18: std::thread::local::LocalKey<T>::try_with
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/local.rs:315:12
-          19: std::thread::local::LocalKey<T>::with
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/local.rs:279:20
-          20: tokio::runtime::context::set_scheduler
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/context.rs:176:17
-          21: tokio::runtime::scheduler::current_thread::CoreGuard::enter
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:840:27
-          22: tokio::runtime::scheduler::current_thread::CoreGuard::block_on
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:740:24
-          23: tokio::runtime::scheduler::current_thread::CurrentThread::block_on::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:200:33
-          24: tokio::runtime::context::runtime::enter_runtime
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/context/runtime.rs:65:16
-          25: tokio::runtime::scheduler::current_thread::CurrentThread::block_on
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:188:9
-          26: tokio::runtime::runtime::Runtime::block_on_inner
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/runtime.rs:368:52
-          27: tokio::runtime::runtime::Runtime::block_on
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/runtime.rs:342:18
-          28: datafusion_udf_wasm_host::vfs::tests::vfs_limits
-                     at ./src/vfs/mod.rs:1523:11
-          29: datafusion_udf_wasm_host::vfs::tests::vfs_limits::{{closure}}
-                     at ./src/vfs/mod.rs:1203:26
-          30: core::ops::function::FnOnce::call_once
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
-          31: core::ops::function::FnOnce::call_once
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/core/src/ops/function.rs:250:5
-          32: test::__rust_begin_short_backtrace
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/test/src/lib.rs:663:18
-          33: test::run_test_in_process::{{closure}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/test/src/lib.rs:686:74
-          34: <core::panic::unwind_safe::AssertUnwindSafe<F> as core::ops::function::FnOnce<()>>::call_once
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/core/src/panic/unwind_safe.rs:274:9
-          35: std::panicking::catch_unwind::do_call
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panicking.rs:590:40
-          36: std::panicking::catch_unwind
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panicking.rs:553:19
-          37: std::panic::catch_unwind
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panic.rs:359:14
-          38: test::run_test_in_process
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/test/src/lib.rs:686:27
-          39: test::run_test::{{closure}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/test/src/lib.rs:607:43
-          40: test::run_test::{{closure}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/test/src/lib.rs:637:41
-          41: std::sys::backtrace::__rust_begin_short_backtrace
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/sys/backtrace.rs:158:18
-          42: std::thread::Builder::spawn_unchecked_::{{closure}}::{{closure}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/thread/mod.rs:559:17
-          43: <core::panic::unwind_safe::AssertUnwindSafe<F> as core::ops::function::FnOnce<()>>::call_once
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/core/src/panic/unwind_safe.rs:274:9
-          44: std::panicking::catch_unwind::do_call
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panicking.rs:590:40
-          45: std::panicking::catch_unwind
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panicking.rs:553:19
-          46: std::panic::catch_unwind
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panic.rs:359:14
-          47: std::thread::Builder::spawn_unchecked_::{{closure}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/thread/mod.rs:557:30
-          48: core::ops::function::FnOnce::call_once{{vtable.shim}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/core/src/ops/function.rs:250:5
-          49: <alloc::boxed::Box<F,A> as core::ops::function::FnOnce<Args>>::call_once
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/alloc/src/boxed.rs:1985:9
-          50: std::sys::thread::unix::Thread::new::thread_start
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/sys/thread/unix.rs:126:17
-          51: start_thread
-                     at ./nptl/pthread_create.c:447:8
-          52: clone3
-                     at ./misc/../sysdeps/unix/sysv/linux/x86_64/clone3.S:78:0)
-        ");
+        let err_msg = format!("{:?}", res);
+        insta::assert_snapshot!(err_msg.lines().next().unwrap(), @"Err(Resources exhausted: Failed to allocate additional 110.0 B for WASM UDF resources with 0.0 B already allocated for this reservation - 100.0 B remain available for the total pool");
 
         // ******************************************************************
         // Test 2: Validate max_storage_bytes limit with multiple small files
@@ -1408,127 +1348,241 @@ mod tests {
         // Try to create third file with 40 bytes - this should exceed max_storage_bytes (100)
         // 40 + 40 + 40 = 120 bytes > 100 bytes limit
         let res = vfs_ctx.write(file_desc, data.clone(), 0).await;
-
         assert!(res.is_err());
-        insta::assert_snapshot!(format!("{:?}", res), @r"
-        Err(Resources exhausted: Failed to allocate additional 40.0 B for WASM UDF resources with 80.0 B already allocated for this reservation - 20.0 B remain available for the total pool
-
-        Stack backtrace:
-           0: anyhow::error::<impl core::convert::From<E> for anyhow::Error>::from
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/anyhow-1.0.100/src/backtrace.rs:27:14
-           1: <T as core::convert::Into<U>>::into
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/convert/mod.rs:778:9
-           2: wasmtime_wasi::error::TrappableError<T>::trap
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wasmtime-wasi-40.0.0/src/error.rs:53:22
-           3: datafusion_udf_wasm_host::limiter::<impl core::convert::From<datafusion_udf_wasm_host::limiter::GrowthError> for wasmtime_wasi::error::TrappableError<wasmtime_wasi::p2::bindings::async_io::wasi::filesystem::types::ErrorCode>>::from
-                     at ./src/limiter.rs:228:9
-           4: <core::result::Result<T,F> as core::ops::try_trait::FromResidual<core::result::Result<core::convert::Infallible,E>>>::from_residual
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/result.rs:2177:27
-           5: <datafusion_udf_wasm_host::vfs::VfsCtxView as wasmtime_wasi::p2::bindings::async_io::wasi::filesystem::types::HostDescriptor>::write::{{closure}}
-                     at ./src/vfs/mod.rs:578:21
-           6: datafusion_udf_wasm_host::vfs::tests::vfs_limits::{{closure}}
-                     at ./src/vfs/mod.rs:1410:61
-           7: <core::pin::Pin<P> as core::future::future::Future>::poll
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/future/future.rs:133:9
-           8: <core::pin::Pin<P> as core::future::future::Future>::poll
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/future/future.rs:133:9
-           9: tokio::runtime::scheduler::current_thread::CoreGuard::block_on::{{closure}}::{{closure}}::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:753:70
-          10: tokio::task::coop::with_budget
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/task/coop/mod.rs:167:5
-          11: tokio::task::coop::budget
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/task/coop/mod.rs:133:5
-          12: tokio::runtime::scheduler::current_thread::CoreGuard::block_on::{{closure}}::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:753:25
-          13: tokio::runtime::scheduler::current_thread::Context::enter
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:442:19
-          14: tokio::runtime::scheduler::current_thread::CoreGuard::block_on::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:752:44
-          15: tokio::runtime::scheduler::current_thread::CoreGuard::enter::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:840:68
-          16: tokio::runtime::context::scoped::Scoped<T>::set
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/context/scoped.rs:40:9
-          17: tokio::runtime::context::set_scheduler::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/context.rs:176:38
-          18: std::thread::local::LocalKey<T>::try_with
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/local.rs:315:12
-          19: std::thread::local::LocalKey<T>::with
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/thread/local.rs:279:20
-          20: tokio::runtime::context::set_scheduler
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/context.rs:176:17
-          21: tokio::runtime::scheduler::current_thread::CoreGuard::enter
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:840:27
-          22: tokio::runtime::scheduler::current_thread::CoreGuard::block_on
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:740:24
-          23: tokio::runtime::scheduler::current_thread::CurrentThread::block_on::{{closure}}
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:200:33
-          24: tokio::runtime::context::runtime::enter_runtime
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/context/runtime.rs:65:16
-          25: tokio::runtime::scheduler::current_thread::CurrentThread::block_on
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/scheduler/current_thread/mod.rs:188:9
-          26: tokio::runtime::runtime::Runtime::block_on_inner
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/runtime.rs:368:52
-          27: tokio::runtime::runtime::Runtime::block_on
-                     at /home/sl1mb0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.49.0/src/runtime/runtime.rs:342:18
-          28: datafusion_udf_wasm_host::vfs::tests::vfs_limits
-                     at ./src/vfs/mod.rs:1523:11
-          29: datafusion_udf_wasm_host::vfs::tests::vfs_limits::{{closure}}
-                     at ./src/vfs/mod.rs:1203:26
-          30: core::ops::function::FnOnce::call_once
-                     at /home/sl1mb0/.rustup/toolchains/1.91.0-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/ops/function.rs:250:5
-          31: core::ops::function::FnOnce::call_once
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/core/src/ops/function.rs:250:5
-          32: test::__rust_begin_short_backtrace
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/test/src/lib.rs:663:18
-          33: test::run_test_in_process::{{closure}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/test/src/lib.rs:686:74
-          34: <core::panic::unwind_safe::AssertUnwindSafe<F> as core::ops::function::FnOnce<()>>::call_once
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/core/src/panic/unwind_safe.rs:274:9
-          35: std::panicking::catch_unwind::do_call
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panicking.rs:590:40
-          36: std::panicking::catch_unwind
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panicking.rs:553:19
-          37: std::panic::catch_unwind
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panic.rs:359:14
-          38: test::run_test_in_process
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/test/src/lib.rs:686:27
-          39: test::run_test::{{closure}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/test/src/lib.rs:607:43
-          40: test::run_test::{{closure}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/test/src/lib.rs:637:41
-          41: std::sys::backtrace::__rust_begin_short_backtrace
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/sys/backtrace.rs:158:18
-          42: std::thread::Builder::spawn_unchecked_::{{closure}}::{{closure}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/thread/mod.rs:559:17
-          43: <core::panic::unwind_safe::AssertUnwindSafe<F> as core::ops::function::FnOnce<()>>::call_once
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/core/src/panic/unwind_safe.rs:274:9
-          44: std::panicking::catch_unwind::do_call
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panicking.rs:590:40
-          45: std::panicking::catch_unwind
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panicking.rs:553:19
-          46: std::panic::catch_unwind
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/panic.rs:359:14
-          47: std::thread::Builder::spawn_unchecked_::{{closure}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/thread/mod.rs:557:30
-          48: core::ops::function::FnOnce::call_once{{vtable.shim}}
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/core/src/ops/function.rs:250:5
-          49: <alloc::boxed::Box<F,A> as core::ops::function::FnOnce<Args>>::call_once
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/alloc/src/boxed.rs:1985:9
-          50: std::sys::thread::unix::Thread::new::thread_start
-                     at /rustc/f8297e351a40c1439a467bbbb6879088047f50b3/library/std/src/sys/thread/unix.rs:126:17
-          51: start_thread
-                     at ./nptl/pthread_create.c:447:8
-          52: clone3
-                     at ./misc/../sysdeps/unix/sysv/linux/x86_64/clone3.S:78:0)
-        ");
+        let err_msg = format!("{:?}", res);
+        insta::assert_snapshot!(err_msg.lines().next().unwrap(), @"Err(Resources exhausted: Failed to allocate additional 40.0 B for WASM UDF resources with 80.0 B already allocated for this reservation - 20.0 B remain available for the total pool");
     }
 
-    /// Get session context.
+    #[tokio::test]
+    async fn test_create_directory() {
+        let limits = VfsLimits::default();
+
+        let ctx = session_ctx_with_fixed_pool_size(1024 * 1024);
+        let limiter = Limiter::new(
+            StaticResourceLimits::default(),
+            ctx.task_ctx().memory_pool(),
+        );
+
+        let mut vfs_state = VfsState::new(limits, limiter);
+        let mut resource_table = ResourceTable::new();
+
+        let mut vfs_ctx = VfsCtxView {
+            table: &mut resource_table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // ********************************************************
+        // Test 1: Create a simple directory
+        // ********************************************************
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+
+        vfs_ctx
+            .create_directory_at(root_desc, "test_dir".to_string())
+            .await
+            .expect("Failed to create directory");
+
+        // Verify the directory exists by stat-ing it
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let stat = vfs_ctx
+            .stat_at(root_desc, PathFlags::empty(), "test_dir".to_string())
+            .await
+            .expect("Failed to stat directory");
+
+        assert_eq!(stat.type_, DescriptorType::Directory);
+        assert_eq!(stat.size, 0); // Empty directory
+
+        // ********************************************************
+        // Test 2: Attempt to create a directory that already exists
+        // ********************************************************
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let res = vfs_ctx
+            .create_directory_at(root_desc, "test_dir".to_string())
+            .await;
+
+        assert!(res.is_err());
+        assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::Exist));
+
+        // ********************************************************
+        // Test 3: Create nested directory
+        // ********************************************************
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+
+        vfs_ctx
+            .create_directory_at(root_desc, "test_dir/nested".to_string())
+            .await
+            .expect("Failed to create nested directory");
+
+        // Verify nested directory exists
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let stat = vfs_ctx
+            .stat_at(root_desc, PathFlags::empty(), "test_dir/nested".to_string())
+            .await
+            .expect("Failed to stat nested directory");
+
+        assert_eq!(stat.type_, DescriptorType::Directory);
+
+        // ********************************************************
+        // Test 4: Create file in the new directory
+        // ********************************************************
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let file_desc = vfs_ctx
+            .open_at(
+                root_desc,
+                PathFlags::empty(),
+                "test_dir/test_file.txt".to_string(),
+                OpenFlags::CREATE,
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .expect("Failed to create file in directory");
+
+        let data = b"hello from directory".to_vec();
+        vfs_ctx
+            .write(file_desc, data.clone(), 0)
+            .await
+            .expect("Failed to write to file in directory");
+
+        // Read it back
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let read_desc = vfs_ctx
+            .open_at(
+                root_desc,
+                PathFlags::empty(),
+                "test_dir/test_file.txt".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ,
+            )
+            .await
+            .expect("Failed to open file for reading");
+
+        let (read_data, eof) = vfs_ctx
+            .read(read_desc, data.len() as u64, 0)
+            .await
+            .expect("Failed to read data from file");
+
+        assert_eq!(read_data, data);
+        assert!(eof);
+
+        // ********************************************************
+        // Test 5: List directory contents
+        // ********************************************************
+        // Read all entries
+        let mut entries = Vec::new();
+
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+
+        let dir_desc = vfs_ctx
+            .open_at(
+                root_desc,
+                PathFlags::empty(),
+                "test_dir".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ,
+            )
+            .await
+            .expect("Failed to open directory");
+
+        let desc = vfs_ctx
+            .read_directory(dir_desc)
+            .await
+            .expect("Failed to read directory");
+
+        let mut stream = DirectoryEntryIterator::new(desc, &mut vfs_ctx);
+
+        while let Some(entry) = stream.next().await {
+            entries.push(entry);
+        }
+
+        assert_eq!(entries.len(), 2); // nested dir and test_file.txt
+        assert!(
+            entries
+                .iter()
+                .any(|e| e.name == "nested" && e.type_ == DescriptorType::Directory)
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|e| e.name == "test_file.txt" && e.type_ == DescriptorType::RegularFile)
+        );
+
+        // ********************************************************
+        // Test 6: Try to create directory where a file exists
+        // ********************************************************
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let res = vfs_ctx
+            .create_directory_at(root_desc, "test_dir/test_file.txt".to_string())
+            .await;
+
+        assert!(res.is_err());
+        assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::Exist));
+
+        // ********************************************************
+        // Test 7: Try to create directory with non-existent parent
+        // ********************************************************
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let res = vfs_ctx
+            .create_directory_at(root_desc, "nonexistent/subdir".to_string())
+            .await;
+
+        assert!(res.is_err());
+        assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::NoEntry));
+    }
+
+    /// Wrapper for streaming directory entries with a convenient API.
+    ///
+    /// This type provides a high-level interface for reading directory entries
+    /// from a WASI DirectoryEntryStream resource. It's primarily intended for
+    /// use in tests but can be used anywhere you need to iterate over directory
+    /// entries.
+    pub(crate) struct DirectoryEntryIterator<'a, 'b> {
+        /// The underlying directory entry stream resource.
+        resource: Resource<DirectoryEntryStream>,
+        /// Reference to the VFS context view for reading entries.
+        ctx: &'a mut VfsCtxView<'b>,
+    }
+
+    impl<'a, 'b> DirectoryEntryIterator<'a, 'b> {
+        /// Create a new directory entry stream wrapper.
+        ///
+        /// # Arguments
+        ///
+        /// * `resource` - The DirectoryEntryStream resource obtained from `read_directory`
+        /// * `ctx` - Mutable reference to the VfsCtxView for accessing the stream
+        pub(crate) fn new(
+            resource: Resource<DirectoryEntryStream>,
+            ctx: &'a mut VfsCtxView<'b>,
+        ) -> Self {
+            Self { resource, ctx }
+        }
+
+        /// Read the next directory entry from the stream.
+        ///
+        /// Returns `Some(DirectoryEntry)` if there are more entries, or `None` when
+        /// the stream is exhausted.
+        ///
+        /// # Errors
+        ///
+        /// Returns an error if the stream resource is invalid or if there's an issue
+        /// reading from the underlying filesystem.
+        pub(crate) async fn next(&mut self) -> Option<DirectoryEntry> {
+            use filesystem::types::HostDirectoryEntryStream;
+
+            // Create a borrowed resource from the owned resource
+            let resource_borrow = Resource::new_borrow(self.resource.rep());
+
+            self.ctx
+                .read_directory_entry(resource_borrow)
+                .await
+                .unwrap_or_default()
+        }
+    }
+
     fn session_ctx_with_fixed_pool_size(size: usize) -> SessionContext {
+        let memory_pool = Arc::new(GreedyMemoryPool::new(size));
         SessionContext::new_with_config_rt(
             SessionConfig::new(),
             Arc::new(RuntimeEnv {
-                memory_pool: Arc::new(GreedyMemoryPool::new(size)),
+                memory_pool,
                 ..Default::default()
             }),
         )
