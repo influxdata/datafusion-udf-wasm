@@ -7,7 +7,6 @@ use datafusion_common::DataFusionError;
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryPool, MemoryReservation};
 use std::sync::Mutex;
 use wasmtime::ResourceLimiter;
-use wasmtime_wasi::TrappableError;
 
 use crate::error::LimitExceeded;
 
@@ -218,13 +217,5 @@ impl From<GrowthError> for DataFusionError {
 impl From<GrowthError> for std::io::Error {
     fn from(e: GrowthError) -> Self {
         Self::new(std::io::ErrorKind::QuotaExceeded, e.0)
-    }
-}
-
-impl From<GrowthError>
-    for TrappableError<wasmtime_wasi::p2::bindings::filesystem::types::ErrorCode>
-{
-    fn from(e: GrowthError) -> Self {
-        Self::trap(Box::new(e.0))
     }
 }
