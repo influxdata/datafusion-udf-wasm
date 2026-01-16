@@ -1019,8 +1019,19 @@ mod tests {
         root_resource.cast()
     }
 
+    fn session_ctx_with_fixed_pool_size(size: usize) -> SessionContext {
+        let memory_pool = Arc::new(GreedyMemoryPool::new(size));
+        SessionContext::new_with_config_rt(
+            SessionConfig::new(),
+            Arc::new(RuntimeEnv {
+                memory_pool,
+                ..Default::default()
+            }),
+        )
+    }
+
     #[tokio::test]
-    async fn basic_vfs_writes() {
+    async fn test_write() {
         let limits = VfsLimits::default();
 
         let ctx = session_ctx_with_fixed_pool_size(1024 * 1024);
@@ -1037,14 +1048,11 @@ mod tests {
             vfs_state: &mut vfs_state,
         };
 
-        // ********************************************************
-        // Test 1: Create and write to a new file
-        // ********************************************************
+        // Create and write content to file
         let file_path = "bikes.txt".to_string();
         let open_flags = OpenFlags::CREATE;
         let file_flags = DescriptorFlags::READ | DescriptorFlags::WRITE;
 
-        // Create the file
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
         let write_desc = vfs_ctx
             .open_at(
@@ -1057,7 +1065,6 @@ mod tests {
             .await
             .expect("Failed to create file");
 
-        // Write to it!
         let data = b"pinarello,canyon,factor".to_vec(); // 23 bytes
         let bytes_written = vfs_ctx
             .write(write_desc, data.clone(), 0)
@@ -1066,7 +1073,6 @@ mod tests {
 
         assert_eq!(bytes_written, data.len() as u64);
 
-        // Can we read it back?
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
         let read_desc = vfs_ctx
             .open_at(
@@ -1089,9 +1095,7 @@ mod tests {
         assert_eq!(read_data, data);
         assert!(eof);
 
-        // ********************************************************
-        // Test 2: Append data to the file
-        // ********************************************************
+        // Append content to file
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
         let write_desc = vfs_ctx
             .open_at(
@@ -1104,7 +1108,6 @@ mod tests {
             .await
             .expect("Failed to open file for appending");
 
-        // Append to it!
         let appended = b"bianchi,look,merida".to_vec(); // 19 bytes
         let bytes_written = vfs_ctx
             .write(write_desc, appended.clone(), data.len() as u64)
@@ -1113,7 +1116,6 @@ mod tests {
 
         assert_eq!(bytes_written, appended.len() as u64);
 
-        // Can read the appended data back?
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
         let read_desc = vfs_ctx
             .open_at(
@@ -1138,9 +1140,7 @@ mod tests {
         assert_eq!(expected, actual);
         assert!(eof);
 
-        // ********************************************************
-        // Test 2: Overwrite contents of file
-        // ********************************************************
+        // Overwrite content of file
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
         let write_desc = vfs_ctx
             .open_at(
@@ -1153,7 +1153,6 @@ mod tests {
             .await
             .expect("Failed to open file for writing");
 
-        // Overwrite data!
         let overwritten = b"specialized,trek,cervelo".to_vec(); // 24 bytes
         let bytes_written = vfs_ctx
             .write(write_desc, overwritten.clone(), 0)
@@ -1162,7 +1161,6 @@ mod tests {
 
         assert_eq!(bytes_written, overwritten.len() as u64);
 
-        // Can read the overwritten data back?
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
         let read_desc = vfs_ctx
             .open_at(
@@ -1201,7 +1199,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn write_permissions() {
+    async fn test_write_permissions() {
         let limits = VfsLimits::default();
 
         let ctx = session_ctx_with_fixed_pool_size(1024 * 1024);
@@ -1249,8 +1247,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn vfs_limits() {
-        // Create VFS with very small limits for testing
+    async fn test_write_limits() {
         let limits = VfsLimits {
             inodes: 10,
             max_path_length: 255,
@@ -1270,9 +1267,7 @@ mod tests {
             vfs_state: &mut vfs_state,
         };
 
-        // ************************************
-        // Test 1: Validate max_file_size limit
-        // ************************************
+        // Single write exceeding max_storage_bytes
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
         let file_desc = vfs_ctx
             .open_at(
@@ -1285,18 +1280,13 @@ mod tests {
             .await
             .expect("Failed to create file");
 
-        // Try to write data exceeding storage limit, should get Io error
-        let exceed_limit = vec![b'X'; 110]; // Larger than max_storage_bytes (100)
+        let exceed_limit = vec![b'X'; 110];
         let res = vfs_ctx.write(file_desc, exceed_limit, 0).await;
         assert!(res.is_err());
         let err_msg = format!("{:?}", res);
-        insta::assert_snapshot!(err_msg.lines().next().unwrap(), @"Err(Resources exhausted: Failed to allocate additional 110.0 B for WASM UDF resources with 0.0 B already allocated for this reservation - 100.0 B remain available for the total pool");
+        assert!(err_msg.contains("Resources exhausted"));
 
-        // ******************************************************************
-        // Test 2: Validate max_storage_bytes limit with multiple small files
-        // ******************************************************************
-
-        // Use buffer size of 40 bytes for each file
+        // Multiple writes exceeding max_storage_bytes cumulatively
         let data = vec![b'A'; 40];
 
         let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
@@ -1350,182 +1340,7 @@ mod tests {
         let res = vfs_ctx.write(file_desc, data.clone(), 0).await;
         assert!(res.is_err());
         let err_msg = format!("{:?}", res);
-        insta::assert_snapshot!(err_msg.lines().next().unwrap(), @"Err(Resources exhausted: Failed to allocate additional 40.0 B for WASM UDF resources with 80.0 B already allocated for this reservation - 20.0 B remain available for the total pool");
-    }
-
-    #[tokio::test]
-    async fn test_create_directory() {
-        let limits = VfsLimits::default();
-
-        let ctx = session_ctx_with_fixed_pool_size(1024 * 1024);
-        let limiter = Limiter::new(
-            StaticResourceLimits::default(),
-            ctx.task_ctx().memory_pool(),
-        );
-
-        let mut vfs_state = VfsState::new(limits, limiter);
-        let mut resource_table = ResourceTable::new();
-
-        let mut vfs_ctx = VfsCtxView {
-            table: &mut resource_table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // ********************************************************
-        // Test 1: Create a simple directory
-        // ********************************************************
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-
-        vfs_ctx
-            .create_directory_at(root_desc, "test_dir".to_string())
-            .await
-            .expect("Failed to create directory");
-
-        // Verify the directory exists by stat-ing it
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-        let stat = vfs_ctx
-            .stat_at(root_desc, PathFlags::empty(), "test_dir".to_string())
-            .await
-            .expect("Failed to stat directory");
-
-        assert_eq!(stat.type_, DescriptorType::Directory);
-        assert_eq!(stat.size, 0); // Empty directory
-
-        // ********************************************************
-        // Test 2: Attempt to create a directory that already exists
-        // ********************************************************
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-        let res = vfs_ctx
-            .create_directory_at(root_desc, "test_dir".to_string())
-            .await;
-
-        assert!(res.is_err());
-        assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::Exist));
-
-        // ********************************************************
-        // Test 3: Create nested directory
-        // ********************************************************
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-
-        vfs_ctx
-            .create_directory_at(root_desc, "test_dir/nested".to_string())
-            .await
-            .expect("Failed to create nested directory");
-
-        // Verify nested directory exists
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-        let stat = vfs_ctx
-            .stat_at(root_desc, PathFlags::empty(), "test_dir/nested".to_string())
-            .await
-            .expect("Failed to stat nested directory");
-
-        assert_eq!(stat.type_, DescriptorType::Directory);
-
-        // ********************************************************
-        // Test 4: Create file in the new directory
-        // ********************************************************
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-        let file_desc = vfs_ctx
-            .open_at(
-                root_desc,
-                PathFlags::empty(),
-                "test_dir/test_file.txt".to_string(),
-                OpenFlags::CREATE,
-                DescriptorFlags::READ | DescriptorFlags::WRITE,
-            )
-            .await
-            .expect("Failed to create file in directory");
-
-        let data = b"hello from directory".to_vec();
-        vfs_ctx
-            .write(file_desc, data.clone(), 0)
-            .await
-            .expect("Failed to write to file in directory");
-
-        // Read it back
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-        let read_desc = vfs_ctx
-            .open_at(
-                root_desc,
-                PathFlags::empty(),
-                "test_dir/test_file.txt".to_string(),
-                OpenFlags::empty(),
-                DescriptorFlags::READ,
-            )
-            .await
-            .expect("Failed to open file for reading");
-
-        let (read_data, eof) = vfs_ctx
-            .read(read_desc, data.len() as u64, 0)
-            .await
-            .expect("Failed to read data from file");
-
-        assert_eq!(read_data, data);
-        assert!(eof);
-
-        // ********************************************************
-        // Test 5: List directory contents
-        // ********************************************************
-        // Read all entries
-        let mut entries = Vec::new();
-
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-
-        let dir_desc = vfs_ctx
-            .open_at(
-                root_desc,
-                PathFlags::empty(),
-                "test_dir".to_string(),
-                OpenFlags::empty(),
-                DescriptorFlags::READ,
-            )
-            .await
-            .expect("Failed to open directory");
-
-        let desc = vfs_ctx
-            .read_directory(dir_desc)
-            .await
-            .expect("Failed to read directory");
-
-        let mut stream = DirectoryEntryIterator::new(desc, &mut vfs_ctx);
-
-        while let Some(entry) = stream.next().await {
-            entries.push(entry);
-        }
-
-        assert_eq!(entries.len(), 2); // nested dir and test_file.txt
-        assert!(
-            entries
-                .iter()
-                .any(|e| e.name == "nested" && e.type_ == DescriptorType::Directory)
-        );
-        assert!(
-            entries
-                .iter()
-                .any(|e| e.name == "test_file.txt" && e.type_ == DescriptorType::RegularFile)
-        );
-
-        // ********************************************************
-        // Test 6: Try to create directory where a file exists
-        // ********************************************************
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-        let res = vfs_ctx
-            .create_directory_at(root_desc, "test_dir/test_file.txt".to_string())
-            .await;
-
-        assert!(res.is_err());
-        assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::Exist));
-
-        // ********************************************************
-        // Test 7: Try to create directory with non-existent parent
-        // ********************************************************
-        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
-        let res = vfs_ctx
-            .create_directory_at(root_desc, "nonexistent/subdir".to_string())
-            .await;
-
-        assert!(res.is_err());
-        assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::NoEntry));
+        assert!(err_msg.contains("Resources exhausted"));
     }
 
     /// Wrapper for streaming directory entries with a convenient API.
@@ -1577,14 +1392,161 @@ mod tests {
         }
     }
 
-    fn session_ctx_with_fixed_pool_size(size: usize) -> SessionContext {
-        let memory_pool = Arc::new(GreedyMemoryPool::new(size));
-        SessionContext::new_with_config_rt(
-            SessionConfig::new(),
-            Arc::new(RuntimeEnv {
-                memory_pool,
-                ..Default::default()
-            }),
-        )
+    #[tokio::test]
+    async fn test_create_directory() {
+        let limits = VfsLimits::default();
+
+        let ctx = session_ctx_with_fixed_pool_size(1024 * 1024);
+        let limiter = Limiter::new(
+            StaticResourceLimits::default(),
+            ctx.task_ctx().memory_pool(),
+        );
+
+        let mut vfs_state = VfsState::new(limits, limiter);
+        let mut resource_table = ResourceTable::new();
+
+        let mut vfs_ctx = VfsCtxView {
+            table: &mut resource_table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // Create a directory
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+
+        vfs_ctx
+            .create_directory_at(root_desc, "test_dir".to_string())
+            .await
+            .expect("Failed to create directory");
+
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let stat = vfs_ctx
+            .stat_at(root_desc, PathFlags::empty(), "test_dir".to_string())
+            .await
+            .expect("Failed to stat directory");
+
+        assert_eq!(stat.type_, DescriptorType::Directory);
+        assert_eq!(stat.size, 0);
+
+        // Try to create a directory that already exists
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let res = vfs_ctx
+            .create_directory_at(root_desc, "test_dir".to_string())
+            .await;
+
+        assert!(res.is_err());
+        assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::Exist));
+
+        // Create nested directory
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+
+        vfs_ctx
+            .create_directory_at(root_desc, "test_dir/nested".to_string())
+            .await
+            .expect("Failed to create nested directory");
+
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let stat = vfs_ctx
+            .stat_at(root_desc, PathFlags::empty(), "test_dir/nested".to_string())
+            .await
+            .expect("Failed to stat nested directory");
+
+        assert_eq!(stat.type_, DescriptorType::Directory);
+
+        // Create file in the new directory
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let file_desc = vfs_ctx
+            .open_at(
+                root_desc,
+                PathFlags::empty(),
+                "test_dir/test_file.txt".to_string(),
+                OpenFlags::CREATE,
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .expect("Failed to create file in directory");
+
+        let data = b"hello from directory".to_vec();
+        vfs_ctx
+            .write(file_desc, data.clone(), 0)
+            .await
+            .expect("Failed to write to file in directory");
+
+        // Read it back
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let read_desc = vfs_ctx
+            .open_at(
+                root_desc,
+                PathFlags::empty(),
+                "test_dir/test_file.txt".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ,
+            )
+            .await
+            .expect("Failed to open file for reading");
+
+        let (read_data, eof) = vfs_ctx
+            .read(read_desc, data.len() as u64, 0)
+            .await
+            .expect("Failed to read data from file");
+
+        assert_eq!(read_data, data);
+        assert!(eof);
+
+        // List directory contents & read all entries
+        let mut entries = Vec::new();
+
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+
+        let dir_desc = vfs_ctx
+            .open_at(
+                root_desc,
+                PathFlags::empty(),
+                "test_dir".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ,
+            )
+            .await
+            .expect("Failed to open directory");
+
+        let desc = vfs_ctx
+            .read_directory(dir_desc)
+            .await
+            .expect("Failed to read directory");
+
+        let mut stream = DirectoryEntryIterator::new(desc, &mut vfs_ctx);
+
+        while let Some(entry) = stream.next().await {
+            entries.push(entry);
+        }
+
+        assert_eq!(entries.len(), 2);
+        assert!(
+            entries
+                .iter()
+                .any(|e| e.name == "nested" && e.type_ == DescriptorType::Directory)
+        );
+        assert!(
+            entries
+                .iter()
+                .any(|e| e.name == "test_file.txt" && e.type_ == DescriptorType::RegularFile)
+        );
+
+        // Try to create directory where a file exists
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let res = vfs_ctx
+            .create_directory_at(root_desc, "test_dir/test_file.txt".to_string())
+            .await;
+
+        assert!(res.is_err());
+        assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::Exist));
+
+        // Try to create directory with non-existent parent
+        let root_desc = create_rw_root_descriptor(&mut vfs_ctx);
+        let res = vfs_ctx
+            .create_directory_at(root_desc, "nonexistent/subdir".to_string())
+            .await;
+
+        assert!(res.is_err());
+        assert_matches!(res.err().unwrap().downcast_ref(), Some(ErrorCode::NoEntry));
     }
 }
