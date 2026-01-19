@@ -1448,6 +1448,7 @@ dependencies = [
  "datafusion-expr",
  "datafusion-udf-wasm-guest",
  "flate2",
+ "gungraun",
  "pyo3",
  "sha2",
  "tar",
