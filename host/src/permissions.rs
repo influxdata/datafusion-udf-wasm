@@ -1,6 +1,6 @@
 //! Permission for guests.
 
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc, time::Duration};
 
 use crate::{
     HttpRequestValidator, RejectAllHttpRequests, StaticResourceLimits, TrustedDataLimits, VfsLimits,
@@ -37,6 +37,12 @@ pub struct WasmPermissions {
     /// Maximum number of UDFs.
     pub(crate) max_udfs: usize,
 
+    /// Maximum number of cached [`ConfigOptions`].
+    ///
+    ///
+    /// [`ConfigOptions`]: datafusion_common::config::ConfigOptions
+    pub(crate) max_cached_config_options: NonZeroUsize,
+
     /// Environment variables.
     pub(crate) envs: BTreeMap<String, String>,
 }
@@ -64,6 +70,7 @@ impl Default for WasmPermissions {
             resource_limits: StaticResourceLimits::default(),
             trusted_data_limits: TrustedDataLimits::default(),
             max_udfs: 20,
+            max_cached_config_options: NonZeroUsize::new(1).expect("valid value"),
             envs: BTreeMap::default(),
         }
     }
@@ -154,6 +161,17 @@ impl WasmPermissions {
     pub fn with_max_udfs(self, limit: usize) -> Self {
         Self {
             max_udfs: limit,
+            ..self
+        }
+    }
+
+    /// Maximum number of cached [`ConfigOptions`].
+    ///
+    ///
+    /// [`ConfigOptions`]: datafusion_common::config::ConfigOptions
+    pub fn with_max_cached_config_options(self, limit: NonZeroUsize) -> Self {
+        Self {
+            max_cached_config_options: limit,
             ..self
         }
     }

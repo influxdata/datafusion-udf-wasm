@@ -6,7 +6,30 @@ use std::sync::Arc;
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
 use arrow::datatypes::DataType;
+use datafusion_common::config::ConfigOptions;
 use datafusion_expr::ScalarUDFImpl;
+
+/// Wraps [`ConfigOptions`] so that it implements the [WIT definition].
+#[derive(Debug)]
+pub struct ConfigOptionsWrapper(Arc<ConfigOptions>);
+
+impl ConfigOptionsWrapper {
+    /// Get wrapped [`ConfigOptions`].
+    pub fn inner(&self) -> &Arc<ConfigOptions> {
+        &self.0
+    }
+}
+
+impl wit_types::GuestConfigOptions for ConfigOptionsWrapper {
+    fn from_string_hash_map(
+        settings: Vec<(String, String)>,
+    ) -> Result<wit_types::ConfigOptions, wit_types::DataFusionError> {
+        let config_options = Arc::new(ConfigOptions::from_string_hash_map(
+            &settings.into_iter().collect(),
+        )?);
+        Ok(wit_types::ConfigOptions::new(Self(config_options)))
+    }
+}
 
 /// Wraps a [`ScalarUDFImpl`] so that it implements the [WIT definition].
 ///
@@ -49,7 +72,7 @@ impl wit_types::GuestScalarUdf for ScalarUdfWrapper {
 
     fn invoke_with_args(
         &self,
-        args: wit_types::ScalarFunctionArgs,
+        args: wit_types::ScalarFunctionArgs<'_>,
     ) -> Result<wit_types::ColumnarValue, wit_types::DataFusionError> {
         let args = args.try_into()?;
         let cval = self.0.invoke_with_args(args)?;

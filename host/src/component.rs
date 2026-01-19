@@ -1,7 +1,9 @@
 //! WASM component handling.
 use std::{ops::Deref, sync::Arc, time::Duration};
 
-use datafusion_common::{DataFusionError, error::Result as DataFusionResult};
+use datafusion_common::{
+    DataFusionError, config::ConfigOptions, error::Result as DataFusionResult,
+};
 use datafusion_execution::memory_pool::MemoryPool;
 use tokio::{
     runtime::Handle,
@@ -10,14 +12,15 @@ use tokio::{
 };
 use wasmtime::{
     AsContext, AsContextMut, Engine, Store, StoreContext, StoreContextMut, UpdateDeadline,
-    component::Component,
+    component::{Component, ResourceAny},
 };
 use wasmtime_wasi::{ResourceTable, WasiCtx, p2::pipe::MemoryOutputPipe};
 use wasmtime_wasi_http::WasiHttpCtx;
 
 use crate::{
-    TrustedDataLimits, WasmPermissions, bindings, error::WasmToDataFusionResultExt,
-    ignore_debug::IgnoreDebug, limiter::Limiter, linker::link, state::WasmStateImpl, vfs::VfsState,
+    TrustedDataLimits, WasmPermissions, bindings, conversion::resource_cache::ResourceCache,
+    error::WasmToDataFusionResultExt, ignore_debug::IgnoreDebug, limiter::Limiter, linker::link,
+    state::WasmStateImpl, vfs::VfsState,
 };
 
 /// Create WASM engine.
@@ -225,6 +228,12 @@ pub(crate) struct WasmComponentInstance {
     /// This mostly contains [`WasmStateImpl`].
     store: Arc<Mutex<Store<WasmStateImpl>>>,
 
+    /// Resource cache for [`ConfigOptions`].
+    ///
+    /// NOTE: This is not included in [`store`](Self::store) / [`WasmStateImpl`] because creating new cache values
+    /// likely requires the [`store`](Self::store) and we cannot have overlapping mutable borrows.
+    cache_config_options: Arc<Mutex<ResourceCache<ConfigOptions, ResourceAny>>>,
+
     /// Background task that keeps the WASM epoch timer running.
     #[expect(dead_code)]
     epoch_task: Arc<JoinSet<()>>,
@@ -349,6 +358,9 @@ impl WasmComponentInstance {
 
         Ok(Self {
             store,
+            cache_config_options: Arc::new(Mutex::new(ResourceCache::new(
+                permissions.max_cached_config_options,
+            ))),
             epoch_task,
             inplace_blocking_timeout,
             trusted_data_limits: permissions.trusted_data_limits.clone(),
@@ -364,6 +376,13 @@ impl WasmComponentInstance {
     /// Lock inner store.
     pub(crate) async fn lock_state(&self) -> LockedState {
         LockedState(Arc::clone(&self.store).lock_owned().await)
+    }
+
+    /// Resource cache for [`ConfigOptions`].
+    pub(crate) async fn cache_config_options(
+        &self,
+    ) -> OwnedMutexGuard<ResourceCache<ConfigOptions, ResourceAny>> {
+        Arc::clone(&self.cache_config_options).lock_owned().await
     }
 
     /// Timeout for blocking tasks.
