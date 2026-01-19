@@ -311,7 +311,7 @@ fn init_python() {
 }
 
 /// Generate UDFs from given Python string.
-fn udfs(source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
+pub fn udfs(source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
     init_python();
 
     let udfs = inspect_python_code(&source)?;

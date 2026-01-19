@@ -46,7 +46,7 @@ pub(crate) trait PyErrExt {
     ///
     /// So this Rust code:
     ///
-    /// ```rust,no-compile
+    /// ```ignore
     /// my_fn
     ///     .call(...)
     ///     .context("foo")
