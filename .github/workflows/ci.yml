@@ -30,7 +30,7 @@ jobs:
         run: pip install --requirement=.github/workflows/requirements.txt
 
       - name: Install `cargo-deny` & `just` & `tombi` & 'typos'
-        uses: taiki-e/install-action@3522286d40783523f9c7880e33f785905b4c20d0  # v2
+        uses: taiki-e/install-action@542cebaaed782771e619bd5609d97659d109c492  # v2
         with:
           tool: cargo-deny,just,tombi,typos
 
@@ -47,7 +47,7 @@ jobs:
       # Swatinem/rust-cache does NOT cache docs, see
       # https://github.com/Swatinem/rust-cache/issues/208
       - name: Rustdoc Cache
-        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb  # v4
+        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7  # v4
         with:
           path: target/doc
           key: v0-${{ runner.os }}-rustdoc-${{ hashFiles('**/Cargo.lock') }}
