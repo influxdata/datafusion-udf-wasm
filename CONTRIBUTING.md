@@ -112,7 +112,10 @@ You should probably have followed ["Required Software > Rust"](#rust), but the c
 rustup target add wasm32-wasip2
 ```
 
-### Python Fails To Start / No module named `encodings`
+### Python Fails To Start
+In case [Python] does not start, here some common issues:
+
+#### No module named `encodings`
 If the [Python] guest fails to start but prints the following to stderr:
 
 ```text
@@ -127,6 +130,15 @@ Current thread 0x012bd368 (most recent call first):
 ```
 
 Then the [Python Standard Library] was not found or not bundled correctly. You may try to wipe `guests/python/download`. If that does not help, open a ticket.
+
+# Unsupported python version
+If you get an error message that looks like this:
+
+```text
+Unsupported python version: (3, 12, 3), supported range is (3, 14, 0)..(3, 15, 0)
+```
+
+This may happen if you are running the Python WASM guest code on the host (e.g. for tests or benchmarks) but your host Python version does no fit our expected range. Install a proper Python version.
 
 ## Pre-built WASM Binaries
 We offer pre-built WASM guest binaries to simplify integration into other software artifacts. This way you only need to depend on the host crates and don't need a WASI compilation toolchain. It also cuts build and test times, since you can include a release-optimized guest even during development and CI. Release-optimized guests are smaller and can be JIT-compiled and executed faster.
