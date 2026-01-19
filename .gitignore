@@ -6,3 +6,4 @@ target/
 
 # profiling data
 profile.json
+profile.json.gz
