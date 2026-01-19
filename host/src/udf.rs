@@ -18,7 +18,10 @@ use crate::{
     WasmComponentPrecompiled, WasmPermissions,
     bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
     component::WasmComponentInstance,
-    conversion::limits::{CheckedInto, ComplexityToken},
+    conversion::{
+        async_from::AsyncTryInto,
+        limits::{CheckedInto, ComplexityToken},
+    },
     error::{DataFusionResultExt, WasmToDataFusionResultExt, WitDataFusionResultExt},
     tokio_helpers::async_in_sync_context,
 };
@@ -294,14 +297,14 @@ impl AsyncScalarUDFImpl for WasmScalarUdf {
         &self,
         args: ScalarFunctionArgs,
     ) -> DataFusionResult<ColumnarValue> {
-        let args = args.try_into()?;
+        let args_converted = (args.clone(), &self.instance).async_try_into().await?;
         let mut state = self.instance.lock_state().await;
         let return_type = self
             .instance
             .bindings()
             .datafusion_udf_wasm_udf_types()
             .scalar_udf()
-            .call_invoke_with_args(&mut state, self.resource, &args)
+            .call_invoke_with_args(&mut state, self.resource, &args_converted)
             .await
             .context(
                 "call ScalarUdf::invoke_with_args",
@@ -309,14 +312,23 @@ impl AsyncScalarUDFImpl for WasmScalarUdf {
             )?
             .convert_err(self.instance.trusted_data_limits().clone())?;
 
+        // clean resources AFTER the actual function call
+        drop(args);
+        drop(state);
+        self.instance
+            .cache_config_options()
+            .await
+            .clean(&self.instance)
+            .await?;
+
         match return_type.checked_into_root(self.instance.trusted_data_limits()) {
             Ok(ColumnarValue::Scalar(scalar)) => Ok(ColumnarValue::Scalar(scalar)),
-            Ok(ColumnarValue::Array(array)) if array.len() as u64 != args.number_rows => {
+            Ok(ColumnarValue::Array(array)) if array.len() as u64 != args_converted.number_rows => {
                 Err(DataFusionError::External(
                     format!(
                         "UDF returned array of length {} but should produce {} rows",
                         array.len(),
-                        args.number_rows
+                        args_converted.number_rows
                     )
                     .into(),
                 ))

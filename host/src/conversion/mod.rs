@@ -1,21 +1,31 @@
 //! Conversion routes from/to [WIT types](crate::bindings).
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use arrow::{
     array::ArrayRef,
     datatypes::{DataType, Field, IntervalUnit, TimeUnit, UnionFields, UnionMode},
 };
-use datafusion_common::{DataFusionError, ScalarValue};
+use datafusion_common::{
+    DataFusionError, ScalarValue, config::ConfigOptions, error::Result as DataFusionResult,
+};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs};
 use datafusion_udf_wasm_arrow2bytes::{array2bytes, bytes2array, bytes2datatype, datatype2bytes};
+use wasmtime::component::ResourceAny;
 
 use crate::{
     bindings::exports::datafusion_udf_wasm::udf::types::{self as wit_types},
-    conversion::limits::{CheckedFrom, CheckedInto},
-    error::DataFusionResultExt,
+    component::WasmComponentInstance,
+    conversion::{
+        async_from::AsyncTryFrom,
+        limits::{CheckedFrom, CheckedInto},
+        resource_cache::ResourceCacheValue,
+    },
+    error::{DataFusionResultExt, WasmToDataFusionResultExt, WitDataFusionResultExt},
 };
 
+pub(crate) mod async_from;
 pub(crate) mod limits;
+pub(crate) mod resource_cache;
 
 impl CheckedFrom<wit_types::DataFusionError> for DataFusionError {
     fn checked_from(
@@ -457,10 +467,52 @@ impl CheckedFrom<wit_types::ColumnarValue> for ColumnarValue {
     }
 }
 
-impl TryFrom<ScalarFunctionArgs> for wit_types::ScalarFunctionArgs {
+impl ResourceCacheValue<ConfigOptions> for ResourceAny {
+    type Context = Arc<WasmComponentInstance>;
+
+    async fn new(k: &Arc<ConfigOptions>, ctx: &Self::Context) -> DataFusionResult<Self> {
+        let settings = k
+            .entries()
+            .into_iter()
+            .filter_map(|e| {
+                let k = e.key;
+                let v = e.value?;
+                Some((k, v))
+            })
+            .collect::<Vec<_>>();
+
+        let mut state = ctx.lock_state().await;
+        ctx.bindings()
+            .datafusion_udf_wasm_udf_types()
+            .config_options()
+            .call_from_string_hash_map(&mut state, &settings)
+            .await
+            .context(
+                "cannot create ConfigOptions resource",
+                Some(&state.stderr.contents()),
+            )?
+            .convert_err(ctx.trusted_data_limits().clone())
+    }
+
+    async fn clean(self, ctx: &Self::Context) -> DataFusionResult<()> {
+        let mut state = ctx.lock_state().await;
+
+        self.resource_drop_async(&mut state).await.context(
+            "cannot free ConfigOptions resource",
+            Some(&state.stderr.contents()),
+        )
+    }
+}
+
+// use a tuple to pass additional context/helpers into the conversion
+impl AsyncTryFrom<(ScalarFunctionArgs, &Arc<WasmComponentInstance>)>
+    for wit_types::ScalarFunctionArgs
+{
     type Error = DataFusionError;
 
-    fn try_from(value: ScalarFunctionArgs) -> Result<Self, Self::Error> {
+    async fn async_try_from(
+        (value, instance): (ScalarFunctionArgs, &Arc<WasmComponentInstance>),
+    ) -> Result<Self, Self::Error> {
         Ok(Self {
             args: value
                 .args
@@ -474,16 +526,11 @@ impl TryFrom<ScalarFunctionArgs> for wit_types::ScalarFunctionArgs {
                 .collect(),
             number_rows: value.number_rows as u64,
             return_field: value.return_field.as_ref().clone().into(),
-            config_options: value
-                .config_options
-                .entries()
-                .into_iter()
-                .filter_map(|e| {
-                    let k = e.key;
-                    let v = e.value?;
-                    Some((k, v))
-                })
-                .collect(),
+            config_options: instance
+                .cache_config_options()
+                .await
+                .cache(&value.config_options, instance)
+                .await?,
         })
     }
 }

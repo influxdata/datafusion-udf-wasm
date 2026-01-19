@@ -1,4 +1,4 @@
-package datafusion-udf-wasm:udf@0.2.0;
+package datafusion-udf-wasm:udf@0.3.0;
 
 interface types {
     // TODO: add more variants
@@ -78,12 +78,16 @@ interface types {
         scalar(scalar-value),
     }
 
+    resource config-options {
+        from-string-hash-map: static func(settings: list<tuple<string, string>>) -> result<config-options, data-fusion-error>;
+    }
+
     record scalar-function-args {
         args: list<columnar-value>,
         arg-fields: list<field>,
         number-rows: u64,
         return-field: field,
-        config-options: list<tuple<string, string>>,
+        config-options: borrow<config-options>,
     }
 
     resource scalar-udf {
