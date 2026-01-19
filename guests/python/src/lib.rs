@@ -206,37 +206,35 @@ impl ScalarUDFImpl for PythonScalarUDF {
                 .return_type
                 .python_to_arrow(py, number_rows);
 
+            // allocate params vector once and reuse for each row
+            let mut params = Vec::with_capacity(parameter_iters.len());
+
             for _ in 0..number_rows {
                 // poll ALL iterators before evaluating the controlflow
-                let params = parameter_iters
-                    .iter_mut()
-                    .map(|it| it.next().expect("all iterators have n_rows"))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                // determine if we shall call the Python method or not
-                let maybe_params = params.into_iter().try_fold(
-                    Vec::with_capacity(parameter_iters.len()),
-                    |mut accu, next| {
-                        accu.push(next?);
-                        ControlFlow::Continue(accu)
-                    },
-                );
-
-                match maybe_params {
-                    ControlFlow::Continue(params) => {
-                        let params = PyTuple::new(py, params).map_err(|e| {
-                            exec_datafusion_err!("{}", py_err_to_string(e, py))
-                                .context("cannot create parameter tuple")
-                        })?;
-                        let rval = handle.call1(params).map_err(|e| {
-                            exec_datafusion_err!("{}", py_err_to_string(e, py))
-                                .context("cannot call function")
-                        })?;
-                        output_row_builder.push(rval)?;
+                params.clear();
+                for it in &mut parameter_iters {
+                    match it.next().expect("all iterators have n_rows")? {
+                        ControlFlow::Continue(param) => {
+                            params.push(param);
+                        }
+                        ControlFlow::Break(()) => {}
                     }
-                    ControlFlow::Break(()) => {
-                        output_row_builder.skip();
-                    }
+                }
+
+                if params.len() == parameter_iters.len() {
+                    // all parameters extracted
+                    let params = PyTuple::new(py, &params).map_err(|e| {
+                        exec_datafusion_err!("{}", py_err_to_string(e, py))
+                            .context("cannot create parameter tuple")
+                    })?;
+                    let rval = handle.call1(params).map_err(|e| {
+                        exec_datafusion_err!("{}", py_err_to_string(e, py))
+                            .context("cannot call function")
+                    })?;
+                    output_row_builder.push(rval)?;
+                } else {
+                    // NULL row
+                    output_row_builder.skip();
                 }
             }
 
