@@ -1,0 +1,11 @@
+[project]
+name = "datafusion-udf-wasm-tooling"
+version = "0.1.0"
+requires-python = "==3.14.*"
+dependencies = [
+  "pip",
+  "yamllint",
+]
+
+[tool.uv]
+required-version = "==0.9.*"

@@ -7,3 +7,6 @@ target/
 # profiling data
 profile.json
 profile.json.gz
+
+# Python venv
+.venv

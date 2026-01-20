@@ -21,7 +21,7 @@ DOWNLOADS_DIR := source_directory() / "downloads"
 export PYO3_CROSS_PYTHON_VERSION := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR
 export PYO3_CROSS_LIB_DIR := DOWNLOADS_DIR / "python-sdk"
 
-PYTHON_TMP_VENV := DOWNLOADS_DIR / "venv"
+UV_PROJECT_DIR := source_directory() / ".." / ".." / "python-tooling"
 PYTHON_SITE_PACKAGES := PYO3_CROSS_LIB_DIR / "lib" / "python" + PYO3_CROSS_PYTHON_VERSION / "site-packages"
 
 # download pre-built Python WASM SDK
@@ -99,23 +99,24 @@ python-site-packages: download-python-sdk
     set -x
 
     # skip if already downloaded
-    if [ -d "{{PYTHON_TMP_VENV}}" ]; then
+    if compgen -G "{{PYTHON_SITE_PACKAGES}}/*.dist-info" > /dev/null; then
         echo "site-packages already set up"
         set +x
         echo ::endgroup::
         exit 0
     fi
 
-    python -m venv "{{PYTHON_TMP_VENV}}"
-
     # Notes:
+    # - ideally we would just use `uv pip install` for this, but that doesn't support pure Python wheels yet, see https://github.com/astral-sh/uv/issues/6246
     # - "only binary" means "only wheels, no sdist", i.e. we don't need to run any Python lib build code
     # - "implementation=py" ensures that we use the most neutral wheel possible, i.e. not actual binary code
-    "{{PYTHON_TMP_VENV}}"/bin/pip install \
+    uv --project="{{UV_PROJECT_DIR}}" run --isolated -- pip install \
         --disable-pip-version-check \
         --no-deps \
         --ignore-installed \
         --implementation=py \
+        --abi=none \
+        --platform=any \
         --isolated \
         --only-binary=:all: \
         --python-version={{PYTHON_VERSION_FULL}} \

@@ -26,8 +26,10 @@ jobs:
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
 
-      - name: Install `yamllint`
-        run: pip install --requirement=.github/workflows/requirements.txt
+      - name: Install `uv`
+        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b  # v7
+        with:
+          version-file: "python-tooling/pyproject.toml"
 
       - name: Install `cargo-deny` & `just` & `tombi` & 'typos'
         uses: taiki-e/install-action@542cebaaed782771e619bd5609d97659d109c492  # v2

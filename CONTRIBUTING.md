@@ -13,17 +13,14 @@ Install the `stable` [Rust] toolchain. The easiest way to do this is [rustup]. Y
 rustup target add wasm32-wasip2
 ```
 
-### Yamllint
-Install [yamllint] for linting.
-
 ### cargo deny
 Install [cargo-deny] to check dependencies.
 
 ### Just
 Install [just] to easily run all the tests/scripts.
 
-### Python
-Install [Python] to set up the environment for the [Python] guest.
+### uv
+Install [uv] for [Python]-based tooling.
 
 ### Tombi
 Install [tombi] to format and lint [TOML] files.
@@ -135,4 +132,4 @@ $ gh workflow run Prebuild --ref <BRANCH_NAME>
 [tombi]: https://tombi-toml.github.io/tombi
 [TOML]: https://toml.io/
 [typos]: https://github.com/crate-ci/typos
-[yamllint]: https://github.com/adrienverge/yamllint
+[uv]: https://docs.astral.sh/uv/
