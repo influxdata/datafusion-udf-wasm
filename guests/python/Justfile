@@ -128,7 +128,7 @@ python-site-packages: download-python-sdk
 [private]
 build-lib profile: download-python-sdk python-site-packages
     @echo ::group::guests::python::build-lib {{profile}}
-    cargo build --target=wasm32-wasip2 --profile={{replace(profile, "debug", "dev")}}
+    cargo rustc --crate-type=cdylib --target=wasm32-wasip2 --profile={{replace(profile, "debug", "dev")}}
     @echo ::endgroup::
 
 # top-level entry point
