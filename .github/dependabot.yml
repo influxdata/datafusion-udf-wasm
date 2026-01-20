@@ -40,11 +40,11 @@ updates:
       github-deps:
         patterns:
           - "*"
-  - package-ecosystem: "pip"
-    directory: ".github/workflows"
+  - package-ecosystem: "uv"
+    directory: "python-tooling/"
     schedule:
       interval: "weekly"
     groups:
-      github-deps:
+      python-deps:
         patterns:
           - "*"

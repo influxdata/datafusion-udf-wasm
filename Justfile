@@ -116,7 +116,7 @@ check-wit:
 # lint YAML files
 check-yaml:
     @echo ::group::check-yaml
-    yamllint -s .
+    uv --project=python-tooling run --isolated -- yamllint -s .
     @echo ::endgroup::
 
 # run ALL checks
