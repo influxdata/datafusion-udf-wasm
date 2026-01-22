@@ -867,6 +867,13 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 Ok(existing_node) => {
                     // File exists, handle EXCLUSIVE flag
                     if open_flags.contains(OpenFlags::EXCLUSIVE) {
+                        let is_dir = matches!(
+                            existing_node.read().unwrap().kind,
+                            VfsNodeKind::Directory { .. }
+                        );
+                        if is_dir {
+                            return Err(FsError::trap(ErrorCode::IsDirectory));
+                        }
                         return Err(FsError::trap(ErrorCode::Exist));
                     }
                     existing_node

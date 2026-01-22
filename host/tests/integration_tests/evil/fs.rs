@@ -1792,10 +1792,10 @@ async fn test_open_create_new() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | ERR: File exists (os error 20)                  |
-    | .           | ERR: File exists (os error 20)                  |
-    | ..          | ERR: File exists (os error 20)                  |
-    | /           | ERR: File exists (os error 20)                  |
+    |             | ERR: Is a directory (os error 31)               |
+    | .           | ERR: Is a directory (os error 31)               |
+    | ..          | ERR: Is a directory (os error 31)               |
+    | /           | ERR: Is a directory (os error 31)               |
     | /bin        | ERR: Read-only file system (os error 69)        |
     | /boot       | ERR: Read-only file system (os error 69)        |
     | /dev        | ERR: Read-only file system (os error 69)        |
