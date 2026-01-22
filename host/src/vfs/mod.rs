@@ -17,14 +17,16 @@ use std::{
     },
 };
 
+use bytes::Bytes;
 use rand::Rng;
 use siphasher::sip128::{Hasher128, SipHasher24};
 use wasmtime::component::{HasData, Resource};
 use wasmtime_wasi::{
-    ResourceTable,
+    ResourceTable, async_trait,
     filesystem::Descriptor,
     p2::{
-        FsError, FsResult, InputStream as WasiInputStream,
+        FsError, FsResult, InputStream as WasiInputStream, OutputStream as WasiOutputStream,
+        Pollable, StreamError,
         bindings::filesystem::{
             self,
             types::{
@@ -244,6 +246,13 @@ impl Allocation {
                 requested: n,
             })
     }
+
+    /// Decrease allocation by given amount.
+    fn dec(&self, n: u64) {
+        let _ = self
+            .n
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |old| old.checked_sub(n));
+    }
 }
 
 /// State for the virtual filesystem.
@@ -395,6 +404,92 @@ struct VfsDirectoryStream {
     entries: std::iter::Fuse<std::vec::IntoIter<DirectoryEntry>>,
 }
 
+/// Output stream for writing into VFS files.
+#[derive(Debug)]
+struct VfsOutputStream {
+    /// File node to write into.
+    node: SharedVfsNode,
+    /// Limiter tracking bytes written into the VFS.
+    limiter: Limiter,
+    /// Current write offset.
+    offset: u64,
+    /// Whether the stream has been closed.
+    closed: bool,
+}
+
+impl VfsOutputStream {
+    /// Create a new output stream at the provided offset.
+    fn new(node: SharedVfsNode, limiter: Limiter, offset: u64) -> Self {
+        Self {
+            node,
+            limiter,
+            offset,
+            closed: false,
+        }
+    }
+}
+
+#[async_trait]
+impl WasiOutputStream for VfsOutputStream {
+    fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
+        if self.closed {
+            return Err(StreamError::Closed);
+        }
+
+        let start =
+            usize::try_from(self.offset).map_err(|_| StreamError::trap("offset overflow"))?;
+        let write_len = bytes.len();
+        let end_u64 = self
+            .offset
+            .checked_add(
+                u64::try_from(write_len).map_err(|_| StreamError::trap("length overflow"))?,
+            )
+            .ok_or_else(|| StreamError::trap("offset overflow"))?;
+        let end = usize::try_from(end_u64).map_err(|_| StreamError::trap("offset overflow"))?;
+
+        match &mut self.node.write().unwrap().kind {
+            VfsNodeKind::File { content } => {
+                let old_size = content.len();
+                if end > old_size {
+                    if let Err(e) = self.limiter.grow(end - old_size) {
+                        println!("let guest handle space error: {:?}", e);
+                    }
+                    content.resize(end, 0);
+                }
+
+                let write_end = start + write_len;
+                content[start..write_end].copy_from_slice(&bytes);
+                self.offset = end_u64;
+                Ok(())
+            }
+            VfsNodeKind::Directory { .. } => Err(StreamError::trap("write on directory")),
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), StreamError> {
+        if self.closed {
+            return Err(StreamError::Closed);
+        }
+        Ok(())
+    }
+
+    fn check_write(&mut self) -> Result<usize, StreamError> {
+        if self.closed {
+            return Err(StreamError::Closed);
+        }
+        Ok(usize::MAX)
+    }
+
+    async fn cancel(&mut self) {
+        self.closed = true;
+    }
+}
+
+#[async_trait]
+impl Pollable for VfsOutputStream {
+    async fn ready(&mut self) {}
+}
+
 /// Provide file system access to given state.
 pub(crate) trait VfsView {
     /// Provide vfs access.
@@ -470,10 +565,34 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     fn write_via_stream(
         &mut self,
-        _self_: Resource<Descriptor>,
-        _offset: Filesize,
+        self_: Resource<Descriptor>,
+        offset: Filesize,
     ) -> FsResult<Resource<OutputStream>> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        let desc = self.get_descriptor(self_)?;
+        if !desc.flags.contains(DescriptorFlags::WRITE) {
+            return Err(FsError::trap(ErrorCode::Access));
+        }
+
+        let node = Arc::clone(&desc.node);
+        match &node.read().unwrap().kind {
+            VfsNodeKind::File { .. } => {}
+            VfsNodeKind::Directory { .. } => return Err(FsError::trap(ErrorCode::IsDirectory)),
+        }
+
+        if offset == u64::MAX {
+            return Err(FsError::trap(ErrorCode::Overflow));
+        }
+
+        let stream: Box<dyn WasiOutputStream> = Box::new(VfsOutputStream::new(
+            node,
+            self.vfs_state.limiter.clone(),
+            offset,
+        ));
+        let res = self
+            .table
+            .push(stream)
+            .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+        Ok(res.cast())
     }
 
     fn append_via_stream(
@@ -864,12 +983,48 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         Err(FsError::trap(ErrorCode::ReadOnly))
     }
 
-    async fn unlink_file_at(
-        &mut self,
-        _self_: Resource<Descriptor>,
-        _path: String,
-    ) -> FsResult<()> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+    async fn unlink_file_at(&mut self, self_: Resource<Descriptor>, path: String) -> FsResult<()> {
+        let node = self.node(self_)?;
+
+        let (is_root, directions) = PathTraversal::parse(&path, &self.vfs_state.limits)?;
+        let mut directions = directions.collect::<Vec<_>>();
+
+        let name = match directions
+            .pop()
+            .ok_or_else(|| FsError::trap(ErrorCode::Invalid))??
+        {
+            PathTraversal::Down(segment) => segment,
+            _ => return Err(FsError::trap(ErrorCode::Invalid)),
+        };
+
+        let parent_start = if is_root {
+            Arc::clone(&self.vfs_state.root)
+        } else {
+            node
+        };
+        let parent_node = VfsNode::traverse(parent_start, directions.into_iter())?;
+
+        let mut parent_guard = parent_node.write().unwrap();
+        match &mut parent_guard.kind {
+            VfsNodeKind::Directory { children } => {
+                let child = children
+                    .get(&name)
+                    .ok_or_else(|| FsError::trap(ErrorCode::NoEntry))?;
+                let child_guard = child.read().unwrap();
+                match &child_guard.kind {
+                    VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
+                    VfsNodeKind::File { content } => {
+                        let content_len = content.len();
+                        drop(child_guard);
+                        children.remove(&name);
+                        self.vfs_state.limiter.shrink(content_len);
+                        self.vfs_state.inodes_allocation.dec(1);
+                        Ok(())
+                    }
+                }
+            }
+            VfsNodeKind::File { .. } => Err(FsError::trap(ErrorCode::NotDirectory)),
+        }
     }
 
     async fn is_same_object(
