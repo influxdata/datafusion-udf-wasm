@@ -34,6 +34,7 @@ async fn test_large_file() {
 
     stderr:
     memory allocation of 10485760 bytes failed
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
     caused by
     External error: wasm trap: wasm `unreachable` instruction executed

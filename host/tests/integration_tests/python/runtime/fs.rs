@@ -189,10 +189,11 @@ async fn test_write() {
     const CODE: &str = r#"
 def write(path: str) -> str:
     try:
-        with open(path, "w") as fp:
+        with open(path, "w+") as fp:
             fp.write("data")
+            fp.seek(0)
             data = fp.read()
-            return "OK: {data}"
+            return f'OK: "{data}"'
     except Exception as e:
         return f"ERR: {e}"
 "#;
@@ -214,7 +215,7 @@ def write(path: str) -> str:
         },
         TestCase {
             path: "/test",
-            err: "ERR: [Errno 69] Read-only file system",
+            err: "OK: \"data\"",
         },
     ];
 
