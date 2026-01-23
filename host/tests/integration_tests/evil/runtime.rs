@@ -34,6 +34,7 @@ async fn test_alloc() {
 
     stderr:
     memory allocation of 1000000000 bytes failed
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
     caused by
     External error: wasm trap: wasm `unreachable` instruction executed
