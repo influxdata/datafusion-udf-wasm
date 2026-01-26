@@ -932,6 +932,13 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
             VfsNode::traverse(start, directions)?
         };
 
+        if flags.contains(DescriptorFlags::WRITE) {
+            let is_dir = matches!(node.read().unwrap().kind, VfsNodeKind::Directory { .. });
+            if is_dir {
+                return Err(FsError::trap(ErrorCode::IsDirectory));
+            }
+        }
+
         if open_flags.contains(OpenFlags::TRUNCATE) && flags.contains(DescriptorFlags::WRITE) {
             let mut node_guard = node.write().unwrap();
             match &mut node_guard.kind {

@@ -1708,10 +1708,10 @@ async fn test_open_append() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | OK: opened                                      |
-    | .           | OK: opened                                      |
-    | ..          | OK: opened                                      |
-    | /           | OK: opened                                      |
+    |             | ERR: Is a directory (os error 31)               |
+    | .           | ERR: Is a directory (os error 31)               |
+    | ..          | ERR: Is a directory (os error 31)               |
+    | /           | ERR: Is a directory (os error 31)               |
     | /bin        | ERR: No such file or directory (os error 44)    |
     | /boot       | ERR: No such file or directory (os error 44)    |
     | /dev        | ERR: No such file or directory (os error 44)    |
@@ -1750,10 +1750,10 @@ async fn test_open_create() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | OK: opened                                      |
-    | .           | OK: opened                                      |
-    | ..          | OK: opened                                      |
-    | /           | OK: opened                                      |
+    |             | ERR: Is a directory (os error 31)               |
+    | .           | ERR: Is a directory (os error 31)               |
+    | ..          | ERR: Is a directory (os error 31)               |
+    | /           | ERR: Is a directory (os error 31)               |
     | /bin        | ERR: Read-only file system (os error 69)        |
     | /boot       | ERR: Read-only file system (os error 69)        |
     | /dev        | ERR: Read-only file system (os error 69)        |
@@ -1918,10 +1918,10 @@ async fn test_open_write() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | OK: opened                                      |
-    | .           | OK: opened                                      |
-    | ..          | OK: opened                                      |
-    | /           | OK: opened                                      |
+    |             | ERR: Is a directory (os error 31)               |
+    | .           | ERR: Is a directory (os error 31)               |
+    | ..          | ERR: Is a directory (os error 31)               |
+    | /           | ERR: Is a directory (os error 31)               |
     | /bin        | ERR: No such file or directory (os error 44)    |
     | /boot       | ERR: No such file or directory (os error 44)    |
     | /dev        | ERR: No such file or directory (os error 44)    |
