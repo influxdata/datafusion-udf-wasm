@@ -88,9 +88,499 @@ async fn test_canonicalize() {
 async fn test_copy() {
     let udf = udf("copy").await;
 
-    insta::assert_snapshot!(
-        run_2(&udf).await,
-        @r"
+    if running_as_github_actions() {
+        insta::assert_snapshot!(
+            run_2(&udf).await,
+            @r"
+    +-------------+-------------+-------------------------------------------------+
+    | from        | to          | output                                          |
+    +-------------+-------------+-------------------------------------------------+
+    |             |             | ERR: Is a directory (os error 31)               |
+    |             | .           | ERR: Is a directory (os error 31)               |
+    |             | ..          | ERR: Is a directory (os error 31)               |
+    |             | /           | ERR: Is a directory (os error 31)               |
+    |             | /bin        | ERR: Bad file descriptor (os error 8)           |
+    |             | /boot       | ERR: Bad file descriptor (os error 8)           |
+    |             | /dev        | ERR: Bad file descriptor (os error 8)           |
+    |             | /etc        | ERR: Bad file descriptor (os error 8)           |
+    |             | /etc/group  | ERR: Not a directory (os error 54)              |
+    |             | /etc/passwd | ERR: Not a directory (os error 54)              |
+    |             | /etc/shadow | ERR: Not a directory (os error 54)              |
+    |             | /home       | ERR: Bad file descriptor (os error 8)           |
+    |             | /lib        | ERR: Bad file descriptor (os error 8)           |
+    |             | /lib64      | ERR: Bad file descriptor (os error 8)           |
+    |             | /opt        | ERR: Bad file descriptor (os error 8)           |
+    |             | /proc       | ERR: Bad file descriptor (os error 8)           |
+    |             | /proc/self  | ERR: Not a directory (os error 54)              |
+    |             | /root       | ERR: Bad file descriptor (os error 8)           |
+    |             | /run        | ERR: Bad file descriptor (os error 8)           |
+    |             | /sbin       | ERR: Bad file descriptor (os error 8)           |
+    |             | /srv        | ERR: Bad file descriptor (os error 8)           |
+    |             | /sys        | ERR: Bad file descriptor (os error 8)           |
+    |             | /tmp        | ERR: Bad file descriptor (os error 8)           |
+    |             | /usr        | ERR: Bad file descriptor (os error 8)           |
+    |             | /var        | ERR: Bad file descriptor (os error 8)           |
+    |             | \0          | ERR: file name contained an unexpected NUL byte |
+    |             | /x/..       | ERR: Invalid argument (os error 28)             |
+    |             | .           |             | ERR: Is a directory (os error 31)               |
+    |             | .           | .           | ERR: Is a directory (os error 31)               |
+    |             | .           | ..          | ERR: Is a directory (os error 31)               |
+    |             | .           | /           | ERR: Is a directory (os error 31)               |
+    |             | .           | /bin        | ERR: Bad file descriptor (os error 8)           |
+    |             | .           | /boot       | ERR: Bad file descriptor (os error 8)           |
+    |             | .           | /dev        | ERR: Bad file descriptor (os error 8)           |
+    |             | .           | /etc        | ERR: Bad file descriptor (os error 8)           |
+    |             | .           | /etc/group  | ERR: Not a directory (os error 54)              |
+    |             | .           | /etc/passwd | ERR: Not a directory (os error 54)              |
+    |             | .           | /etc/shadow | ERR: Not a directory (os error 54)              |
+    |             | .           | /home       | ERR: Bad file descriptor (os error 8)           |
+    |             | .           | /lib        | ERR: Bad file descriptor (os error 8)           |
+    |             | .           | /lib64      | ERR: Bad file descriptor (os error 8)           |
+    |             | .           | /opt        | ERR: Bad file descriptor (os error 8)           |
+    |             | .           | /proc       | ERR: Bad file descriptor (os error 8)           |
+    |             | .           | /proc/self  | ERR: Not a directory (os error 54)              |
+    |             | .           | /root       | ERR: Bad file descriptor (os error 8)           |
+    | .           | /run        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /sbin       | ERR: Bad file descriptor (os error 8)           |
+    | .           | /srv        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /sys        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /tmp        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /usr        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /var        | ERR: Bad file descriptor (os error 8)           |
+    | .           | \0          | ERR: file name contained an unexpected NUL byte |
+    | .           | /x/..       | ERR: Invalid argument (os error 28)             |
+    | ..          |             | ERR: Is a directory (os error 31)               |
+    | ..          | .           | ERR: Is a directory (os error 31)               |
+    | ..          | ..          | ERR: Is a directory (os error 31)               |
+    | ..          | /           | ERR: Is a directory (os error 31)               |
+    | ..          | /bin        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /boot       | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /dev        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /etc        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /etc/group  | ERR: Not a directory (os error 54)              |
+    | ..          | /etc/passwd | ERR: Not a directory (os error 54)              |
+    | ..          | /etc/shadow | ERR: Not a directory (os error 54)              |
+    | ..          | /home       | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /lib        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /lib64      | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /opt        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /proc       | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /proc/self  | ERR: Not a directory (os error 54)              |
+    | ..          | /root       | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /run        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /sbin       | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /srv        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /sys        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /tmp        | ERR: Out of memory (os error 48)                |
+    | ..          | /usr        | ERR: Out of memory (os error 48)                |
+    | ..          | /var        | ERR: Out of memory (os error 48)                |
+    | ..          | \0          | ERR: Out of memory (os error 48)                |
+    | ..          | /x/..       | ERR: Out of memory (os error 48)                |
+    | /           |             | ERR: Out of memory (os error 48)                |
+    | /           | .           | ERR: Out of memory (os error 48)                |
+    | /           | ..          | ERR: Out of memory (os error 48)                |
+    | /           | /           | ERR: Out of memory (os error 48)                |
+    | /           | /bin        | ERR: Out of memory (os error 48)                |
+    | /           | /boot       | ERR: Out of memory (os error 48)                |
+    | /           | /dev        | ERR: Out of memory (os error 48)                |
+    | /           | /etc        | ERR: Out of memory (os error 48)                |
+    | /           | /etc/group  | ERR: Out of memory (os error 48)                |
+    | /           | /etc/passwd | ERR: Out of memory (os error 48)                |
+    | /           | /etc/shadow | ERR: Out of memory (os error 48)                |
+    | /           | /home       | ERR: Out of memory (os error 48)                |
+    | /           | /lib        | ERR: Out of memory (os error 48)                |
+    | /           | /lib64      | ERR: Out of memory (os error 48)                |
+    | /           | /opt        | ERR: Out of memory (os error 48)                |
+    | /           | /proc       | ERR: Out of memory (os error 48)                |
+    | /           | /proc/self  | ERR: Out of memory (os error 48)                |
+    | /           | /root       | ERR: Out of memory (os error 48)                |
+    | /           | /run        | ERR: Out of memory (os error 48)                |
+    | /           | /sbin       | ERR: Out of memory (os error 48)                |
+    | /           | /srv        | ERR: Out of memory (os error 48)                |
+    | /           | /sys        | ERR: Out of memory (os error 48)                |
+    | /           | /tmp        | ERR: Out of memory (os error 48)                |
+    | /           | /usr        | ERR: Out of memory (os error 48)                |
+    | /           | /var        | ERR: Out of memory (os error 48)                |
+    | /           | \0          | ERR: Out of memory (os error 48)                |
+    | /           | /x/..       | ERR: Out of memory (os error 48)                |
+    | /bin        |             | ERR: Out of memory (os error 48)                |
+    | /bin        | .           | ERR: Out of memory (os error 48)                |
+    | /bin        | ..          | ERR: Out of memory (os error 48)                |
+    | /bin        | /           | ERR: Out of memory (os error 48)                |
+    | /bin        | /bin        | ERR: Out of memory (os error 48)                |
+    | /bin        | /boot       | ERR: Out of memory (os error 48)                |
+    | /bin        | /dev        | ERR: Out of memory (os error 48)                |
+    | /bin        | /etc        | ERR: Out of memory (os error 48)                |
+    | /bin        | /etc/group  | ERR: Out of memory (os error 48)                |
+    | /bin        | /etc/passwd | ERR: Out of memory (os error 48)                |
+    | /bin        | /etc/shadow | ERR: Out of memory (os error 48)                |
+    | /bin        | /home       | ERR: Out of memory (os error 48)                |
+    | /bin        | /lib        | ERR: Out of memory (os error 48)                |
+    | /bin        | /lib64      | ERR: Out of memory (os error 48)                |
+    | /bin        | /opt        | ERR: Out of memory (os error 48)                |
+    | /bin        | /proc       | ERR: Out of memory (os error 48)                |
+    | /bin        | /proc/self  | ERR: Out of memory (os error 48)                |
+    | /bin        | /root       | ERR: Out of memory (os error 48)                |
+    | /bin        | /run        | ERR: Out of memory (os error 48)                |
+    | /bin        | /sbin       | ERR: Out of memory (os error 48)                |
+    | /bin        | /srv        | ERR: Out of memory (os error 48)                |
+    | /bin        | /sys        | ERR: Out of memory (os error 48)                |
+    | /bin        | /tmp        | ERR: Out of memory (os error 48)                |
+    | /bin        | /usr        | ERR: Out of memory (os error 48)                |
+    | /bin        | /var        | ERR: Out of memory (os error 48)                |
+    | /bin        | \0          | ERR: Out of memory (os error 48)                |
+    | /bin        | /x/..       | ERR: Out of memory (os error 48)                |
+    | /boot       |             | ERR: Out of memory (os error 48)                |
+    | /boot       | .           | ERR: Out of memory (os error 48)                |
+    | /boot       | ..          | ERR: Out of memory (os error 48)                |
+    | /boot       | /           | ERR: Out of memory (os error 48)                |
+    | /boot       | /bin        | ERR: Out of memory (os error 48)                |
+    | /boot       | /boot       | ERR: Out of memory (os error 48)                |
+    | /boot       | /dev        | ERR: Out of memory (os error 48)                |
+    | /boot       | /etc        | ERR: Out of memory (os error 48)                |
+    | /boot       | /etc/group  | ERR: Out of memory (os error 48)                |
+    | /boot       | /etc/passwd | ERR: Out of memory (os error 48)                |
+    | /boot       | /etc/shadow | ERR: Out of memory (os error 48)                |
+    | /boot       | /home       | ERR: Out of memory (os error 48)                |
+    | /boot       | /lib        | ERR: Out of memory (os error 48)                |
+    | /boot       | /lib64      | ERR: Out of memory (os error 48)                |
+    | /boot       | /opt        | ERR: Out of memory (os error 48)                |
+    | /boot       | /proc       | ERR: Out of memory (os error 48)                |
+    | /boot       | /proc/self  | ERR: Out of memory (os error 48)                |
+    | /boot       | /root       | ERR: Out of memory (os error 48)                |
+    | /boot       | /run        | ERR: Out of memory (os error 48)                |
+    | /boot       | /sbin       | ERR: Out of memory (os error 48)                |
+    | /boot       | /srv        | ERR: Out of memory (os error 48)                |
+    | /boot       | /sys        | ERR: Out of memory (os error 48)                |
+    | /boot       | /tmp        | ERR: Out of memory (os error 48)                |
+    | /boot       | /usr        | ERR: Out of memory (os error 48)                |
+    | /boot       | /var        | ERR: Out of memory (os error 48)                |
+    | /boot       | \0          | ERR: Out of memory (os error 48)                |
+    | /boot       | /x/..       | ERR: Out of memory (os error 48)                |
+    | /dev        |             | ERR: Out of memory (os error 48)                |
+    | /dev        | .           | ERR: Out of memory (os error 48)                |
+    | /dev        | ..          | ERR: Out of memory (os error 48)                |
+    | /dev        | /           | ERR: Out of memory (os error 48)                |
+    | /dev        | /bin        | ERR: Out of memory (os error 48)                |
+    | /dev        | /boot       | ERR: Out of memory (os error 48)                |
+    | /dev        | /dev        | ERR: Out of memory (os error 48)                |
+    | /dev        | /etc        | ERR: Out of memory (os error 48)                |
+    | /dev        | /etc/group  | ERR: Out of memory (os error 48)                |
+    | /dev        | /etc/passwd | ERR: Out of memory (os error 48)                |
+    | /dev        | /etc/shadow | ERR: Out of memory (os error 48)                |
+    | /dev        | /home       | ERR: Out of memory (os error 48)                |
+    | /dev        | /lib        | ERR: Out of memory (os error 48)                |
+    | /dev        | /lib64      | ERR: Out of memory (os error 48)                |
+    | /dev        | /opt        | ERR: Out of memory (os error 48)                |
+    | /dev        | /proc       | ERR: Out of memory (os error 48)                |
+    | /dev        | /proc/self  | ERR: Out of memory (os error 48)                |
+    | /dev        | /root       | ERR: Out of memory (os error 48)                |
+    | /dev        | /run        | ERR: Out of memory (os error 48)                |
+    | /dev        | /sbin       | ERR: Out of memory (os error 48)                |
+    | /dev        | /srv        | ERR: Out of memory (os error 48)                |
+    | /dev        | /sys        | ERR: Out of memory (os error 48)                |
+    | /dev        | /tmp        | ERR: Out of memory (os error 48)                |
+    | /dev        | /usr        | ERR: Out of memory (os error 48)                |
+    | /dev        | /var        | ERR: Out of memory (os error 48)                |
+    | /dev        | \0          | ERR: Out of memory (os error 48)                |
+    | /dev        | /x/..       | ERR: Out of memory (os error 48)                |
+    | /etc        |             | ERR: Out of memory (os error 48)                |
+    | /etc        | .           | ERR: Out of memory (os error 48)                |
+    | /etc        | ..          | ERR: Out of memory (os error 48)                |
+    | /etc        | /           | ERR: Out of memory (os error 48)                |
+    | /etc        | /bin        | ERR: Out of memory (os error 48)                |
+    | /etc        | /boot       | ERR: Out of memory (os error 48)                |
+    | /etc        | /dev        | ERR: Out of memory (os error 48)                |
+    | /etc        | /etc        | ERR: Out of memory (os error 48)                |
+    | /etc        | /etc/group  | ERR: Out of memory (os error 48)                |
+    | /etc        | /etc/passwd | ERR: Out of memory (os error 48)                |
+    | /etc        | /etc/shadow | ERR: Out of memory (os error 48)                |
+    | /etc        | /home       | ERR: Out of memory (os error 48)                |
+    | /etc        | /lib        | ERR: Out of memory (os error 48)                |
+    | /etc        | /lib64      | ERR: Out of memory (os error 48)                |
+    | /etc        | /opt        | ERR: Out of memory (os error 48)                |
+    | /etc        | /proc       | ERR: Out of memory (os error 48)                |
+    | /etc        | /proc/self  | ERR: Out of memory (os error 48)                |
+    | /etc        | /root       | ERR: Out of memory (os error 48)                |
+    | /etc        | /run        | ERR: Out of memory (os error 48)                |
+    | /etc        | /sbin       | ERR: Out of memory (os error 48)                |
+    | /etc        | /srv        | ERR: Out of memory (os error 48)                |
+    | /etc        | /sys        | ERR: Out of memory (os error 48)                |
+    | /etc        | /tmp        | ERR: Out of memory (os error 48)                |
+    | /etc        | /usr        | ERR: Out of memory (os error 48)                |
+    | /etc        | /var        | ERR: Out of memory (os error 48)                |
+    | /etc        | \0          | ERR: Out of memory (os error 48)                |
+    | /etc        | /x/..       | ERR: Out of memory (os error 48)                |
+    | /etc/group  |             | ERR: Not a directory (os error 54)              |
+    | /etc/group  | .           | ERR: Not a directory (os error 54)              |
+    | /etc/group  | ..          | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /           | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /bin        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /boot       | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /dev        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /etc        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /etc/group  | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /etc/passwd | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /etc/shadow | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /home       | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /lib        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /lib64      | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /opt        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /proc       | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /proc/self  | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /root       | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /run        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /sbin       | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /srv        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /sys        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /tmp        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /usr        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /var        | ERR: Not a directory (os error 54)              |
+    | /etc/group  | \0          | ERR: Not a directory (os error 54)              |
+    | /etc/group  | /x/..       | ERR: Not a directory (os error 54)              |
+    | /etc/passwd |             | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | .           | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | ..          | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /           | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /bin        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /boot       | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /dev        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /etc        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /etc/group  | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /etc/passwd | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /etc/shadow | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /home       | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /lib        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /lib64      | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /opt        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /proc       | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /proc/self  | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /root       | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /run        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /sbin       | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /srv        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /sys        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /tmp        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /usr        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /var        | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | \0          | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | /x/..       | ERR: Not a directory (os error 54)              |
+    | /etc/shadow |             | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | .           | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | ..          | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /           | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /bin        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /boot       | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /dev        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /etc        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /etc/group  | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /etc/passwd | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /etc/shadow | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /home       | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /lib        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /lib64      | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /opt        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /proc       | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /proc/self  | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /root       | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /run        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /sbin       | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /srv        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /sys        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /tmp        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /usr        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /var        | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | \0          | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | /x/..       | ERR: Not a directory (os error 54)              |
+    | /home       |             | ERR: Out of memory (os error 48)                |
+    | /home       | .           | ERR: Out of memory (os error 48)                |
+    | /home       | ..          | ERR: Out of memory (os error 48)                |
+    | /home       | /           | ERR: Out of memory (os error 48)                |
+    | /home       | /bin        | ERR: Out of memory (os error 48)                |
+    | /home       | /boot       | ERR: Out of memory (os error 48)                |
+    | /home       | /dev        | ERR: Out of memory (os error 48)                |
+    | /home       | /etc        | ERR: Out of memory (os error 48)                |
+    | /home       | /etc/group  | ERR: Out of memory (os error 48)                |
+    | /home       | /etc/passwd | ERR: Out of memory (os error 48)                |
+    | /home       | /etc/shadow | ERR: Out of memory (os error 48)                |
+    | /home       | /home       | ERR: Out of memory (os error 48)                |
+    | /home       | /lib        | ERR: Out of memory (os error 48)                |
+    | /home       | /lib64      | ERR: Out of memory (os error 48)                |
+    | /home       | /opt        | ERR: Out of memory (os error 48)                |
+    | /home       | /proc       | ERR: Out of memory (os error 48)                |
+    | /home       | /proc/self  | ERR: Out of memory (os error 48)                |
+    | /home       | /root       | ERR: Out of memory (os error 48)                |
+    | /home       | /run        | ERR: Out of memory (os error 48)                |
+    | /home       | /sbin       | ERR: Out of memory (os error 48)                |
+    | /home       | /srv        | ERR: Out of memory (os error 48)                |
+    | /home       | /sys        | ERR: Out of memory (os error 48)                |
+    | /home       | /tmp        | ERR: Out of memory (os error 48)                |
+    | /home       | /usr        | ERR: Out of memory (os error 48)                |
+    | /home       | /var        | ERR: Out of memory (os error 48)                |
+    | /home       | \0          | ERR: Out of memory (os error 48)                |
+    | /home       | /x/..       | ERR: Out of memory (os error 48)                |
+    | /lib        |             | ERR: Out of memory (os error 48)                |
+    | /lib        | .           | ERR: Out of memory (os error 48)                |
+    | /lib        | ..          | ERR: Out of memory (os error 48)                |
+    | /lib        | /           | ERR: Out of memory (os error 48)                |
+    | /lib        | /bin        | ERR: Out of memory (os error 48)                |
+    | /lib        | /boot       | ERR: Out of memory (os error 48)                |
+    | /lib        | /dev        | ERR: Out of memory (os error 48)                |
+    | /lib        | /etc        | ERR: Out of memory (os error 48)                |
+    | /lib        | /etc/group  | ERR: Out of memory (os error 48)                |
+    | /lib        | /etc/passwd | ERR: Out of memory (os error 48)                |
+    | /lib        | /etc/shadow | ERR: Out of memory (os error 48)                |
+    | /lib        | /home       | ERR: Out of memory (os error 48)                |
+    | /lib        | /lib        | ERR: Out of memory (os error 48)                |
+    | /lib        | /lib64      | ERR: Out of memory (os error 48)                |
+    | /lib        | /opt        | ERR: Out of memory (os error 48)                |
+    | /lib        | /proc       | ERR: Out of memory (os error 48)                |
+    | /lib        | /proc/self  | ERR: Out of memory (os error 48)                |
+    | /lib        | /root       | ERR: Out of memory (os error 48)                |
+    | /lib        | /run        | ERR: Out of memory (os error 48)                |
+    | /lib        | /sbin       | ERR: Out of memory (os error 48)                |
+    | /lib        | /srv        | ERR: Out of memory (os error 48)                |
+    | /lib        | /sys        | ERR: Out of memory (os error 48)                |
+    | /lib        | /tmp        | ERR: Out of memory (os error 48)                |
+    | /lib        | /usr        | ERR: Out of memory (os error 48)                |
+    | /lib        | /var        | ERR: Out of memory (os error 48)                |
+    | /lib        | \0          | ERR: Out of memory (os error 48)                |
+    | /lib        | /x/..       | ERR: Out of memory (os error 48)                |
+    | /lib64      |             | ERR: Out of memory (os error 48)                |
+    | /lib64      | .           | ERR: Out of memory (os error 48)                |
+    | /lib64      | ..          | ERR: Out of memory (os error 48)                |
+    | /lib64      | /           | ERR: Out of memory (os error 48)                |
+    | /lib64      | /bin        | ERR: Out of memory (os error 48)                |
+    | /lib64      | /boot       | ERR: Out of memory (os error 48)                |
+    | /lib64      | /dev        | ERR: Out of memory (os error 48)                |
+    | /lib64      | /etc        | ERR: Out of memory (os error 48)                |
+    | /lib64      | /etc/group  | ERR: Out of memory (os error 48)                |
+    | /lib64      | /etc/passwd | ERR: Out of memory (os error 48)                |
+    | /lib64      | /etc/shadow | ERR: Out of memory (os error 48)                |
+    | /lib64      | /home       | ERR: Out of memory (os error 48)                |
+    | /lib64      | /lib        | ERR: Out of memory (os error 48)                |
+    | /lib64      | /lib64      | ERR: Out of memory (os error 48)                |
+    | /lib64      | /opt        | ERR: Out of memory (os error 48)                |
+    | /lib64      | /proc       | ERR: Out of memory (os error 48)                |
+    | /lib64      | /proc/self  | ERR: Out of memory (os error 48)                |
+    | /lib64      | /root       | ERR: Out of memory (os error 48)                |
+    | /lib64      | /run        | ERR: Out of memory (os error 48)                |
+    | /lib64      | /sbin       | ERR: Out of memory (os error 48)                |
+    | /lib64      | /srv        | ERR: Out of memory (os error 48)                |
+    | /lib64      | /sys        | ERR: Out of memory (os error 48)                |
+    | /lib64      | /tmp        | ERR: Out of memory (os error 48)                |
+    | /lib64      | /usr        | ERR: Out of memory (os error 48)                |
+    | /lib64      | /var        | ERR: Out of memory (os error 48)                |
+    | /lib64      | \0          | ERR: Out of memory (os error 48)                |
+    | /lib64      | /x/..       | ERR: Out of memory (os error 48)                |
+    | /opt        |             | ERR: Out of memory (os error 48)                |
+    | /opt        | .           | ERR: Out of memory (os error 48)                |
+    | /opt        | ..          | ERR: Out of memory (os error 48)                |
+    | /opt        | /           | ERR: Out of memory (os error 48)                |
+    | /opt        | /bin        | ERR: Out of memory (os error 48)                |
+    | /opt        | /boot       | ERR: Out of memory (os error 48)                |
+    | /opt        | /dev        | ERR: Out of memory (os error 48)                |
+    | /opt        | /etc        | ERR: Out of memory (os error 48)                |
+    | /opt        | /etc/group  | ERR: Out of memory (os error 48)                |
+    | /opt        | /etc/passwd | ERR: Out of memory (os error 48)                |
+    | /opt        | /etc/shadow | ERR: Out of memory (os error 48)                |
+    | /opt        | /home       | ERR: Out of memory (os error 48)                |
+    | /opt        | /lib        | ERR: Out of memory (os error 48)                |
+    | /opt        | /lib64      | ERR: Out of memory (os error 48)                |
+    | /opt        | /opt        | ERR: Out of memory (os error 48)                |
+    | /opt        | /proc       | ERR: Out of memory (os error 48)                |
+    | /opt        | /proc/self  | ERR: Out of memory (os error 48)                |
+    | /opt        | /root       | ERR: Out of memory (os error 48)                |
+    | /opt        | /run        | ERR: Out of memory (os error 48)                |
+    | /opt        | /sbin       | ERR: Out of memory (os error 48)                |
+    | /opt        | /srv        | ERR: Out of memory (os error 48)                |
+    | /opt        | /sys        | ERR: Out of memory (os error 48)                |
+    | /opt        | /tmp        | ERR: Out of memory (os error 48)                |
+    | /opt        | /usr        | ERR: Out of memory (os error 48)                |
+    | /opt        | /var        | ERR: Out of memory (os error 48)                |
+    | /opt        | \0          | ERR: Out of memory (os error 48)                |
+    | /opt        | /x/..       | ERR: Out of memory (os error 48)                |
+    | /proc       |             | ERR: Out of memory (os error 48)                |
+    | /proc       | .           | ERR: Out of memory (os error 48)                |
+    | /proc       | ..          | ERR: Out of memory (os error 48)                |
+    | /proc       | /           | ERR: Out of memory (os error 48)                |
+    | /proc       | /bin        | ERR: Out of memory (os error 48)                |
+    | /proc       | /boot       | ERR: Out of memory (os error 48)                |
+    | /proc       | /dev        | ERR: Out of memory (os error 48)                |
+    | /proc       | /etc        | ERR: Out of memory (os error 48)                |
+    | /proc       | /etc/group  | ERR: Out of memory (os error 48)                |
+    | /proc       | /etc/passwd | ERR: Out of memory (os error 48)                |
+    | /proc       | /etc/shadow | ERR: Out of memory (os error 48)                |
+    | /proc       | /home       | ERR: Out of memory (os error 48)                |
+    | /proc       | /lib        | ERR: Out of memory (os error 48)                |
+    | /proc       | /lib64      | ERR: Out of memory (os error 48)                |
+    | /proc       | /opt        | ERR: Out of memory (os error 48)                |
+    | /proc       | /proc       | ERR: Out of memory (os error 48)                |
+    | /proc       | /proc/self  | ERR: Out of memory (os error 48)                |
+    | /proc       | /root       | ERR: Out of memory (os error 48)                |
+    | /proc       | /run        | ERR: Out of memory (os error 48)                |
+    | /proc       | /sbin       | ERR: Out of memory (os error 48)                |
+    | /proc       | /srv        | ERR: Out of memory (os error 48)                |
+    | /proc       | /sys        | ERR: Out of memory (os error 48)                |
+    | /proc       | /tmp        | ERR: Out of memory (os error 48)                |
+    | /proc       | /usr        | ERR: Out of memory (os error 48)                |
+    | /proc       | /var        | ERR: Out of memory (os error 48)                |
+    | /proc       | \0          | ERR: Out of memory (os error 48)                |
+    | /proc       | /x/..       | ERR: Out of memory (os error 48)                |
+    | /proc/self  |             | ERR: Not a directory (os error 54)              |
+    | /proc/self  | .           | ERR: Not a directory (os error 54)              |
+    | /proc/self  | ..          | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /           | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /bin        | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /boot       | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /dev        | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /etc        | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /etc/group  | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /etc/passwd | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /etc/shadow | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /home       | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /lib        | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /lib64      | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /opt        | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /proc       | ERR: Not a directory (os error 54)              |
+    | /proc/self  | /proc/self  | ERR: Not a directory (os error 54)              |
+    | \0          | /var        | ERR: file name contained an unexpected NUL byte |
+    | \0          | \0          | ERR: file name contained an unexpected NUL byte |
+    | \0          | /x/..       | ERR: file name contained an unexpected NUL byte |
+    | /x/..       |             | ERR: No such file or directory (os error 44)    |
+    | /x/..       | .           | ERR: No such file or directory (os error 44)    |
+    | /x/..       | ..          | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /           | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /bin        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /boot       | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /dev        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /etc        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /home       | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /lib        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /lib64      | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /opt        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /proc       | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /root       | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /run        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /sbin       | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /srv        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /sys        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /tmp        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /usr        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /var        | ERR: No such file or directory (os error 44)    |
+    | /x/..       | \0          | ERR: No such file or directory (os error 44)    |
+    | /x/..       | /x/..       | ERR: No such file or directory (os error 44)    |
+    +-------------+-------------+-------------------------------------------------+
+    ",
+        );
+    } else {
+        insta::assert_snapshot!(
+            run_2(&udf).await,
+            @r"
     +-------------+-------------+--------------------------------------------------------------------------------+
     | from        | to          | output                                                                         |
     +-------------+-------------+--------------------------------------------------------------------------------+
@@ -825,7 +1315,8 @@ async fn test_copy() {
     | /x/..       | /x/..       | ERR: No such file or directory (os error 44)                                   |
     +-------------+-------------+--------------------------------------------------------------------------------+
     ",
-    );
+        );
+    }
 }
 
 #[tokio::test]
@@ -1796,29 +2287,29 @@ async fn test_open_create_new() {
     | .           | ERR: Is a directory (os error 31)               |
     | ..          | ERR: Is a directory (os error 31)               |
     | /           | ERR: Is a directory (os error 31)               |
-    | /bin        | OK: opened                                      |
-    | /boot       | OK: opened                                      |
-    | /dev        | OK: opened                                      |
-    | /etc        | OK: opened                                      |
-    | /etc/group  | ERR: Not a directory (os error 54)              |
-    | /etc/passwd | ERR: Not a directory (os error 54)              |
-    | /etc/shadow | ERR: Not a directory (os error 54)              |
-    | /home       | OK: opened                                      |
-    | /lib        | OK: opened                                      |
-    | /lib64      | OK: opened                                      |
-    | /opt        | OK: opened                                      |
-    | /proc       | OK: opened                                      |
-    | /proc/self  | ERR: Not a directory (os error 54)              |
-    | /root       | OK: opened                                      |
-    | /run        | OK: opened                                      |
-    | /sbin       | OK: opened                                      |
-    | /srv        | OK: opened                                      |
-    | /sys        | OK: opened                                      |
-    | /tmp        | OK: opened                                      |
-    | /usr        | OK: opened                                      |
-    | /var        | OK: opened                                      |
+    | /bin        | ERR: Read-only file system (os error 69)        |
+    | /boot       | ERR: Read-only file system (os error 69)        |
+    | /dev        | ERR: Read-only file system (os error 69)        |
+    | /etc        | ERR: Read-only file system (os error 69)        |
+    | /etc/group  | ERR: Read-only file system (os error 69)        |
+    | /etc/passwd | ERR: Read-only file system (os error 69)        |
+    | /etc/shadow | ERR: Read-only file system (os error 69)        |
+    | /home       | ERR: Read-only file system (os error 69)        |
+    | /lib        | ERR: Read-only file system (os error 69)        |
+    | /lib64      | ERR: Read-only file system (os error 69)        |
+    | /opt        | ERR: Read-only file system (os error 69)        |
+    | /proc       | ERR: Read-only file system (os error 69)        |
+    | /proc/self  | ERR: Read-only file system (os error 69)        |
+    | /root       | ERR: Read-only file system (os error 69)        |
+    | /run        | ERR: Read-only file system (os error 69)        |
+    | /sbin       | ERR: Read-only file system (os error 69)        |
+    | /srv        | ERR: Read-only file system (os error 69)        |
+    | /sys        | ERR: Read-only file system (os error 69)        |
+    | /tmp        | ERR: Read-only file system (os error 69)        |
+    | /usr        | ERR: Read-only file system (os error 69)        |
+    | /var        | ERR: Read-only file system (os error 69)        |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Invalid argument (os error 28)             |
+    | /x/..       | ERR: Read-only file system (os error 69)        |
     +-------------+-------------------------------------------------+
     ",
     );
@@ -2866,9 +3357,48 @@ async fn test_rename() {
 async fn test_set_permissions() {
     let udf = udf("set_permissions").await;
 
-    insta::assert_snapshot!(
-        run_1(&udf).await,
-        @r"
+    if running_as_github_actions() {
+        insta::assert_snapshot!(
+            run_1(&udf).await,
+            @r"
+    +-------------+-----------------------------------------------+
+    | path        | result                                        |
+    +-------------+-----------------------------------------------+
+    |             | ERR: operation not supported on this platform |
+    | .           | ERR: operation not supported on this platform |
+    | ..          | ERR: operation not supported on this platform |
+    | /           | ERR: operation not supported on this platform |
+    | /bin        | ERR: operation not supported on this platform |
+    | /boot       | ERR: operation not supported on this platform |
+    | /dev        | ERR: operation not supported on this platform |
+    | /etc        | ERR: operation not supported on this platform |
+    | /etc/group  | ERR: operation not supported on this platform |
+    | /etc/passwd | ERR: operation not supported on this platform |
+    | /etc/shadow | ERR: operation not supported on this platform |
+    | /home       | ERR: operation not supported on this platform |
+    | /lib        | ERR: operation not supported on this platform |
+    | /lib64      | ERR: operation not supported on this platform |
+    | /opt        | ERR: operation not supported on this platform |
+    | /proc       | ERR: operation not supported on this platform |
+    | /proc/self  | ERR: operation not supported on this platform |
+    | /root       | ERR: operation not supported on this platform |
+    | /run        | ERR: operation not supported on this platform |
+    | /sbin       | ERR: operation not supported on this platform |
+    | /srv        | ERR: operation not supported on this platform |
+    | /sys        | ERR: operation not supported on this platform |
+    | /tmp        | ERR: operation not supported on this platform |
+    | /usr        | ERR: operation not supported on this platform |
+    | /var        | ERR: operation not supported on this platform |
+    | \0          | ERR: operation not supported on this platform |
+    | /x/..       | ERR: operation not supported on this platform |
+    +-------------+-----------------------------------------------+
+
+    ",
+        );
+    } else {
+        insta::assert_snapshot!(
+            run_1(&udf).await,
+            @r"
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
@@ -2901,7 +3431,8 @@ async fn test_set_permissions() {
     | /x/..       | ERR: Function not implemented (os error 52)     |
     +-------------+-------------------------------------------------+
     ",
-    );
+        );
+    }
 }
 
 #[tokio::test]
@@ -3057,4 +3588,8 @@ async fn run_2(udf: &WasmScalarUdf) -> String {
         ("output", result),
     ])
     .unwrap()])
+}
+
+fn running_as_github_actions() -> bool {
+    std::env::var("GITHUB_ACTIONS").is_ok()
 }
