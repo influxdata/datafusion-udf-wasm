@@ -27,6 +27,7 @@ updates:
           - "pulley-*"
           - "wasmtime"
           - "wasmtime-*"
+          - "winch-*"
       # Catch-all group to bundle version updates (but not security updates) everything
       # else into a single PR.
       rust-other:
