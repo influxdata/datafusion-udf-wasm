@@ -1796,29 +1796,29 @@ async fn test_open_create_new() {
     | .           | ERR: Is a directory (os error 31)               |
     | ..          | ERR: Is a directory (os error 31)               |
     | /           | ERR: Is a directory (os error 31)               |
-    | /bin        | ERR: Read-only file system (os error 69)        |
-    | /boot       | ERR: Read-only file system (os error 69)        |
-    | /dev        | ERR: Read-only file system (os error 69)        |
-    | /etc        | ERR: Read-only file system (os error 69)        |
-    | /etc/group  | ERR: Read-only file system (os error 69)        |
-    | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    | /home       | ERR: Read-only file system (os error 69)        |
-    | /lib        | ERR: Read-only file system (os error 69)        |
-    | /lib64      | ERR: Read-only file system (os error 69)        |
-    | /opt        | ERR: Read-only file system (os error 69)        |
-    | /proc       | ERR: Read-only file system (os error 69)        |
-    | /proc/self  | ERR: Read-only file system (os error 69)        |
-    | /root       | ERR: Read-only file system (os error 69)        |
-    | /run        | ERR: Read-only file system (os error 69)        |
-    | /sbin       | ERR: Read-only file system (os error 69)        |
-    | /srv        | ERR: Read-only file system (os error 69)        |
-    | /sys        | ERR: Read-only file system (os error 69)        |
-    | /tmp        | ERR: Read-only file system (os error 69)        |
-    | /usr        | ERR: Read-only file system (os error 69)        |
-    | /var        | ERR: Read-only file system (os error 69)        |
+    | /bin        | OK: opened                                      |
+    | /boot       | OK: opened                                      |
+    | /dev        | OK: opened                                      |
+    | /etc        | OK: opened                                      |
+    | /etc/group  | ERR: Not a directory (os error 54)              |
+    | /etc/passwd | ERR: Not a directory (os error 54)              |
+    | /etc/shadow | ERR: Not a directory (os error 54)              |
+    | /home       | OK: opened                                      |
+    | /lib        | OK: opened                                      |
+    | /lib64      | OK: opened                                      |
+    | /opt        | OK: opened                                      |
+    | /proc       | OK: opened                                      |
+    | /proc/self  | ERR: Not a directory (os error 54)              |
+    | /root       | OK: opened                                      |
+    | /run        | OK: opened                                      |
+    | /sbin       | OK: opened                                      |
+    | /srv        | OK: opened                                      |
+    | /sys        | OK: opened                                      |
+    | /tmp        | OK: opened                                      |
+    | /usr        | OK: opened                                      |
+    | /var        | OK: opened                                      |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Read-only file system (os error 69)        |
+    | /x/..       | ERR: Invalid argument (os error 28)             |
     +-------------+-------------------------------------------------+
     ",
     );
