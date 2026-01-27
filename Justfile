@@ -4,6 +4,33 @@ mod guests
 default:
     @just --list --list-submodules
 
+# check Python formatting
+check-python-fmt:
+    @echo ::group::check-python-fmt
+    uv --project=python-tooling run --isolated --locked -- ruff format --check
+    @echo ::endgroup::
+
+# check Python lints
+check-python-lint:
+    @echo ::group::check-python-lint
+    uv --project=python-tooling run --isolated --locked -- ruff check
+    @echo ::endgroup::
+
+# ensure that Python lockfile is up-to-date
+check-python-lock:
+    @echo ::group::check-python-lock
+    uv --project=python-tooling lock --check
+    @echo ::endgroup::
+
+# check Python typing
+check-python-ty:
+    @echo ::group::check-python-ty
+    uv --project=python-tooling run --isolated --locked -- ty check --error-on-warning
+    @echo ::endgroup::
+
+# all Python checks
+check-python: check-python-fmt check-python-lint check-python-lock check-python-ty
+
 # check Rust files via `cargo build`
 check-rust-build: guests::rust::check-build guests::python::check-build
 
@@ -116,11 +143,11 @@ check-wit:
 # lint YAML files
 check-yaml:
     @echo ::group::check-yaml
-    uv --project=python-tooling run --isolated -- yamllint -s .
+    uv --project=python-tooling run --isolated --locked -- yamllint -s .
     @echo ::endgroup::
 
 # run ALL checks
-check: check-rust check-spelling check-toml check-wit check-yaml
+check: check-python check-rust check-spelling check-toml check-wit check-yaml
 
 # clean Rust build artifacts
 clean-rust:
@@ -130,6 +157,27 @@ clean-rust:
 
 # clean build artifacts
 clean: clean-rust guests::python::clean
+
+# fix Python formatting
+fix-python-fmt:
+    @echo ::group::fix-python-fmt
+    uv --project=python-tooling run --isolated --locked -- ruff format
+    @echo ::endgroup::
+
+# fix Python lints
+fix-python-lint:
+    @echo ::group::fix-python-lint
+    uv --project=python-tooling run --isolated --locked -- ruff check --fix
+    @echo ::endgroup::
+
+# lock Python env
+fix-python-lock:
+    @echo ::group::fix-python-lock
+    uv --project=python-tooling lock
+    @echo ::endgroup::
+
+# fix Python-related issues
+fix-python: fix-python-lint fix-python-fmt fix-python-lock
 
 # fix Rust check/rustc warnings
 fix-rust-check:
@@ -168,4 +216,4 @@ fix-toml-fmt:
 fix-toml: fix-toml-fmt
 
 # fix common issues automatically
-fix: fix-spellcheck fix-rust fix-toml
+fix: fix-python fix-spellcheck fix-rust fix-toml
