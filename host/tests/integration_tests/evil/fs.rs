@@ -2487,9 +2487,47 @@ async fn test_read_dir() {
 async fn test_read_link() {
     let udf = udf("read_link").await;
 
-    insta::assert_snapshot!(
-        run_1(&udf).await,
-        @r"
+    if running_as_github_actions() {
+        insta::assert_snapshot!(
+            run_1(&udf).await,
+            @r"
+    +-------------+-------------------------------------------------+
+    | path        | result                                          |
+    +-------------+-------------------------------------------------+
+    |             | ERR: No such file or directory (os error 44)    |
+    | .           | ERR: No such file or directory (os error 44)    |
+    | ..          | ERR: No such file or directory (os error 44)    |
+    | /           | ERR: No such file or directory (os error 44)    |
+    | /bin        | ERR: No such file or directory (os error 44)    |
+    | /boot       | ERR: No such file or directory (os error 44)    |
+    | /dev        | ERR: No such file or directory (os error 44)    |
+    | /etc        | ERR: No such file or directory (os error 44)    |
+    | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | /home       | ERR: No such file or directory (os error 44)    |
+    | /lib        | ERR: No such file or directory (os error 44)    |
+    | /lib64      | ERR: No such file or directory (os error 44)    |
+    | /opt        | ERR: No such file or directory (os error 44)    |
+    | /proc       | ERR: No such file or directory (os error 44)    |
+    | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | /root       | ERR: No such file or directory (os error 44)    |
+    | /run        | ERR: No such file or directory (os error 44)    |
+    | /sbin       | ERR: No such file or directory (os error 44)    |
+    | /srv        | ERR: No such file or directory (os error 44)    |
+    | /sys        | ERR: No such file or directory (os error 44)    |
+    | /tmp        | ERR: No such file or directory (os error 44)    |
+    | /usr        | ERR: No such file or directory (os error 44)    |
+    | /var        | ERR: No such file or directory (os error 44)    |
+    | \0          | ERR: file name contained an unexpected NUL byte |
+    | /x/..       | ERR: No such file or directory (os error 44)    |
+    +-------------+-------------------------------------------------+
+    ",
+        );
+    } else {
+        insta::assert_snapshot!(
+            run_1(&udf).await,
+            @r"
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
@@ -2522,7 +2560,8 @@ async fn test_read_link() {
     | /x/..       | ERR: Not supported (os error 58)                |
     +-------------+-------------------------------------------------+
     ",
-    );
+        );
+    }
 }
 
 #[tokio::test]
