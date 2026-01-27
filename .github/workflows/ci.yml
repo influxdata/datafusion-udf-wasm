@@ -31,6 +31,16 @@ jobs:
         with:
           version-file: "python-tooling/pyproject.toml"
 
+      - name: Install `python`
+        shell: bash
+        run: |
+          uv --directory=python-tooling python install --default
+
+          path_exe="$(uv --directory=python-tooling python find)"
+          path_bin="$(dirname "$path_exe")"
+          echo "PYO3_CROSS_LIB_DIR=${path_bin}/../lib" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${path_bin}/../lib" >> "$GITHUB_ENV"
+
       - name: Install `cargo-deny` & `just` & `tombi` & 'typos'
         uses: taiki-e/install-action@710817a1645ef40daad5bcde7431ceccf6cc3528  # v2
         with:
