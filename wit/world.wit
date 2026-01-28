@@ -1,4 +1,4 @@
-package datafusion-udf-wasm:udf@0.3.0;
+package datafusion-udf-wasm:udf@0.4.0;
 
 interface types {
     // TODO: add more variants
@@ -20,12 +20,16 @@ interface types {
         arrow-ipc-schema: list<u8>,
     }
 
-    record field {
+    record field-args {
         name: string,
         data-type: data-type,
         nullable: bool,
         dict-is-ordered: bool,
         metadata: list<tuple<string, string>>,
+    }
+
+    resource field {
+        new: static func(args: field-args) -> result<field, data-fusion-error>;
     }
 
     record array {
@@ -84,9 +88,9 @@ interface types {
 
     record scalar-function-args {
         args: list<columnar-value>,
-        arg-fields: list<field>,
+        arg-fields: list<borrow<field>>,
         number-rows: u64,
-        return-field: field,
+        return-field: borrow<field>,
         config-options: borrow<config-options>,
     }
 

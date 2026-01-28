@@ -1,16 +1,14 @@
 //! Conversion routes from/to [WIT types](crate::bindings).
 use std::sync::Arc;
 
-use arrow::{
-    array::ArrayRef,
-    datatypes::{DataType, Field, FieldRef},
-};
+use arrow::{array::ArrayRef, datatypes::DataType};
 use datafusion_common::{error::DataFusionError, scalar::ScalarValue};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs};
 use datafusion_udf_wasm_arrow2bytes::{array2bytes, bytes2array, bytes2datatype, datatype2bytes};
 
 use crate::{
-    bindings::exports::datafusion_udf_wasm::udf::types as wit_types, wrapper::ConfigOptionsWrapper,
+    bindings::exports::datafusion_udf_wasm::udf::types as wit_types,
+    wrapper::{ConfigOptionsWrapper, FieldWrapper},
 };
 
 impl From<DataFusionError> for wit_types::DataFusionError {
@@ -54,26 +52,6 @@ impl From<DataType> for wit_types::DataType {
         Self {
             arrow_ipc_schema: datatype2bytes(value),
         }
-    }
-}
-
-impl TryFrom<wit_types::Field> for FieldRef {
-    type Error = DataFusionError;
-
-    fn try_from(value: wit_types::Field) -> Result<Self, Self::Error> {
-        let wit_types::Field {
-            name,
-            data_type,
-            nullable,
-            dict_is_ordered,
-            metadata,
-        } = value;
-
-        Ok(Self::new(
-            Field::new(name, data_type.try_into()?, nullable)
-                .with_dict_is_ordered(dict_is_ordered)
-                .with_metadata(metadata.into_iter().collect()),
-        ))
     }
 }
 
@@ -239,10 +217,10 @@ impl TryFrom<wit_types::ScalarFunctionArgs<'_>> for ScalarFunctionArgs {
             arg_fields: value
                 .arg_fields
                 .into_iter()
-                .map(TryFrom::try_from)
-                .collect::<Result<_, _>>()?,
+                .map(|field| Arc::clone(field.get::<FieldWrapper>().inner()))
+                .collect(),
             number_rows: value.number_rows as usize,
-            return_field: value.return_field.try_into()?,
+            return_field: Arc::clone(value.return_field.get::<FieldWrapper>().inner()),
             config_options: Arc::clone(value.config_options.get::<ConfigOptionsWrapper>().inner()),
         })
     }

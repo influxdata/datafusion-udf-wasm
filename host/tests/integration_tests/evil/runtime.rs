@@ -278,6 +278,8 @@ async fn udf(name: &'static str) -> WasmScalarUdf {
 }
 
 async fn try_call_no_params(udf: &WasmScalarUdf) -> Result<(), DataFusionError> {
+    static RETURN_FIELD: LazyLock<Arc<Field>> =
+        LazyLock::new(|| Arc::new(Field::new("r", DataType::Null, true)));
     static CONFIG_OPTIONS: LazyLock<Arc<ConfigOptions>> =
         LazyLock::new(|| Arc::new(ConfigOptions::default()));
 
@@ -285,7 +287,7 @@ async fn try_call_no_params(udf: &WasmScalarUdf) -> Result<(), DataFusionError> 
         args: vec![],
         arg_fields: vec![],
         number_rows: 1,
-        return_field: Arc::new(Field::new("r", DataType::Null, true)),
+        return_field: Arc::clone(&RETURN_FIELD),
         config_options: Arc::clone(&CONFIG_OPTIONS),
     })
     .await
