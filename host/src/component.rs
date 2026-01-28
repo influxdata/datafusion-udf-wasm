@@ -285,7 +285,7 @@ impl WasmComponentInstance {
         let mut limiter = Limiter::new(permissions.resource_limits.clone(), memory_pool);
 
         // Create in-memory VFS
-        let vfs_state = VfsState::new(permissions.vfs.clone());
+        let vfs_state = VfsState::new(permissions.vfs.clone(), limiter.clone());
 
         // set up WASI p2 context
         limiter.grow(permissions.stderr_bytes)?;
@@ -341,7 +341,7 @@ impl WasmComponentInstance {
 
             state
                 .vfs_state
-                .populate_from_tar(&root_data, &mut state.limiter)
+                .populate_from_tar(&root_data)
                 .map_err(|e| DataFusionError::IoError(e).context("populate root FS from TAR"))?;
         }
 
