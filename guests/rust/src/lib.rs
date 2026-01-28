@@ -61,6 +61,7 @@ macro_rules! export {
 
         impl $crate::bindings::exports::datafusion_udf_wasm::udf::types::Guest for Implementation {
             type ConfigOptions = $crate::wrapper::ConfigOptionsWrapper;
+            type Field = $crate::wrapper::FieldWrapper;
             type ScalarUdf = $crate::wrapper::ScalarUdfWrapper;
 
             fn root_fs_tar() -> Option<Vec<u8>> {

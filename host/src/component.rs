@@ -1,6 +1,7 @@
 //! WASM component handling.
 use std::{ops::Deref, sync::Arc, time::Duration};
 
+use arrow::datatypes::Field;
 use datafusion_common::{
     DataFusionError, config::ConfigOptions, error::Result as DataFusionResult,
 };
@@ -228,6 +229,12 @@ pub(crate) struct WasmComponentInstance {
     /// This mostly contains [`WasmStateImpl`].
     store: Arc<Mutex<Store<WasmStateImpl>>>,
 
+    /// Resource cache for [`Field`].
+    ///
+    /// NOTE: This is not included in [`store`](Self::store) / [`WasmStateImpl`] because creating new cache values
+    /// likely requires the [`store`](Self::store) and we cannot have overlapping mutable borrows.
+    cache_field: Arc<Mutex<ResourceCache<Field, ResourceAny>>>,
+
     /// Resource cache for [`ConfigOptions`].
     ///
     /// NOTE: This is not included in [`store`](Self::store) / [`WasmStateImpl`] because creating new cache values
@@ -358,6 +365,9 @@ impl WasmComponentInstance {
 
         Ok(Self {
             store,
+            cache_field: Arc::new(Mutex::new(ResourceCache::new(
+                permissions.max_cached_fields,
+            ))),
             cache_config_options: Arc::new(Mutex::new(ResourceCache::new(
                 permissions.max_cached_config_options,
             ))),
@@ -376,6 +386,11 @@ impl WasmComponentInstance {
     /// Lock inner store.
     pub(crate) async fn lock_state(&self) -> LockedState {
         LockedState(Arc::clone(&self.store).lock_owned().await)
+    }
+
+    /// Resource cache for [`Field`].
+    pub(crate) async fn cache_field(&self) -> OwnedMutexGuard<ResourceCache<Field, ResourceAny>> {
+        Arc::clone(&self.cache_field).lock_owned().await
     }
 
     /// Resource cache for [`ConfigOptions`].
