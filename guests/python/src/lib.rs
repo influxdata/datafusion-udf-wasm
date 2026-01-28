@@ -22,6 +22,10 @@ use crate::error::py_err_to_string;
 use crate::inspect::inspect_python_code;
 use crate::signature::PythonFn;
 
+// unused-crate-dependencies false positives
+#[cfg(test)]
+use gungraun as _;
+
 mod conversion;
 mod error;
 mod inspect;
