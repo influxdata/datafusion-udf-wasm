@@ -14,6 +14,12 @@ pub(crate) struct PathSegment(
     Box<str>,
 );
 
+impl Clone for PathSegment {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
 impl PathSegment {
     /// Create new path segment.
     ///
