@@ -39,7 +39,7 @@ def perform_request(url: str) -> str:
         .mount(&server)
         .await;
 
-    let mut permissions = AllowCertainHttpRequests::new();
+    let mut permissions = AllowCertainHttpRequests::default();
     permissions.allow(HttpRequestMatcher {
         method: http::Method::GET,
         host: server.address().ip().to_string().into(),
@@ -638,7 +638,7 @@ def perform_request(url: str) -> str:
 
     // deliberately use a runtime what we are going to throw away later to prevent tricks like `Handle::current`
     let udf = rt_tmp.block_on(async {
-        let mut permissions = AllowCertainHttpRequests::new();
+        let mut permissions = AllowCertainHttpRequests::default();
         permissions.allow(HttpRequestMatcher {
             method: http::Method::GET,
             host: server.address().ip().to_string().into(),
@@ -675,5 +675,155 @@ def perform_request(url: str) -> str:
     assert_eq!(
         array.as_ref(),
         &StringArray::from_iter([Some("hello world!".to_owned()),]) as &dyn Array,
+    );
+}
+
+#[tokio::test]
+async fn test_allowed_http_request_path() {
+    const CODE: &str = r#"
+import requests
+
+def perform_request(url: str) -> str:
+    return requests.get(url).text
+"#;
+
+    let server = MockServer::start().await;
+    Mock::given(matchers::any())
+        .respond_with(ResponseTemplate::new(200).set_body_string("hello world!"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let allowed_paths = vec!["/allowed".to_string()];
+
+    let mut permissions = AllowCertainHttpRequests::new(allowed_paths);
+    permissions.allow(HttpRequestMatcher {
+        method: http::Method::GET,
+        host: server.address().ip().to_string().into(),
+        port: server.address().port(),
+    });
+    let udf = python_udf_with_permissions(CODE, permissions).await;
+
+    let array = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(format!(
+                "{}/allowed",
+                server.uri()
+            ))))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap()
+        .unwrap_array();
+
+    assert_eq!(
+        array.as_ref(),
+        &StringArray::from_iter([Some("hello world!".to_owned()),]) as &dyn Array,
+    );
+
+    let err = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(format!(
+                "{}/not_allowed",
+                server.uri()
+            ))))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap_err();
+
+    insta::assert_snapshot!(
+        err.to_string(),
+        @r#"
+    cannot call function
+    caused by
+    Execution error: Traceback (most recent call last):
+      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+        response = self._make_request(
+            conn,
+        ...<10 lines>...
+            **response_kw,
+        )
+      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+        conn.request(
+        ~~~~~~~~~~~~^
+            method,
+            ^^^^^^^
+        ...<6 lines>...
+            enforce_content_length=enforce_content_length,
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        )
+        ^
+      File "/lib/python3.14/site-packages/urllib3/contrib/wasi/connection.py", line 124, in request
+        self._response = wasi.send_request(request)
+                         ~~~~~~~~~~~~~~~~~^^^^^^^^^
+      File "/lib/python3.14/site-packages/urllib3/contrib/wasi/wasi.py", line 79, in send_request
+        raise errors.WasiErrorCode(str(response.value.value))
+    urllib3.contrib.wasi.errors.WasiErrorCode: Request failed with wasi http error ErrorCode_HttpRequestDenied
+
+    During handling of the above exception, another exception occurred:
+
+    Traceback (most recent call last):
+      File "/lib/python3.14/site-packages/requests/adapters.py", line 644, in send
+        resp = conn.urlopen(
+            method=request.method,
+        ...<9 lines>...
+            chunked=chunked,
+        )
+      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+        retries = retries.increment(
+            method, url, error=new_e, _pool=self, _stacktrace=sys.exc_info()[2]
+        )
+      File "/lib/python3.14/site-packages/urllib3/util/retry.py", line 474, in increment
+        raise reraise(type(error), error, _stacktrace)
+              ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "/lib/python3.14/site-packages/urllib3/util/util.py", line 38, in reraise
+        raise value.with_traceback(tb)
+      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+        response = self._make_request(
+            conn,
+        ...<10 lines>...
+            **response_kw,
+        )
+      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+        conn.request(
+        ~~~~~~~~~~~~^
+            method,
+            ^^^^^^^
+        ...<6 lines>...
+            enforce_content_length=enforce_content_length,
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        )
+        ^
+      File "/lib/python3.14/site-packages/urllib3/contrib/wasi/connection.py", line 124, in request
+        self._response = wasi.send_request(request)
+                         ~~~~~~~~~~~~~~~~~^^^^^^^^^
+      File "/lib/python3.14/site-packages/urllib3/contrib/wasi/wasi.py", line 79, in send_request
+        raise errors.WasiErrorCode(str(response.value.value))
+    urllib3.exceptions.ProtocolError: ('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpRequestDenied'))
+
+    During handling of the above exception, another exception occurred:
+
+    Traceback (most recent call last):
+      File "<string>", line 5, in perform_request
+      File "/lib/python3.14/site-packages/requests/api.py", line 73, in get
+        return request("get", url, params=params, **kwargs)
+      File "/lib/python3.14/site-packages/requests/api.py", line 59, in request
+        return session.request(method=method, url=url, **kwargs)
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "/lib/python3.14/site-packages/requests/sessions.py", line 589, in request
+        resp = self.send(prep, **send_kwargs)
+      File "/lib/python3.14/site-packages/requests/sessions.py", line 703, in send
+        r = adapter.send(request, **kwargs)
+      File "/lib/python3.14/site-packages/requests/adapters.py", line 659, in send
+        raise ConnectionError(err, request=request)
+    requests.exceptions.ConnectionError: ('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpRequestDenied'))
+    "#,
     );
 }
