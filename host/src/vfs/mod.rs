@@ -260,11 +260,14 @@ pub(crate) struct VfsState {
 
     /// Current allocation of inodes.
     inodes_allocation: Allocation,
+
+    /// Storage limiter.
+    limiter: Limiter,
 }
 
 impl VfsState {
     /// Create a new empty VFS.
-    pub(crate) fn new(limits: VfsLimits) -> Self {
+    pub(crate) fn new(limits: VfsLimits, limiter: Limiter) -> Self {
         let inodes_allocation = Allocation::new("inodes", limits.inodes);
 
         Self {
@@ -277,16 +280,13 @@ impl VfsState {
             metadata_hash_key: rand::rng().random(),
             limits,
             inodes_allocation,
+            limiter,
         }
     }
 
     /// Populate the VFS from a tar archive.
-    pub(crate) fn populate_from_tar(
-        &mut self,
-        tar_data: &[u8],
-        limiter: &mut Limiter,
-    ) -> Result<(), std::io::Error> {
-        let size_pre = limiter.size();
+    pub(crate) fn populate_from_tar(&mut self, tar_data: &[u8]) -> Result<(), std::io::Error> {
+        let size_pre = self.limiter.size();
         let cursor = Cursor::new(tar_data);
         let mut archive = tar::Archive::new(cursor);
 
@@ -299,10 +299,11 @@ impl VfsState {
                     children: HashMap::new(),
                 },
                 tar::EntryType::Regular => {
-                    let mut content = Vec::new();
+                    let expected_size = entry.size() as usize;
+                    self.limiter.grow(expected_size)?;
+                    let mut content = Vec::with_capacity(expected_size);
                     entry.read_to_end(&mut content)?;
-                    content.shrink_to_fit();
-                    limiter.grow(content.capacity())?;
+                    assert_eq!(expected_size, content.len());
                     VfsNodeKind::File { content }
                 }
                 other => {
@@ -350,8 +351,8 @@ impl VfsState {
             }));
 
             self.inodes_allocation.inc(1)?;
-            limiter.grow(name.len())?;
-            limiter.grow(std::mem::size_of_val(&child))?;
+            self.limiter.grow(name.len())?;
+            self.limiter.grow(std::mem::size_of_val(&child))?;
 
             match &mut node.write().unwrap().kind {
                 VfsNodeKind::File { .. } => {
@@ -369,7 +370,7 @@ impl VfsState {
         log::info!(
             "unpacked WASM guest root filesystem from {} bytes TAR, consuming {} bytes and {} inodes",
             tar_data.len(),
-            limiter.size() - size_pre,
+            self.limiter.size() - size_pre,
             self.inodes_allocation.get()
         );
 

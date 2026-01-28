@@ -104,6 +104,10 @@ impl Evil {
                 root: Box::new(root::not_tar::root),
                 udfs: Box::new(common::udfs_empty),
             },
+            "root::tar_too_large" => Self {
+                root: Box::new(root::tar_too_large::root),
+                udfs: Box::new(common::udfs_empty),
+            },
             "root::path_long" => Self {
                 root: Box::new(root::path_long::root),
                 udfs: Box::new(common::udfs_empty),

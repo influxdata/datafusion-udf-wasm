@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use datafusion_execution::memory_pool::UnboundedMemoryPool;
 use datafusion_udf_wasm_host::{VfsLimits, WasmPermissions, WasmScalarUdf};
+use regex::Regex;
 
 use crate::integration_tests::evil::test_utils::{
     IO_RUNTIME, MEMORY_LIMIT, component, try_scalar_udfs, try_scalar_udfs_with_env,
@@ -78,6 +79,31 @@ async fn test_not_tar() {
     populate root FS from TAR
     caused by
     IO error: failed to read entire block
+    ");
+}
+
+#[tokio::test]
+async fn test_tar_too_large() {
+    let tar_size = MEMORY_LIMIT / 5;
+    let permissions = WasmPermissions::new()
+        .with_env("tar_size".to_owned(), tar_size.to_string())
+        .with_vfs_limits(VfsLimits::default());
+    let err = try_scalar_udfs_with_permissions("root::tar_too_large", permissions)
+        .await
+        .unwrap_err();
+
+    // Sanitize sizes in the error message.
+    let err = err.to_string();
+    let err = Regex::new(r#"[0-9.]+ [KMB]B"#)
+        .unwrap()
+        .replace_all(&err, "<SIZE>");
+
+    insta::assert_snapshot!(
+        err,
+        @r"
+    populate root FS from TAR
+    caused by
+    IO error: Resources exhausted: Failed to allocate additional <SIZE> for WASM UDF resources with <SIZE> already allocated for this reservation - <SIZE> remain available for the total pool
     ");
 }
 

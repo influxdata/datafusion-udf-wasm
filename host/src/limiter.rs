@@ -1,6 +1,6 @@
 //! Resource limiter.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
 use datafusion_common::DataFusionError;
@@ -52,26 +52,38 @@ pub(crate) struct Limiter {
     /// DataFusion memory reservation.
     ///
     /// This is ONLY used for bytes, not for any other resources.
-    memory_reservation: MemoryReservation,
+    memory_reservation: Arc<Mutex<MemoryReservation>>,
 
     /// Limits.
     limits: StaticResourceLimits,
+}
+
+impl Clone for Limiter {
+    fn clone(&self) -> Self {
+        Self {
+            memory_reservation: Arc::clone(&self.memory_reservation),
+            limits: self.limits.clone(),
+        }
+    }
 }
 
 impl Limiter {
     /// Create new limiter.
     pub(crate) fn new(limits: StaticResourceLimits, pool: &Arc<dyn MemoryPool>) -> Self {
         let memory_reservation = MemoryConsumer::new("WASM UDF resources").register(pool);
-
         Self {
-            memory_reservation,
+            memory_reservation: Arc::new(Mutex::new(memory_reservation)),
             limits,
         }
     }
 
     /// Grow memory usage.
     pub(crate) fn grow(&mut self, bytes: usize) -> Result<(), GrowthError> {
-        self.memory_reservation.try_grow(bytes).map_err(|e| {
+        let mut self_guard = self
+            .memory_reservation
+            .lock()
+            .expect("memory reservation lock poisoned");
+        self_guard.try_grow(bytes).map_err(|e| {
             log::debug!("failed to grow memory: {e}");
             GrowthError(e)
         })
@@ -79,7 +91,10 @@ impl Limiter {
 
     /// Get current allocation size.
     pub(crate) fn size(&self) -> usize {
-        self.memory_reservation.size()
+        self.memory_reservation
+            .lock()
+            .expect("memory reservation lock poisoned")
+            .size()
     }
 
     /// Inner implementation of [`ResourceLimiter::table_growing`]
