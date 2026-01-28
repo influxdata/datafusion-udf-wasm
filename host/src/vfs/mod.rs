@@ -8,7 +8,7 @@
 //! running.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, hash_map::Entry},
     hash::Hash,
     io::{Cursor, Read},
     sync::{
@@ -435,6 +435,36 @@ impl<'a> VfsCtxView<'a> {
         };
         VfsNode::traverse(start, directions)
     }
+
+    /// Get the parent node and base name for a given path.
+    fn parent_node_and_name(
+        &self,
+        node: SharedVfsNode,
+        path: &str,
+    ) -> FsResult<(SharedVfsNode, PathSegment)> {
+        let (is_root, directions) = PathTraversal::parse(path, &self.vfs_state.limits)?;
+        let mut directions = directions.collect::<Vec<_>>();
+
+        let start = if is_root {
+            Arc::clone(&self.vfs_state.root)
+        } else {
+            node
+        };
+
+        let name = match directions
+            .pop()
+            .ok_or_else(|| FsError::trap(ErrorCode::Invalid))?
+        {
+            Ok(PathTraversal::Down(segment)) => segment,
+            _other @ (Ok(PathTraversal::Stay) | Ok(PathTraversal::Up) | Err(_)) => {
+                return Err(FsError::trap(ErrorCode::Invalid));
+            }
+        };
+
+        let parent = VfsNode::traverse(start, directions.into_iter())?;
+
+        Ok((parent, name))
+    }
 }
 
 impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
@@ -600,10 +630,54 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     async fn create_directory_at(
         &mut self,
-        _self_: Resource<Descriptor>,
-        _path: String,
+        self_: Resource<Descriptor>,
+        path: String,
     ) -> FsResult<()> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        // Check that we have permission to mutate the directory
+        let desc = self.get_descriptor(self_)?;
+        if !desc.flags.contains(DescriptorFlags::MUTATE_DIRECTORY) {
+            return Err(FsError::trap(ErrorCode::ReadOnly));
+        }
+
+        let (parent_node, name) = self.parent_node_and_name(Arc::clone(&desc.node), &path)?;
+
+        // Create the new directory node
+        let new_dir = Arc::new(RwLock::new(VfsNode {
+            kind: VfsNodeKind::Directory {
+                children: HashMap::new(),
+            },
+            parent: Some(Arc::downgrade(&parent_node)),
+        }));
+
+        // Account for resource limits
+        self.vfs_state
+            .inodes_allocation
+            .inc(1)
+            .map_err(FsError::trap)?;
+        self.vfs_state
+            .limiter
+            .grow(name.len())
+            .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+        self.vfs_state
+            .limiter
+            .grow(std::mem::size_of_val(&new_dir))
+            .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+
+        match &mut parent_node.write().unwrap().kind {
+            VfsNodeKind::File { .. } => {
+                return Err(FsError::trap(ErrorCode::NotDirectory));
+            }
+            VfsNodeKind::Directory { children } => match children.entry(name) {
+                Entry::Vacant(entry) => {
+                    entry.insert(new_dir);
+                }
+                Entry::Occupied(_) => {
+                    return Err(FsError::trap(ErrorCode::Exist));
+                }
+            },
+        }
+
+        Ok(())
     }
 
     async fn stat(&mut self, self_: Resource<Descriptor>) -> FsResult<DescriptorStat> {
