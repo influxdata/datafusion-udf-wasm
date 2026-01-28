@@ -250,19 +250,41 @@ impl From<DataType> for wit_types::DataType {
     }
 }
 
-impl From<Field> for wit_types::Field {
-    fn from(value: Field) -> Self {
-        Self {
-            name: value.name().clone(),
-            data_type: value.data_type().clone().into(),
-            nullable: value.is_nullable(),
-            dict_is_ordered: value.dict_is_ordered().unwrap_or_default(),
-            metadata: value
+impl ResourceCacheValue<Field> for ResourceAny {
+    type Context = Arc<WasmComponentInstance>;
+
+    async fn new(k: &Arc<Field>, ctx: &Self::Context) -> DataFusionResult<Self> {
+        let args = wit_types::FieldArgs {
+            name: k.name().clone(),
+            data_type: k.data_type().clone().into(),
+            nullable: k.is_nullable(),
+            dict_is_ordered: k.dict_is_ordered().unwrap_or_default(),
+            metadata: k
                 .metadata()
                 .iter()
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
-        }
+        };
+
+        let mut state = ctx.lock_state().await;
+        ctx.bindings()
+            .datafusion_udf_wasm_udf_types()
+            .field()
+            .call_new(&mut state, &args)
+            .await
+            .context(
+                "cannot create Field resource",
+                Some(&state.stderr.contents()),
+            )?
+            .convert_err(ctx.trusted_data_limits().clone())
+    }
+
+    async fn clean(self, ctx: &Self::Context) -> DataFusionResult<()> {
+        let mut state = ctx.lock_state().await;
+
+        self.resource_drop_async(&mut state)
+            .await
+            .context("cannot free Field resource", Some(&state.stderr.contents()))
     }
 }
 
@@ -513,22 +535,24 @@ impl AsyncTryFrom<(ScalarFunctionArgs, &Arc<WasmComponentInstance>)>
     async fn async_try_from(
         (value, instance): (ScalarFunctionArgs, &Arc<WasmComponentInstance>),
     ) -> Result<Self, Self::Error> {
+        let mut cache_config_options = instance.cache_config_options().await;
+        let mut cache_field = instance.cache_field().await;
+
+        let mut arg_fields = Vec::with_capacity(value.arg_fields.len());
+        for f in value.arg_fields {
+            arg_fields.push(cache_field.cache(&f, instance).await?);
+        }
+
         Ok(Self {
             args: value
                 .args
                 .into_iter()
                 .map(TryFrom::try_from)
                 .collect::<Result<_, _>>()?,
-            arg_fields: value
-                .arg_fields
-                .into_iter()
-                .map(|f| f.as_ref().clone().into())
-                .collect(),
+            arg_fields,
             number_rows: value.number_rows as u64,
-            return_field: value.return_field.as_ref().clone().into(),
-            config_options: instance
-                .cache_config_options()
-                .await
+            return_field: cache_field.cache(&value.return_field, instance).await?,
+            config_options: cache_config_options
                 .cache(&value.config_options, instance)
                 .await?,
         })

@@ -5,11 +5,47 @@
 use std::sync::Arc;
 
 use crate::bindings::exports::datafusion_udf_wasm::udf::types as wit_types;
-use arrow::datatypes::DataType;
+use arrow::datatypes::{DataType, Field};
 use datafusion_common::config::ConfigOptions;
 use datafusion_expr::ScalarUDFImpl;
 
+/// Wraps [`Field`] so that it implements the [WIT definition]
+///
+///
+/// [WIT definition]: wit_types::GuestScalarUdf
+#[derive(Debug)]
+pub struct FieldWrapper(Arc<Field>);
+
+impl FieldWrapper {
+    /// Get wrapped [`Field`].
+    pub fn inner(&self) -> &Arc<Field> {
+        &self.0
+    }
+}
+
+impl wit_types::GuestField for FieldWrapper {
+    fn new(args: wit_types::FieldArgs) -> Result<wit_types::Field, wit_types::DataFusionError> {
+        let wit_types::FieldArgs {
+            name,
+            data_type,
+            nullable,
+            dict_is_ordered,
+            metadata,
+        } = args;
+
+        let field = Arc::new(
+            Field::new(name, data_type.try_into()?, nullable)
+                .with_dict_is_ordered(dict_is_ordered)
+                .with_metadata(metadata.into_iter().collect()),
+        );
+        Ok(wit_types::Field::new(Self(field)))
+    }
+}
+
 /// Wraps [`ConfigOptions`] so that it implements the [WIT definition].
+///
+///
+/// [WIT definition]: wit_types::GuestScalarUdf
 #[derive(Debug)]
 pub struct ConfigOptionsWrapper(Arc<ConfigOptions>);
 
