@@ -8,5 +8,9 @@ target/
 profile.json
 profile.json.gz
 
-# Python venv
+# Python-related data
+*.egg-info/
+.ruff_cache/
 .venv
+__pycache__
+dist/
