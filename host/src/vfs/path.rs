@@ -2,6 +2,8 @@
 
 use std::{io::ErrorKind, ops::Deref};
 
+use wasmtime_wasi::p2::{FsError, bindings::filesystem::types::ErrorCode};
+
 use crate::{error::LimitExceeded, vfs::VfsLimits};
 
 /// Path segment.
@@ -143,6 +145,21 @@ impl std::fmt::Display for PathTraversal {
             Self::Down(segment) => segment.fmt(f),
         }
     }
+}
+
+/// Split path into parent and base name.
+pub(crate) fn split_path_by_parent_and_base_name(path: &str) -> Result<(&str, &str), FsError> {
+    let pos = path
+        .rfind('/')
+        .ok_or_else(|| FsError::trap(ErrorCode::Invalid))?;
+    let parent = &path[..pos];
+    let name = &path[pos + 1..];
+
+    if name.is_empty() || name == "." || name == ".." {
+        return Err(FsError::trap(ErrorCode::Invalid));
+    }
+
+    Ok((parent, name))
 }
 
 #[cfg(test)]
