@@ -43,7 +43,7 @@ use crate::{
     state::WasmStateImpl,
     vfs::{
         limits::VfsLimits,
-        path::{PathSegment, PathTraversal},
+        path::{PathSegment, PathTraversal, split_path_by_parent_and_base_name},
     },
 };
 
@@ -600,10 +600,71 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     async fn create_directory_at(
         &mut self,
-        _self_: Resource<Descriptor>,
-        _path: String,
+        self_: Resource<Descriptor>,
+        path: String,
     ) -> FsResult<()> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        // Check that we have permission to mutate the directory
+        let desc = self.get_descriptor(self_)?;
+        if !desc.flags.contains(DescriptorFlags::MUTATE_DIRECTORY) {
+            return Err(FsError::trap(ErrorCode::ReadOnly));
+        }
+
+        // Split path into parent path and new directory name
+        let (parent, self_name) = split_path_by_parent_and_base_name(&path)?;
+
+        // Use PathTraversal::parse to validate and create the PathSegment
+        let (_, mut directions) = PathTraversal::parse(self_name, &self.vfs_state.limits)?;
+        let name = match directions.next() {
+            Some(Ok(PathTraversal::Down(segment))) => segment,
+            _ => return Err(FsError::trap(ErrorCode::Invalid)),
+        };
+        // Ensure the name is a single segment
+        if directions.next().is_some() {
+            return Err(FsError::trap(ErrorCode::Invalid));
+        }
+
+        let (_, directions) = PathTraversal::parse(parent, &self.vfs_state.limits)?;
+
+        // Get the parent directory node
+        let parent_node = VfsNode::traverse(Arc::clone(&self.vfs_state.root), directions)?;
+
+        // Create the new directory node
+        let new_dir = Arc::new(RwLock::new(VfsNode {
+            kind: VfsNodeKind::Directory {
+                children: HashMap::new(),
+            },
+            parent: Some(Arc::downgrade(&parent_node)),
+        }));
+
+        // Account for resource limits
+        self.vfs_state
+            .inodes_allocation
+            .inc(1)
+            .map_err(FsError::trap)?;
+        self.vfs_state
+            .limiter
+            .grow(name.len())
+            .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+        self.vfs_state
+            .limiter
+            .grow(std::mem::size_of_val(&new_dir))
+            // map to InsufficientMemory as the VFS is only limited by RAM.
+            .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+
+        // Insert the new directory into the parent
+        match &mut parent_node.write().unwrap().kind {
+            VfsNodeKind::File { .. } => {
+                return Err(FsError::trap(ErrorCode::NotDirectory));
+            }
+            VfsNodeKind::Directory { children } => {
+                if children.contains_key(&name) {
+                    return Err(FsError::trap(ErrorCode::Exist));
+                }
+                children.insert(name, new_dir);
+            }
+        }
+
+        Ok(())
     }
 
     async fn stat(&mut self, self_: Resource<Descriptor>) -> FsResult<DescriptorStat> {
