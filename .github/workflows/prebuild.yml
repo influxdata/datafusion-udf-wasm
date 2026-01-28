@@ -103,12 +103,24 @@ jobs:
           sha256sum * > sha256sum.txt
         working-directory: ./out
 
-      - name: read wasmtime version
-        id: wasmtime
+      - name: read artifact versions
+        id: versions
         run: |
-          version="$(cargo metadata --format-version=1 | jq --raw-output '.packages[] | select(.name == "wasmtime") | .version')"
-          echo "version=$version"
-          echo VERSION="$version" >> "$GITHUB_OUTPUT"
+          cargo_md="$(cargo metadata --format-version=1)"
+          v_arrow="$(echo "$cargo_md" | jq --raw-output '.packages[] | select(.name == "arrow") | .version')"
+          v_datafusion="$(echo "$cargo_md" | jq --raw-output '.packages[] | select(.name == "datafusion") | .version')"
+          v_wasmtime="$(echo "$cargo_md" | jq --raw-output '.packages[] | select(.name == "wasmtime") | .version')"
+          v_wit="$(cat "wit/world.wit" | grep package | sed -E 's/^[^@]+@([0-9.]+).*/\1/g')"
+
+          echo "     arrow: $v_arrow"
+          echo "datafusion: $v_datafusion"
+          echo "  wasmtime: $v_wasmtime"
+          echo "       wit: $v_wit"
+
+          echo ARROW="$v_arrow" >> "$GITHUB_OUTPUT"
+          echo DATAFUSION="$v_datafusion" >> "$GITHUB_OUTPUT"
+          echo WASMTIME="$v_wasmtime" >> "$GITHUB_OUTPUT"
+          echo WIT="$v_wit" >> "$GITHUB_OUTPUT"
 
       - name: attestation
         id: attestation
@@ -125,9 +137,26 @@ jobs:
             # Build Metadata
 
             **Commit:** [`${{ github.sha }}`](${{ github.server_url }}/${{ github.repository }}/tree/${{ github.sha }})
-            **Wasmtime:** `${{ steps.wasmtime.outputs.VERSION }}`
             **Build Timestamp:** `${{ steps.timestamp.outputs.TIMESTAMP_ISO }}`
             **Build Attestation:** <${{ steps.attestation.outputs.attestation-url }}>
+
+            # WIT Interface
+            The WIT interface — used between host and guest — is: `${{ steps.versions.outputs.WIT }}`
+
+            If host & guest are out of sync, you will get an error that looks like this:
+
+            ```text
+            Context("link WASM components", External(Error { context: "initialize bindings", source: no exported instance named `datafusion-udf-wasm:udf/types@x.y.z`
+            ```
+
+            # Dependency Versions
+            These are the versions of the major dependencies:
+
+            | Dependency | Version |
+            | - | - |
+            | Arrow | `${{ steps.versions.outputs.ARROW }}` |
+            | DataFusion | `${{ steps.versions.outputs.DATAFUSION }}` |
+            | Wasmtime | `${{ steps.versions.outputs.WASMTIME }}` |
 
             # WASM Binaries
             We build the following targets:
