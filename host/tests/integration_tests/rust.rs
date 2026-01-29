@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{num::NonZeroUsize, sync::Arc};
 
 use arrow::{
     array::{Array, Int64Array},
@@ -349,6 +349,45 @@ async fn test_mismatch_target() {
     create WASM component
     caused by
     External error: Module was compiled for architecture 'riscv64gc'
+    "
+    );
+}
+
+#[tokio::test]
+async fn test_undersize_resource_cache() {
+    let component = component().await;
+    let udf = WasmScalarUdf::new(
+        component,
+        &WasmPermissions::default().with_max_cached_fields(
+            // we need 2, one for the arg field and one for the return field
+            NonZeroUsize::new(1).unwrap(),
+        ),
+        Handle::current(),
+        &(Arc::new(UnboundedMemoryPool::default()) as _),
+        "".to_owned(),
+    )
+    .await
+    .unwrap()
+    .into_iter()
+    .next()
+    .unwrap();
+
+    let res = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Int64Array::new_null(0)))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Int64, true))],
+            number_rows: 0,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await;
+
+    insta::assert_snapshot!(
+        res.unwrap_err(),
+        @r"
+    call ScalarUdf::invoke_with_args
+    caused by
+    External error: Resource (e.g. `Field` or `ConfigOptions`) was already de-allocated. You may need to increase resource cache limits in `WasmPermissions`.
     "
     );
 }
