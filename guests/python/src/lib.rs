@@ -15,7 +15,6 @@ use datafusion_common::{
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 use datafusion_udf_wasm_guest::export;
 use pyo3::prelude::*;
-use pyo3::types::PyTuple;
 use uuid::Uuid;
 
 use crate::error::py_err_to_string;
@@ -206,37 +205,51 @@ impl ScalarUDFImpl for PythonScalarUDF {
                 .return_type
                 .python_to_arrow(py, number_rows);
 
+            // allocate params vector once and reuse for each row
+            // NOTE: the pointer array needs one additional slot because we need to prepend a NULL ptr for the vectorcall API
+            let mut params = Vec::with_capacity(parameter_iters.len());
+            let mut params_ptrs = Vec::with_capacity(parameter_iters.len() + 1);
+
             for _ in 0..number_rows {
                 // poll ALL iterators before evaluating the controlflow
-                let params = parameter_iters
-                    .iter_mut()
-                    .map(|it| it.next().expect("all iterators have n_rows"))
-                    .collect::<Result<Vec<_>, _>>()?;
-
-                // determine if we shall call the Python method or not
-                let maybe_params = params.into_iter().try_fold(
-                    Vec::with_capacity(parameter_iters.len()),
-                    |mut accu, next| {
-                        accu.push(next?);
-                        ControlFlow::Continue(accu)
-                    },
-                );
-
-                match maybe_params {
-                    ControlFlow::Continue(params) => {
-                        let params = PyTuple::new(py, params).map_err(|e| {
-                            exec_datafusion_err!("{}", py_err_to_string(e, py))
-                                .context("cannot create parameter tuple")
-                        })?;
-                        let rval = handle.call1(params).map_err(|e| {
-                            exec_datafusion_err!("{}", py_err_to_string(e, py))
-                                .context("cannot call function")
-                        })?;
-                        output_row_builder.push(rval)?;
+                params.clear();
+                for it in &mut parameter_iters {
+                    match it.next().expect("all iterators have n_rows")? {
+                        ControlFlow::Continue(param) => {
+                            params.push(param);
+                        }
+                        ControlFlow::Break(()) => {}
                     }
-                    ControlFlow::Break(()) => {
-                        output_row_builder.skip();
-                    }
+                }
+
+                if params.len() == parameter_iters.len() {
+                    // all parameters extracted
+
+                    // Prepend one null argument for `PY_VECTORCALL_ARGUMENTS_OFFSET`.
+                    params_ptrs.clear();
+                    params_ptrs.push(std::ptr::null_mut());
+                    params_ptrs.extend(params.iter().map(|p| p.as_ptr()));
+
+                    // SAFETY: We are holding a reference to `params` to keep the pointers alive. We also follow that `pyo3` is doing.
+                    let call_res_ptr = unsafe {
+                        pyo3::ffi::PyObject_Vectorcall(
+                            handle.as_ptr(),
+                            params_ptrs.as_mut_ptr().add(1),
+                            params.len() + pyo3::ffi::PY_VECTORCALL_ARGUMENTS_OFFSET,
+                            std::ptr::null_mut(),
+                        )
+                    };
+                    // SAFETY: `vectorcall` returns a non-NULL pointer that we are supposed to own
+                    let call_res = unsafe { Bound::from_owned_ptr_or_err(py, call_res_ptr) };
+
+                    let rval = call_res.map_err(|e| {
+                        exec_datafusion_err!("{}", py_err_to_string(e, py))
+                            .context("cannot call function")
+                    })?;
+                    output_row_builder.push(rval)?;
+                } else {
+                    // NULL row
+                    output_row_builder.skip();
                 }
             }
 
