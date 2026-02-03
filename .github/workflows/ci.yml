@@ -27,7 +27,7 @@ jobs:
         uses: ./.github/actions/free-disk-space
 
       - name: Install `uv`
-        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b  # v7
+        uses: astral-sh/setup-uv@803947b9bd8e9f986429fa0c5a41c367cd732b41  # v7
         with:
           version-file: "python-tooling/pyproject.toml"
 
@@ -42,7 +42,7 @@ jobs:
           echo "LD_LIBRARY_PATH=${path_bin}/../lib" >> "$GITHUB_ENV"
 
       - name: Install `cargo-deny` & `just` & `tombi` & 'typos'
-        uses: taiki-e/install-action@710817a1645ef40daad5bcde7431ceccf6cc3528  # v2
+        uses: taiki-e/install-action@650c5ca14212efbbf3e580844b04bdccf68dac31  # v2
         with:
           tool: cargo-deny,just,tombi,typos
 
@@ -59,7 +59,7 @@ jobs:
       # Swatinem/rust-cache does NOT cache docs, see
       # https://github.com/Swatinem/rust-cache/issues/208
       - name: Rustdoc Cache
-        uses: actions/cache@8b402f58fbc84540c8b491a91e594a4576fec3d7  # v4
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v4
         with:
           path: target/doc
           key: v0-${{ runner.os }}-rustdoc-${{ hashFiles('**/Cargo.lock') }}
