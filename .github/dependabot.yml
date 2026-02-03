@@ -21,6 +21,10 @@ updates:
           - "datafusion"
           - "datafusion-*"
           - "sqlparser"
+      pyo3:
+        patterns:
+          - "pyo3"
+          - "pyo3-*"
       wasmtime:
         patterns:
           - "cranelift-*"
