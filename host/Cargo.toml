@@ -16,6 +16,7 @@ required-features = ["all-arch"]
 [dependencies]
 anyhow.workspace = true
 arrow.workspace = true
+bytes.workspace = true
 datafusion-common.workspace = true
 datafusion-execution.workspace = true
 datafusion-expr.workspace = true
