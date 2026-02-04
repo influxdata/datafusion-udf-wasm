@@ -62,6 +62,12 @@ jobs:
       - name: build "add one" example (release)
         run: just guests::rust::build-add-one-release
 
+      - name: build "sub str" example (debug)
+        run: just guests::rust::build-sub-str-debug
+
+      - name: build "sub str" example (release)
+        run: just guests::rust::build-sub-str-release
+
       - name: build python guest (debug)
         run: just guests::python::build-debug
 
@@ -74,6 +80,8 @@ jobs:
           mkdir out
           mv target/wasm32-wasip2/debug/examples/add_one.wasm             out/example_add_one.debug.wasm
           mv target/wasm32-wasip2/release/examples/add_one.wasm           out/example_add_one.release.wasm
+          mv target/wasm32-wasip2/debug/examples/sub_str.wasm             out/example_sub_str.debug.wasm
+          mv target/wasm32-wasip2/release/examples/sub_str.wasm           out/example_sub_str.release.wasm
           mv target/wasm32-wasip2/debug/datafusion_udf_wasm_python.wasm   out/datafusion_udf_wasm_python.debug.wasm
           mv target/wasm32-wasip2/release/datafusion_udf_wasm_python.wasm out/datafusion_udf_wasm_python.release.wasm
 
@@ -162,6 +170,7 @@ jobs:
             We build the following targets:
 
             - `example_add_one`: "add one" Rust example UDF
+            - `example_sub_str`: "sub str" Rust example UDF
             - `datafusion_udf_wasm_python`: Guest for Python-based UDFs, bundles CPython.
 
             Each of them is provided in `debug` and `release` builds. The artifacts have the file extension `.wasm`.

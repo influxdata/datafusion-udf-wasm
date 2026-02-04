@@ -299,11 +299,18 @@ const FEATURES: &[Feature] = &[
     Feature {
         name: "example",
         package: "datafusion-udf-wasm-guest",
-        just_cmds: &[JustCmd {
-            artifact_type: ArtifactType::Example("add-one"),
-            const_name: "EXAMPLE",
-            doc: r#""add-one" example."#,
-        }],
+        just_cmds: &[
+            JustCmd {
+                artifact_type: ArtifactType::Example("add-one"),
+                const_name: "EXAMPLE_ADD_ONE",
+                doc: r#""add-one" example."#,
+            },
+            JustCmd {
+                artifact_type: ArtifactType::Example("sub-str"),
+                const_name: "EXAMPLE_SUB_STR",
+                doc: r#""sub-str" example."#,
+            },
+        ],
     },
     Feature {
         name: "python",
