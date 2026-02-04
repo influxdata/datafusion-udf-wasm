@@ -1095,6 +1095,41 @@ mod tests {
         res.cast()
     }
 
+    /// Create a test file in the root folder of the VFS
+    fn create_test_file(ctx: &mut VfsCtxView<'_>, path: &str, data: &[u8], limits: &VfsLimits) {
+        let flags =
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY;
+
+        let root = create_test_descriptor(ctx, flags);
+        let root = ctx.node(root).unwrap();
+        let mut guard = root.write().unwrap();
+
+        let node = Arc::new(RwLock::new(VfsNode {
+            kind: VfsNodeKind::File {
+                content: Vec::new(),
+            },
+            parent: Some(Arc::downgrade(&ctx.vfs_state.root)),
+        }));
+
+        match &mut guard.kind {
+            VfsNodeKind::File { .. } => {
+                panic!("root node is a file, expected directory");
+            }
+            VfsNodeKind::Directory { children } => {
+                children.insert(PathSegment::new(path, limits).unwrap(), Arc::clone(&node));
+                let desc = VfsDescriptor { node, flags };
+                let res = ctx
+                    .table
+                    .push(desc)
+                    .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))
+                    .unwrap();
+                let desc = res.cast();
+                futures::executor::block_on(ctx.write(desc, data.to_vec(), 0))
+                    .expect("write test file");
+            }
+        }
+    }
+
     #[tokio::test]
     async fn test_create_directory_readonly_descriptor_fails() {
         let (mut table, mut vfs_state) = create_test_vfs();
@@ -1374,5 +1409,461 @@ mod tests {
 
         let err = result.unwrap_err();
         assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::IsDirectory);
+    }
+
+    #[tokio::test]
+    async fn test_write_to_file_basic() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "test.txt", &[0; 10], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: file_node,
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        let data = vec![1, 2, 3, 4, 5];
+        let result = ctx.write(desc.cast(), data.clone(), 2).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 5);
+
+        // Verify the actual underlying data
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+        let guard = file_node.read().unwrap();
+        if let VfsNodeKind::File { content } = &guard.kind {
+            assert_eq!(content.len(), 10);
+            assert_eq!(&content[0..2], &[0, 0]); // Original data before offset
+            assert_eq!(&content[2..7], &[1, 2, 3, 4, 5]); // Written data
+            assert_eq!(&content[7..], &[0, 0, 0]); // Original data after write
+        } else {
+            panic!("Expected file node");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_to_file_extends_content() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "test.txt", &[1, 2, 3], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: file_node,
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        let data = vec![4, 5, 6, 7];
+        let result = ctx.write(desc.cast(), data.clone(), 5).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 4);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+        let guard = file_node.read().unwrap();
+        if let VfsNodeKind::File { content } = &guard.kind {
+            assert_eq!(content.len(), 9); // Extended to accommodate write
+            assert_eq!(&content[0..3], &[1, 2, 3]); // Original data
+            assert_eq!(&content[3..5], &[0, 0]); // Zero-filled gap
+            assert_eq!(&content[5..9], &[4, 5, 6, 7]); // Written data
+        } else {
+            panic!("Expected file node");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_to_file_at_zero_offset() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "test.txt", &[1, 2, 3, 4, 5], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: file_node,
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        let data = vec![10, 20, 30];
+        let result = ctx.write(desc.cast(), data.clone(), 0).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 3);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+        let guard = file_node.read().unwrap();
+        if let VfsNodeKind::File { content } = &guard.kind {
+            assert_eq!(content.len(), 5); // Same size as original
+            assert_eq!(&content[0..3], &[10, 20, 30]); // Written data
+            assert_eq!(&content[3..5], &[4, 5]); // Remaining original data
+        } else {
+            panic!("Expected file node");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_to_empty_file() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "empty.txt", &[], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "empty.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: file_node,
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        let data = vec![1, 2, 3];
+        let result = ctx.write(desc.cast(), data.clone(), 0).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 3);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "empty.txt").unwrap();
+        let guard = file_node.read().unwrap();
+        if let VfsNodeKind::File { content } = &guard.kind {
+            assert_eq!(content, &[1, 2, 3]);
+        } else {
+            panic!("Expected file node");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_overflow_fails() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "test.txt", &[1, 2, 3], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: file_node,
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        let data = vec![4, 5, 6];
+        let result = ctx.write(desc.cast(), data.clone(), u64::MAX).await;
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::Overflow);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+        let guard = file_node.read().unwrap();
+        if let VfsNodeKind::File { content } = &guard.kind {
+            assert_eq!(content, &[1, 2, 3]); // Original data unchanged
+        } else {
+            panic!("Expected file node");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_basic() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "test.txt", &[0; 10], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: Arc::clone(&file_node),
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        let stream_result = ctx.write_via_stream(desc.cast(), 3);
+        assert!(stream_result.is_ok());
+
+        let stream_res = stream_result.unwrap();
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+
+        let data = bytes::Bytes::from(vec![1, 2, 3, 4, 5]);
+        let write_result = stream.write(data);
+        assert!(write_result.is_ok());
+
+        // Verify the actual underlying data
+        let guard = file_node.read().unwrap();
+        if let VfsNodeKind::File { content } = &guard.kind {
+            assert_eq!(content.len(), 10);
+            assert_eq!(&content[0..3], &[0, 0, 0]); // Original data before offset
+            assert_eq!(&content[3..8], &[1, 2, 3, 4, 5]); // Written data
+            assert_eq!(&content[8..], &[0, 0]); // Original data after write
+        } else {
+            panic!("Expected file node");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_extends_content() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "test.txt", &[1, 2, 3], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: Arc::clone(&file_node),
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        let stream_result = ctx.write_via_stream(desc.cast(), 5);
+        assert!(stream_result.is_ok());
+
+        let stream_res = stream_result.unwrap();
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+
+        let data = bytes::Bytes::from(vec![4, 5, 6, 7]);
+        let write_result = stream.write(data);
+        assert!(write_result.is_ok());
+
+        // Verify the actual underlying data
+        let guard = file_node.read().unwrap();
+        if let VfsNodeKind::File { content } = &guard.kind {
+            assert_eq!(content.len(), 9); // Extended to accommodate write
+            assert_eq!(&content[0..3], &[1, 2, 3]); // Original data
+            assert_eq!(&content[3..5], &[0, 0]); // Zero-filled gap
+            assert_eq!(&content[5..9], &[4, 5, 6, 7]); // Written data
+        } else {
+            panic!("Expected file node");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_multiple_writes() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "test.txt", &[0; 5], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: Arc::clone(&file_node),
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        let stream_result = ctx.write_via_stream(desc.cast(), 0);
+        assert!(stream_result.is_ok());
+
+        let stream_res = stream_result.unwrap();
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+
+        // First write
+        let data1 = bytes::Bytes::from(vec![1, 2]);
+        let write_result1 = stream.write(data1);
+        assert!(write_result1.is_ok());
+
+        // Second write (should continue from where the first write ended)
+        let data2 = bytes::Bytes::from(vec![3, 4, 5]);
+        let write_result2 = stream.write(data2);
+        assert!(write_result2.is_ok());
+
+        // Verify the actual underlying data
+        let guard = file_node.read().unwrap();
+        if let VfsNodeKind::File { content } = &guard.kind {
+            assert_eq!(content, &[1, 2, 3, 4, 5]);
+        } else {
+            panic!("Expected file node");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_overflow_offset_fails() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "test.txt", &[1, 2, 3], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: file_node,
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        let stream_result = ctx.write_via_stream(desc.cast(), u64::MAX);
+        assert!(stream_result.is_err());
+
+        let err = stream_result.unwrap_err();
+        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::Overflow);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_closed_stream_fails() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "test.txt", &[0; 5], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: file_node,
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        let stream_result = ctx.write_via_stream(desc.cast(), 0);
+        assert!(stream_result.is_ok());
+
+        let stream_res = stream_result.unwrap();
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+
+        // Close the stream
+        stream.cancel().await;
+
+        // Try to write to closed stream
+        let data = bytes::Bytes::from(vec![1, 2, 3]);
+        let write_result = stream.write(data);
+        assert!(write_result.is_err());
+
+        if let Err(StreamError::Closed) = write_result {
+            // Expected error
+        } else {
+            panic!("Expected StreamError::Closed");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_partial_overwrite() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let limits = VfsLimits::default();
+        create_test_file(&mut ctx, "test.txt", &[1, 2, 3, 4, 5, 6, 7, 8], &limits);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+
+        let desc = ctx
+            .table
+            .push(VfsDescriptor {
+                node: file_node,
+                flags: DescriptorFlags::READ | DescriptorFlags::WRITE,
+            })
+            .unwrap();
+
+        // Overwrite middle portion
+        let data = vec![10, 20, 30];
+        let result = ctx.write(desc.cast(), data.clone(), 2).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 3);
+
+        let d = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_node = ctx.node_at(d, "test.txt").unwrap();
+        let guard = file_node.read().unwrap();
+        if let VfsNodeKind::File { content } = &guard.kind {
+            assert_eq!(content.len(), 8); // Same size as original
+            assert_eq!(&content[0..2], &[1, 2]); // Original data before write
+            assert_eq!(&content[2..5], &[10, 20, 30]); // Written data
+            assert_eq!(&content[5..8], &[6, 7, 8]); // Original data after write
+        } else {
+            panic!("Expected file node");
+        }
     }
 }
