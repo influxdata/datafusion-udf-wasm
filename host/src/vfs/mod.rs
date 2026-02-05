@@ -868,7 +868,9 @@ impl<'a> filesystem::preopens::Host for VfsCtxView<'a> {
         // Create new preopen descriptor for root with read-write access
         let desc = VfsDescriptor {
             node: Arc::clone(&self.vfs_state.root),
-            flags: DescriptorFlags::READ,
+            flags: DescriptorFlags::READ
+                | DescriptorFlags::MUTATE_DIRECTORY
+                | DescriptorFlags::WRITE,
         };
 
         let res = self.table.push(desc)?;
