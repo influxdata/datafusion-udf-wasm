@@ -48,11 +48,11 @@ tempfile = { version = "3.23.0", default-features = false }
 tokio = { version = "1.49.0", default-features = false }
 uuid = { version = "1.20.0", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
-wasmtime = { version = "41.0.2", default-features = false, features = [
+wasmtime = { version = "41.0.3", default-features = false, features = [
   "async",
 ] }
-wasmtime-wasi = { version = "41.0.2", default-features = false }
-wasmtime-wasi-http = { version = "41.0.2", default-features = false, features = [
+wasmtime-wasi = { version = "41.0.3", default-features = false }
+wasmtime-wasi-http = { version = "41.0.3", default-features = false, features = [
   "default-send-request"
 ] }
 wasmtime-wasi-io = { version = "41.0.0", default-features = false }
