@@ -866,15 +866,86 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         open_flags: OpenFlags,
         flags: DescriptorFlags,
     ) -> FsResult<Resource<Descriptor>> {
-        // Handle write-like flags
-        if open_flags.intersects(OpenFlags::CREATE | OpenFlags::TRUNCATE)
-            || flags.intersects(DescriptorFlags::MUTATE_DIRECTORY | DescriptorFlags::WRITE)
-        {
-            return Err(FsError::trap(ErrorCode::ReadOnly));
-        }
+        let maybe_desc = self.get_descriptor(self_);
+        let wants_create = open_flags.contains(OpenFlags::CREATE);
+        let wants_exclusive = open_flags.contains(OpenFlags::EXCLUSIVE);
+        let wants_directory = open_flags.contains(OpenFlags::DIRECTORY);
+        let wants_truncate = open_flags.contains(OpenFlags::TRUNCATE);
 
-        // get node
-        let node = self.node_at(self_, &path)?;
+        let node = if wants_create {
+            match maybe_desc {
+                Ok(desc) => {
+                    if wants_exclusive {
+                        return Err(FsError::trap(ErrorCode::Exist));
+                    }
+                    Arc::clone(&desc.node)
+                }
+                Err(_) => {
+                    if !flags.contains(DescriptorFlags::MUTATE_DIRECTORY) {
+                        return Err(FsError::trap(ErrorCode::ReadOnly));
+                    }
+
+                    let (parent_node, name) =
+                        self.parent_node_and_name(Arc::clone(&self.vfs_state.root), &path)?;
+                    let new_file = Arc::new(RwLock::new(VfsNode {
+                        kind: VfsNodeKind::File {
+                            content: Vec::new(),
+                        },
+                        parent: Some(Arc::downgrade(&parent_node)),
+                    }));
+
+                    self.vfs_state
+                        .inodes_allocation
+                        .inc(1)
+                        .map_err(FsError::trap)?;
+                    self.vfs_state
+                        .limiter
+                        .grow(name.len())
+                        .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+                    self.vfs_state
+                        .limiter
+                        .grow(std::mem::size_of_val(&new_file))
+                        .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+
+                    match &mut parent_node.write().unwrap().kind {
+                        VfsNodeKind::File { .. } => {
+                            return Err(FsError::trap(ErrorCode::NotDirectory));
+                        }
+                        VfsNodeKind::Directory { children } => match children.entry(name) {
+                            Entry::Vacant(entry) => {
+                                entry.insert(Arc::clone(&new_file));
+                            }
+                            Entry::Occupied(_) => {
+                                return Err(FsError::trap(ErrorCode::Exist));
+                            }
+                        },
+                    }
+
+                    new_file
+                }
+            }
+        } else {
+            let desc = maybe_desc?;
+            if wants_directory
+                && matches!(&desc.node.read().unwrap().kind, VfsNodeKind::File { .. })
+            {
+                return Err(FsError::trap(ErrorCode::NotDirectory));
+            }
+
+            if wants_truncate {
+                let mut guard = desc.node.write().unwrap();
+                match &mut guard.kind {
+                    VfsNodeKind::File { content } => {
+                        content.clear();
+                    }
+                    VfsNodeKind::Directory { .. } => {
+                        return Err(FsError::trap(ErrorCode::IsDirectory));
+                    }
+                }
+            }
+
+            Arc::clone(&desc.node)
+        };
 
         // Create descriptor
         let new_desc = VfsDescriptor { node, flags };
