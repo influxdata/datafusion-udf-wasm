@@ -8,7 +8,7 @@
 //! running.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, hash_map::Entry},
     hash::Hash,
     io::{Cursor, Read},
     sync::{
@@ -435,6 +435,36 @@ impl<'a> VfsCtxView<'a> {
         };
         VfsNode::traverse(start, directions)
     }
+
+    /// Get the parent node and base name for a given path.
+    fn parent_node_and_name(
+        &self,
+        node: SharedVfsNode,
+        path: &str,
+    ) -> FsResult<(SharedVfsNode, PathSegment)> {
+        let (is_root, directions) = PathTraversal::parse(path, &self.vfs_state.limits)?;
+        let mut directions = directions.collect::<Vec<_>>();
+
+        let start = if is_root {
+            Arc::clone(&self.vfs_state.root)
+        } else {
+            node
+        };
+
+        let name = match directions
+            .pop()
+            .ok_or_else(|| FsError::trap(ErrorCode::Invalid))?
+        {
+            Ok(PathTraversal::Down(segment)) => segment,
+            _other @ (Ok(PathTraversal::Stay) | Ok(PathTraversal::Up) | Err(_)) => {
+                return Err(FsError::trap(ErrorCode::Invalid));
+            }
+        };
+
+        let parent = VfsNode::traverse(start, directions.into_iter())?;
+
+        Ok((parent, name))
+    }
 }
 
 impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
@@ -600,10 +630,51 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     async fn create_directory_at(
         &mut self,
-        _self_: Resource<Descriptor>,
-        _path: String,
+        self_: Resource<Descriptor>,
+        path: String,
     ) -> FsResult<()> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        let desc = self.get_descriptor(self_)?;
+        if !desc.flags.contains(DescriptorFlags::MUTATE_DIRECTORY) {
+            return Err(FsError::trap(ErrorCode::ReadOnly));
+        }
+
+        let (parent_node, name) = self.parent_node_and_name(Arc::clone(&desc.node), &path)?;
+
+        let new_dir = Arc::new(RwLock::new(VfsNode {
+            kind: VfsNodeKind::Directory {
+                children: HashMap::new(),
+            },
+            parent: Some(Arc::downgrade(&parent_node)),
+        }));
+
+        self.vfs_state
+            .inodes_allocation
+            .inc(1)
+            .map_err(FsError::trap)?;
+        self.vfs_state
+            .limiter
+            .grow(name.len())
+            .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+        self.vfs_state
+            .limiter
+            .grow(std::mem::size_of_val(&new_dir))
+            .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+
+        match &mut parent_node.write().unwrap().kind {
+            VfsNodeKind::File { .. } => {
+                return Err(FsError::trap(ErrorCode::NotDirectory));
+            }
+            VfsNodeKind::Directory { children } => match children.entry(name) {
+                Entry::Vacant(entry) => {
+                    entry.insert(new_dir);
+                }
+                Entry::Occupied(_) => {
+                    return Err(FsError::trap(ErrorCode::Exist));
+                }
+            },
+        }
+
+        Ok(())
     }
 
     async fn stat(&mut self, self_: Resource<Descriptor>) -> FsResult<DescriptorStat> {
@@ -797,7 +868,9 @@ impl<'a> filesystem::preopens::Host for VfsCtxView<'a> {
         // Create new preopen descriptor for root with read-write access
         let desc = VfsDescriptor {
             node: Arc::clone(&self.vfs_state.root),
-            flags: DescriptorFlags::READ,
+            flags: DescriptorFlags::READ
+                | DescriptorFlags::MUTATE_DIRECTORY
+                | DescriptorFlags::WRITE,
         };
 
         let res = self.table.push(desc)?;
@@ -839,4 +912,266 @@ pub(crate) struct HasFs;
 
 impl HasData for HasFs {
     type Data<'a> = VfsCtxView<'a>;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::vfs::DescriptorFlags;
+    use datafusion_execution::memory_pool::{GreedyMemoryPool, MemoryPool, UnboundedMemoryPool};
+    use wasmtime_wasi::p2::bindings::filesystem::types::HostDescriptor;
+
+    use super::*;
+    use crate::limiter::{Limiter, StaticResourceLimits};
+
+    /// Create a test VfsCtxView with default limits
+    fn create_test_vfs() -> (ResourceTable, VfsState) {
+        let limits = VfsLimits::default();
+        let pool: Arc<dyn MemoryPool> = Arc::new(UnboundedMemoryPool::default());
+        let limiter = Limiter::new(StaticResourceLimits::default(), &pool);
+        let vfs_state = VfsState::new(limits, limiter);
+        let table = ResourceTable::new();
+
+        (table, vfs_state)
+    }
+
+    /// Create a test descriptor with the given flags
+    fn create_test_descriptor(
+        ctx: &mut VfsCtxView<'_>,
+        flags: DescriptorFlags,
+    ) -> Resource<Descriptor> {
+        let desc = VfsDescriptor {
+            node: Arc::clone(&ctx.vfs_state.root),
+            flags,
+        };
+        let res = ctx.table.push(desc).unwrap();
+        res.cast()
+    }
+
+    #[tokio::test]
+    async fn test_create_directory_readonly_descriptor_fails() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // Create descriptor with READ flags only (no MUTATE_DIRECTORY)
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+
+        // Attempt to create directory should fail with ReadOnly error
+        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::ReadOnly);
+    }
+
+    #[tokio::test]
+    async fn test_create_directory_already_exists_fails() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+
+        // First creation should succeed
+        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
+        assert!(result.is_ok());
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+
+        // Second creation should fail with Exist error
+        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::Exist);
+    }
+
+    #[tokio::test]
+    async fn test_create_directory_success() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+
+        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
+        assert!(result.is_ok());
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+
+        // Verify the directory was created by checking it exists
+        let node_result = ctx.node_at(desc, "testdir");
+        assert!(node_result.is_ok());
+
+        let node = node_result.unwrap();
+        let node_guard = node.read().unwrap();
+        match &node_guard.kind {
+            VfsNodeKind::Directory { .. } => {
+                // Success - it's a directory
+            }
+            VfsNodeKind::File { .. } => {
+                panic!("Expected directory, got file");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_directory_insufficient_inodes_fails() {
+        // Create VFS with very limited inodes (1 inode, does not include root)
+        let limits = VfsLimits {
+            inodes: 1,
+            max_path_length: 255,
+            max_path_segment_size: 50,
+        };
+        let pool: Arc<dyn MemoryPool> = Arc::new(UnboundedMemoryPool::default());
+        let limiter = Limiter::new(StaticResourceLimits::default(), &pool);
+        let mut vfs_state = VfsState::new(limits, limiter);
+        let mut table = ResourceTable::new();
+
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // Create descriptor with proper flags
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+
+        // Directory creation should fail due to insufficient inodes
+        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
+        assert!(result.is_ok());
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+
+        let result = ctx.create_directory_at(desc, "testdir2".to_string()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_create_directory_insufficient_space_fails() {
+        // Create VFS with very limited space (10 bytes)
+        let limits = VfsLimits::default();
+        let pool: Arc<dyn MemoryPool> = Arc::new(GreedyMemoryPool::new(2));
+        let static_limits = StaticResourceLimits {
+            n_elements_per_table: 1,
+            n_instances: 1,
+            n_tables: 1,
+            n_memories: 1,
+        };
+        let limiter = Limiter::new(static_limits, &pool);
+        let mut vfs_state = VfsState::new(limits, limiter);
+        let mut table = ResourceTable::new();
+
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // Create descriptor with proper flags
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+
+        // Directory creation should fail due to insufficient space for name
+        let result = ctx
+            .create_directory_at(
+                desc,
+                "very_long_directory_name_with_a_bunch_of_limits".to_string(),
+            )
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_create_directory_nested_path_success() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // Create descriptor with proper flags
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+
+        // First create parent directory
+        let result = ctx.create_directory_at(desc, "parent".to_string()).await;
+        assert!(result.is_ok());
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+
+        // Then create child directory using relative path
+        let result = ctx
+            .create_directory_at(desc, "parent/child".to_string())
+            .await;
+        assert!(result.is_ok());
+
+        // Verify both directories were created
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        assert!(ctx.node_at(desc, "parent").is_ok());
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        assert!(ctx.node_at(desc, "parent/child").is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_create_directory_invalid_parent_fails() {
+        let (mut table, mut vfs_state) = create_test_vfs();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // Create descriptor with proper flags
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+
+        // Try to create directory with non-existent parent
+        let result = ctx
+            .create_directory_at(desc, "nonexistent/child".to_string())
+            .await;
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::NoEntry);
+    }
 }
