@@ -230,7 +230,8 @@ impl Setup {
             Mode::Native => Arc::new(AddOne::default()) as Arc<dyn AsyncScalarUDFImpl>,
             Mode::Wasm => {
                 let udf = rt.block_on(async {
-                    let component = build_wasm_module(datafusion_udf_wasm_bundle::BIN_EXAMPLE);
+                    let component =
+                        build_wasm_module(datafusion_udf_wasm_bundle::BIN_EXAMPLE_ADD_ONE);
 
                     WasmScalarUdf::new(
                         &component,
