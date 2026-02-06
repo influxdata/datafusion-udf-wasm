@@ -16,6 +16,7 @@ required-features = ["all-arch"]
 [dependencies]
 anyhow.workspace = true
 arrow.workspace = true
+bytes.workspace = true
 datafusion-common.workspace = true
 datafusion-execution.workspace = true
 datafusion-expr.workspace = true
@@ -39,6 +40,7 @@ datafusion-udf-wasm-bundle = { workspace = true, features = [
   "example",
   "python"
 ] }
+futures = "0.3.31"
 gungraun.workspace = true
 insta.workspace = true
 regex.workspace = true

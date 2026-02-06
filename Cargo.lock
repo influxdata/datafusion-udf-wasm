@@ -1418,11 +1418,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "arrow",
+ "bytes",
  "datafusion-common",
  "datafusion-execution",
  "datafusion-expr",
  "datafusion-udf-wasm-arrow2bytes",
  "datafusion-udf-wasm-bundle",
+ "futures",
  "gungraun",
  "http",
  "hyper",
