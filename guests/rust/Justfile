@@ -1,14 +1,20 @@
 [private]
-build-add-one profile:
-    @echo ::group::guests::rust::build-add-one {{profile}}
-    cargo build --target=wasm32-wasip2 --example=add_one --profile={{replace(profile, "debug", "dev")}}
+build-example example profile:
+    @echo ::group::guests::rust::build-{{example}}-{{profile}}
+    cargo build --target=wasm32-wasip2 --example={{example}} --profile={{replace(profile, "debug", "dev")}}
     @echo ::endgroup::
 
 # build `add-one` example in debug mode
-build-add-one-debug: (build-add-one "debug")
+build-add-one-debug: (build-example "add_one" "debug")
 
 # build `add-one` example in release mode
-build-add-one-release: (build-add-one "release")
+build-add-one-release: (build-example "add_one" "release")
+
+# build `sub-str` example in debug mode
+build-sub-str-debug: (build-example "sub_str" "debug")
+
+# build `sub-str` example in release mode
+build-sub-str-release: (build-example "sub_str" "release")
 
 # checks build
-check-build: build-add-one-debug
+check-build: build-add-one-debug build-sub-str-debug
