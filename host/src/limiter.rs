@@ -78,7 +78,7 @@ impl Limiter {
     }
 
     /// Grow memory usage.
-    pub(crate) fn grow(&mut self, bytes: usize) -> Result<(), GrowthError> {
+    pub(crate) fn grow(&self, bytes: usize) -> Result<(), GrowthError> {
         let mut self_guard = self
             .memory_reservation
             .lock()
