@@ -17,7 +17,7 @@ use std::{
     },
 };
 
-use rand::Rng;
+use rand::RngExt;
 use siphasher::sip128::{Hasher128, SipHasher24};
 use wasmtime::component::{HasData, Resource};
 use wasmtime_wasi::{
