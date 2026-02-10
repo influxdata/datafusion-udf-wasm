@@ -592,11 +592,96 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     async fn write(
         &mut self,
-        _self_: Resource<Descriptor>,
-        _buffer: Vec<u8>,
-        _offset: Filesize,
+        self_: Resource<Descriptor>,
+        buffer: Vec<u8>,
+        offset: Filesize,
     ) -> FsResult<Filesize> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        // Per POSIX: "If nbyte is zero and the file is a regular file, the write()
+        // function may detect and return errors as described below. In the absence
+        // of errors, or if error detection is not performed, the write() function
+        // shall return zero and have no other results."
+        if buffer.is_empty() {
+            // Still check for valid descriptor and permissions
+            let desc = self.get_descriptor(self_)?;
+            if !desc.flags.contains(DescriptorFlags::WRITE) {
+                // Per POSIX [EBADF]: "The fildes argument is not a valid file
+                // descriptor open for writing."
+                return Err(FsError::trap(ErrorCode::BadDescriptor));
+            }
+            // Check it's not a directory
+            let node = Arc::clone(&desc.node);
+            let guard = node.read().unwrap();
+            if matches!(guard.kind, VfsNodeKind::Directory { .. }) {
+                // Per POSIX [EISDIR]: Writing to a directory is not allowed
+                return Err(FsError::trap(ErrorCode::IsDirectory));
+            }
+            return Ok(0);
+        }
+
+        let desc = self.get_descriptor(self_)?;
+
+        // Per POSIX [EBADF]: "The fildes argument is not a valid file descriptor
+        // open for writing."
+        if !desc.flags.contains(DescriptorFlags::WRITE) {
+            return Err(FsError::trap(ErrorCode::BadDescriptor));
+        }
+
+        let node = Arc::clone(&desc.node);
+        let offset = offset as usize;
+        let buffer_len = buffer.len();
+
+        // Calculate how much the file needs to grow
+        let mut guard = node.write().unwrap();
+        match &mut guard.kind {
+            VfsNodeKind::File { content } => {
+                let current_len = content.len();
+                let write_end = offset.saturating_add(buffer_len);
+
+                // Calculate how much new memory we need
+                // Per POSIX: "On a regular file, if the position of the last byte
+                // written is greater than or equal to the length of the file, the
+                // length of the file shall be set to this position plus one."
+                let growth = if write_end > current_len {
+                    write_end.saturating_sub(current_len)
+                } else {
+                    0
+                };
+
+                // Account for memory growth before modifying content
+                if growth > 0 {
+                    // Per POSIX [ENOSPC]: "There was no free space remaining on
+                    // the device containing the file."
+                    // We map this to InsufficientMemory for our in-memory VFS.
+                    self.vfs_state
+                        .limiter
+                        .grow(growth)
+                        .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+                }
+
+                // Extend the file with zeros if writing past the current end
+                // Per POSIX: Writing past EOF extends the file
+                if offset > current_len {
+                    content.resize(offset, 0);
+                }
+
+                // Ensure we have enough capacity for the write
+                if write_end > content.len() {
+                    content.resize(write_end, 0);
+                }
+
+                // Per POSIX: "The write() function shall attempt to write nbyte
+                // bytes from the buffer pointed to by buf to the file"
+                content[offset..write_end].copy_from_slice(&buffer);
+
+                // Per POSIX: "Upon successful completion, these functions shall
+                // return the number of bytes actually written to the file"
+                Ok(buffer_len as Filesize)
+            }
+            VfsNodeKind::Directory { .. } => {
+                // Per POSIX [EISDIR]: Writing to a directory is not allowed
+                Err(FsError::trap(ErrorCode::IsDirectory))
+            }
+        }
     }
 
     async fn read_directory(
@@ -1833,4 +1918,382 @@ mod tests {
             assert!(result.is_ok());
         }
     );
+
+    // ==================== write tests ====================
+
+    /// Helper to open a file descriptor for a file
+    async fn open_file_descriptor(
+        ctx: &mut VfsCtxView<'_>,
+        name: &str,
+        flags: DescriptorFlags,
+    ) -> Resource<Descriptor> {
+        let desc = create_test_descriptor(
+            ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        ctx.open_at(
+            desc,
+            PathFlags::empty(),
+            name.to_string(),
+            OpenFlags::empty(),
+            flags,
+        )
+        .await
+        .expect("file open should succeed")
+    }
+
+    vfs_test!(test_write_zero_bytes_returns_zero, |ctx| async move {
+        // Per POSIX: "If nbyte is zero and the file is a regular file...
+        // the write() function shall return zero and have no other results."
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let result = ctx.write(file_desc, vec![], 0).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+    });
+
+    vfs_test!(
+        test_write_zero_bytes_checks_write_permission,
+        |ctx| async move {
+            // Per POSIX: Even zero-byte writes should check permissions
+            create_test_file_via_open(&mut ctx, "testfile").await;
+
+            let file_desc = open_file_descriptor(&mut ctx, "testfile", DescriptorFlags::READ).await;
+
+            let result = ctx.write(file_desc, vec![], 0).await;
+            assert_error_code!(result, ErrorCode::BadDescriptor);
+        }
+    );
+
+    vfs_test!(test_write_zero_bytes_to_directory_fails, |ctx| async move {
+        // Per POSIX: Writing to a directory should fail with EISDIR
+        create_test_directory(&mut ctx, "testdir").await;
+
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let dir_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testdir".to_string(),
+                OpenFlags::DIRECTORY,
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let result = ctx.write(dir_desc, vec![], 0).await;
+        assert_error_code!(result, ErrorCode::IsDirectory);
+    });
+
+    vfs_test!(
+        test_write_without_write_permission_fails,
+        |ctx| async move {
+            // Per POSIX [EBADF]: "The fildes argument is not a valid file
+            // descriptor open for writing."
+            create_test_file_via_open(&mut ctx, "testfile").await;
+
+            let file_desc = open_file_descriptor(&mut ctx, "testfile", DescriptorFlags::READ).await;
+
+            let result = ctx.write(file_desc, vec![1, 2, 3], 0).await;
+            assert_error_code!(result, ErrorCode::BadDescriptor);
+        }
+    );
+
+    vfs_test!(test_write_to_directory_fails, |ctx| async move {
+        // Per POSIX [EISDIR]: Writing to a directory is not allowed
+        create_test_directory(&mut ctx, "testdir").await;
+
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let dir_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testdir".to_string(),
+                OpenFlags::DIRECTORY,
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let result = ctx.write(dir_desc, vec![1, 2, 3], 0).await;
+        assert_error_code!(result, ErrorCode::IsDirectory);
+    });
+
+    vfs_test!(test_write_basic_success, |ctx| async move {
+        // Per POSIX: "The write() function shall attempt to write nbyte bytes
+        // from the buffer pointed to by buf to the file"
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let data = vec![1, 2, 3, 4, 5];
+        let result = ctx.write(file_desc, data.clone(), 0).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 5);
+
+        // Verify the content was written
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap();
+        assert_file_content!(node, data);
+    });
+
+    vfs_test!(test_write_at_offset_success, |ctx| async move {
+        // Per POSIX: "the actual writing of data shall proceed from the position
+        // in the file indicated by the file offset"
+        let initial_content = vec![0, 0, 0, 0, 0];
+        create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let data = vec![1, 2, 3];
+        let result = ctx.write(file_desc, data, 1).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 3);
+
+        // Verify the content: [0, 1, 2, 3, 0]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap();
+        assert_file_content!(node, vec![0, 1, 2, 3, 0]);
+    });
+
+    vfs_test!(test_write_extends_file, |ctx| async move {
+        // Per POSIX: "On a regular file, if the position of the last byte written
+        // is greater than or equal to the length of the file, the length of the
+        // file shall be set to this position plus one."
+        let initial_content = vec![1, 2, 3];
+        create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let data = vec![4, 5, 6, 7];
+        let result = ctx.write(file_desc, data, 3).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 4);
+
+        // Verify the content: [1, 2, 3, 4, 5, 6, 7]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap();
+        assert_file_content!(node, vec![1, 2, 3, 4, 5, 6, 7]);
+    });
+
+    vfs_test!(test_write_past_eof_fills_with_zeros, |ctx| async move {
+        // Per POSIX: Writing past EOF extends the file, gap filled with zeros
+        let initial_content = vec![1, 2, 3];
+        create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let data = vec![7, 8, 9];
+        let result = ctx.write(file_desc, data, 6).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 3);
+
+        // Verify the content: [1, 2, 3, 0, 0, 0, 7, 8, 9]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap();
+        assert_file_content!(node, vec![1, 2, 3, 0, 0, 0, 7, 8, 9]);
+    });
+
+    vfs_test!(test_write_overwrites_existing_data, |ctx| async move {
+        // Per POSIX: "Any subsequent successful write() to the same byte position
+        // in the file shall overwrite that file data."
+        let initial_content = vec![1, 2, 3, 4, 5];
+        create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let data = vec![9, 9, 9];
+        let result = ctx.write(file_desc, data, 1).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 3);
+
+        // Verify the content: [1, 9, 9, 9, 5]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap();
+        assert_file_content!(node, vec![1, 9, 9, 9, 5]);
+    });
+
+    vfs_test!(test_write_returns_bytes_written, |ctx| async move {
+        // Per POSIX: "Upon successful completion, these functions shall return
+        // the number of bytes actually written to the file"
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let data = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        let result = ctx.write(file_desc, data, 0).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 10);
+    });
+
+    vfs_test!(test_write_to_empty_file, |ctx| async move {
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let data = vec![1, 2, 3];
+        let result = ctx.write(file_desc, data.clone(), 0).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 3);
+
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap();
+        assert_file_content!(node, data);
+    });
+
+    vfs_test!(test_write_multiple_times, |ctx| async move {
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        // First write
+        let result = ctx.write(file_desc, vec![1, 2, 3], 0).await;
+        assert!(result.is_ok());
+
+        // Need a new descriptor for another write
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        // Second write
+        let result = ctx.write(file_desc, vec![4, 5, 6], 3).await;
+        assert!(result.is_ok());
+
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap();
+        assert_file_content!(node, vec![1, 2, 3, 4, 5, 6]);
+    });
+
+    vfs_test!(test_write_insufficient_space_fails, limited_space: 50, |ctx| async move {
+        // Per POSIX [ENOSPC]: "There was no free space remaining on the device
+        // containing the file."
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        // Try to write a very large buffer that exceeds memory limits
+        let large_data = vec![0u8; 1000];
+        let result = ctx.write(file_desc, large_data, 0).await;
+        assert_error_code!(result, ErrorCode::InsufficientMemory);
+    });
+
+    vfs_test!(test_write_at_offset_zero_to_empty_file, |ctx| async move {
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let data = vec![42];
+        let result = ctx.write(file_desc, data.clone(), 0).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap();
+        assert_file_content!(node, data);
+    });
+
+    vfs_test!(test_write_at_large_offset_to_empty_file, |ctx| async move {
+        // Writing at a large offset should fill with zeros
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let data = vec![1, 2];
+        let result = ctx.write(file_desc, data, 5).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 2);
+
+        // Should be: [0, 0, 0, 0, 0, 1, 2]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap();
+        assert_file_content!(node, vec![0, 0, 0, 0, 0, 1, 2]);
+    });
+
+    vfs_test!(test_write_partial_overwrite_and_extend, |ctx| async move {
+        // Write that partially overwrites existing data and extends the file
+        let initial_content = vec![1, 2, 3];
+        create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let file_desc = open_file_descriptor(
+            &mut ctx,
+            "testfile",
+            DescriptorFlags::READ | DescriptorFlags::WRITE,
+        )
+        .await;
+
+        let data = vec![8, 9, 10, 11];
+        let result = ctx.write(file_desc, data, 2).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 4);
+
+        // Should be: [1, 2, 8, 9, 10, 11]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap();
+        assert_file_content!(node, vec![1, 2, 8, 9, 10, 11]);
+    });
 }
