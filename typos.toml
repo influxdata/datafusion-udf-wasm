@@ -1,2 +1,6 @@
 [default]
 locale = "en-us"
+extend-ignore-identifiers-re = [
+  # See https://pypi.org/project/certifi
+  "certifi",
+]
