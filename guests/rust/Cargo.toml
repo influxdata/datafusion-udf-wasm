@@ -8,6 +8,10 @@ license.workspace = true
 crate-type = ["cdylib"]
 name = "add_one"
 
+[[example]]
+crate-type = ["cdylib"]
+name = "sub_str"
+
 [dependencies]
 arrow.workspace = true
 datafusion-common.workspace = true
