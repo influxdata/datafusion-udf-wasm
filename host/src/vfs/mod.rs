@@ -792,9 +792,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 drop(guard);
                 node
             }
-            Ok(_) => {
-                return Err(FsError::trap(ErrorCode::Unsupported));
-            }
+            Ok(node) => node,
             Err(_) => {
                 if !wants_create {
                     // Per POSIX [ENOENT]: "O_CREAT is not set and a component of path does
@@ -1072,234 +1070,6 @@ mod tests {
         res.cast()
     }
 
-    #[tokio::test]
-    async fn test_create_directory_readonly_descriptor_fails() {
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create descriptor with READ flags only (no MUTATE_DIRECTORY)
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-
-        // Attempt to create directory should fail with ReadOnly error
-        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
-        assert!(result.is_err());
-
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::ReadOnly);
-    }
-
-    #[tokio::test]
-    async fn test_create_directory_already_exists_fails() {
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        // First creation should succeed
-        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
-        assert!(result.is_ok());
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        // Second creation should fail with Exist error
-        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
-        assert!(result.is_err());
-
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::Exist);
-    }
-
-    #[tokio::test]
-    async fn test_create_directory_success() {
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
-        assert!(result.is_ok());
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        // Verify the directory was created by checking it exists
-        let node_result = ctx.node_at(desc, "testdir");
-        assert!(node_result.is_ok());
-
-        let node = node_result.unwrap();
-        let node_guard = node.read().unwrap();
-        match &node_guard.kind {
-            VfsNodeKind::Directory { .. } => {
-                // Success - it's a directory
-            }
-            VfsNodeKind::File { .. } => {
-                panic!("Expected directory, got file");
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn test_create_directory_insufficient_inodes_fails() {
-        // Create VFS with very limited inodes (1 inode, does not include root)
-        let limits = VfsLimits {
-            inodes: 1,
-            max_path_length: 255,
-            max_path_segment_size: 50,
-        };
-        let pool: Arc<dyn MemoryPool> = Arc::new(UnboundedMemoryPool::default());
-        let limiter = Limiter::new(StaticResourceLimits::default(), &pool);
-        let mut vfs_state = VfsState::new(limits, limiter);
-        let mut table = ResourceTable::new();
-
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create descriptor with proper flags
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        // Directory creation should fail due to insufficient inodes
-        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
-        assert!(result.is_ok());
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        let result = ctx.create_directory_at(desc, "testdir2".to_string()).await;
-        assert!(result.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_create_directory_insufficient_space_fails() {
-        // Create VFS with very limited space (10 bytes)
-        let limits = VfsLimits::default();
-        let pool: Arc<dyn MemoryPool> = Arc::new(GreedyMemoryPool::new(2));
-        let static_limits = StaticResourceLimits {
-            n_elements_per_table: 1,
-            n_instances: 1,
-            n_tables: 1,
-            n_memories: 1,
-        };
-        let limiter = Limiter::new(static_limits, &pool);
-        let mut vfs_state = VfsState::new(limits, limiter);
-        let mut table = ResourceTable::new();
-
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create descriptor with proper flags
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        // Directory creation should fail due to insufficient space for name
-        let result = ctx
-            .create_directory_at(
-                desc,
-                "/very_long_directory_name_with_a_bunch_of_limits".to_string(),
-            )
-            .await;
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::InsufficientMemory);
-    }
-
-    #[tokio::test]
-    async fn test_create_directory_nested_path_success() {
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create descriptor with proper flags
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        // First create parent directory
-        let result = ctx.create_directory_at(desc, "parent".to_string()).await;
-        assert!(result.is_ok());
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        // Then create child directory using relative path
-        let result = ctx
-            .create_directory_at(desc, "parent/child".to_string())
-            .await;
-        assert!(result.is_ok());
-
-        // Verify both directories were created
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-        assert!(ctx.node_at(desc, "parent").is_ok());
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-        assert!(ctx.node_at(desc, "parent/child").is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_create_directory_invalid_parent_fails() {
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create descriptor with proper flags
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        // Try to create directory with non-existent parent
-        let result = ctx
-            .create_directory_at(desc, "nonexistent/child".to_string())
-            .await;
-        assert!(result.is_err());
-
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::NoEntry);
-    }
-
     /// Helper to create a file in the VFS for testing
     async fn create_test_file_via_open(ctx: &mut VfsCtxView<'_>, name: &str) {
         let desc = create_test_descriptor(
@@ -1317,6 +1087,18 @@ mod tests {
             .await
             .expect("file creation should succeed");
     }
+
+    /// Helper to create a directory in the VFS for testing
+    async fn create_test_directory(ctx: &mut VfsCtxView<'_>, name: &str) {
+        let desc = create_test_descriptor(
+            ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        ctx.create_directory_at(desc, name.to_string())
+            .await
+            .expect("directory creation should succeed");
+    }
+
     /// Helper to create a file with content in the VFS
     async fn create_file_with_content(
         ctx: &mut VfsCtxView<'_>,
@@ -1353,108 +1135,320 @@ mod tests {
         node
     }
 
-    #[tokio::test]
-    async fn test_open_at_directory_flag_on_nonexistent_path_fails() {
-        // Per POSIX O_DIRECTORY: path doesn't exist → NoEntry
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
+    /// Macro for VFS unit tests to reduce boilerplate.
+    ///
+    /// # Variants
+    ///
+    /// ## Basic test with default VFS:
+    /// ```ignore
+    /// vfs_test!(test_name, |ctx| async move {
+    ///     // test body using ctx: &mut VfsCtxView<'_>
+    /// });
+    /// ```
+    ///
+    /// ## Test with custom VFS setup:
+    /// ```ignore
+    /// vfs_test!(test_name, setup: |table, vfs_state| { /* custom setup */ }, |ctx| async move {
+    ///     // test body
+    /// });
+    /// ```
+    macro_rules! vfs_test {
+        // Basic test with default VFS
+        ($name:ident, |$ctx:ident| async move $body:block) => {
+            #[tokio::test]
+            async fn $name() {
+                let (mut table, mut vfs_state) = create_test_vfs();
+                let mut $ctx = VfsCtxView {
+                    table: &mut table,
+                    vfs_state: &mut vfs_state,
+                };
+                $body
+            }
         };
 
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        // Test with custom VFS limits (inodes)
+        ($name:ident, inodes: $inodes:expr, |$ctx:ident| async move $body:block) => {
+            #[tokio::test]
+            async fn $name() {
+                let limits = VfsLimits {
+                    inodes: $inodes,
+                    max_path_length: 255,
+                    max_path_segment_size: 50,
+                };
+                let pool: Arc<dyn MemoryPool> = Arc::new(UnboundedMemoryPool::default());
+                let limiter = Limiter::new(StaticResourceLimits::default(), &pool);
+                let mut vfs_state = VfsState::new(limits, limiter);
+                let mut table = ResourceTable::new();
+                let mut $ctx = VfsCtxView {
+                    table: &mut table,
+                    vfs_state: &mut vfs_state,
+                };
+                $body
+            }
+        };
 
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "nonexistent".to_string(),
-                OpenFlags::DIRECTORY,
-                DescriptorFlags::READ,
-            )
-            .await;
+        // Test with custom memory pool size
+        ($name:ident, memory_pool_bytes: $bytes:expr, |$ctx:ident| async move $body:block) => {
+            #[tokio::test]
+            async fn $name() {
+                let limits = VfsLimits {
+                    inodes: 100,
+                    max_path_length: 255,
+                    max_path_segment_size: 100,
+                };
+                let pool: Arc<dyn MemoryPool> = Arc::new(GreedyMemoryPool::new($bytes));
+                let static_limits = StaticResourceLimits {
+                    n_elements_per_table: 100,
+                    n_instances: 100,
+                    n_tables: 100,
+                    n_memories: 100,
+                };
+                let limiter = Limiter::new(static_limits, &pool);
+                let mut vfs_state = VfsState::new(limits, limiter);
+                let mut table = ResourceTable::new();
+                let mut $ctx = VfsCtxView {
+                    table: &mut table,
+                    vfs_state: &mut vfs_state,
+                };
+                $body
+            }
+        };
 
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::NoEntry);
+        // Test with very limited memory (for space exhaustion tests)
+        ($name:ident, limited_space: $bytes:expr, |$ctx:ident| async move $body:block) => {
+            #[tokio::test]
+            async fn $name() {
+                let limits = VfsLimits::default();
+                let pool: Arc<dyn MemoryPool> = Arc::new(GreedyMemoryPool::new($bytes));
+                let static_limits = StaticResourceLimits {
+                    n_elements_per_table: 1,
+                    n_instances: 1,
+                    n_tables: 1,
+                    n_memories: 1,
+                };
+                let limiter = Limiter::new(static_limits, &pool);
+                let mut vfs_state = VfsState::new(limits, limiter);
+                let mut table = ResourceTable::new();
+                let mut $ctx = VfsCtxView {
+                    table: &mut table,
+                    vfs_state: &mut vfs_state,
+                };
+                $body
+            }
+        };
     }
 
-    #[tokio::test]
-    async fn test_open_at_directory_flag_on_file_fails() {
-        // Per POSIX O_DIRECTORY: "If path resolves to a non-directory file, fail"
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create a file first
-        create_test_file_via_open(&mut ctx, "afile").await;
-
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "afile".to_string(),
-                OpenFlags::DIRECTORY,
-                DescriptorFlags::READ,
-            )
-            .await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::NotDirectory);
+    /// Macro for asserting an error result with a specific ErrorCode
+    macro_rules! assert_error_code {
+        ($result:expr, $code:expr) => {{
+            assert!($result.is_err());
+            let err = $result.unwrap_err();
+            assert_eq!(*err.downcast_ref().unwrap(), $code);
+        }};
     }
 
-    #[tokio::test]
-    async fn test_open_at_directory_flag_on_directory_succeeds() {
-        // Per POSIX O_DIRECTORY: opening a directory with O_DIRECTORY should succeed
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
+    /// Macro for asserting a node is a file with specific content
+    macro_rules! assert_file_content {
+        ($node:expr, $expected:expr) => {{
+            let guard = $node.read().unwrap();
+            match &guard.kind {
+                VfsNodeKind::File { content } => {
+                    assert_eq!(*content, $expected);
+                }
+                VfsNodeKind::Directory { .. } => {
+                    panic!("Expected file, got directory");
+                }
+            }
+        }};
+    }
 
-        // Create a directory first
+    /// Macro for asserting a node is an empty file
+    macro_rules! assert_empty_file {
+        ($node:expr) => {{ assert_file_content!($node, Vec::<u8>::new()) }};
+    }
+
+    /// Macro for asserting a node is a directory
+    macro_rules! assert_is_directory {
+        ($node:expr) => {{
+            let guard = $node.read().unwrap();
+            match &guard.kind {
+                VfsNodeKind::Directory { .. } => {}
+                VfsNodeKind::File { .. } => {
+                    panic!("Expected directory, got file");
+                }
+            }
+        }};
+    }
+
+    // ==================== create_directory_at tests ====================
+
+    vfs_test!(
+        test_create_directory_readonly_descriptor_fails,
+        |ctx| async move {
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
+            assert_error_code!(result, ErrorCode::ReadOnly);
+        }
+    );
+
+    vfs_test!(
+        test_create_directory_already_exists_fails,
+        |ctx| async move {
+            // First creation should succeed
+            create_test_directory(&mut ctx, "testdir").await;
+
+            // Second creation should fail
+            let desc = create_test_descriptor(
+                &mut ctx,
+                DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+            );
+            let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
+            assert_error_code!(result, ErrorCode::Exist);
+        }
+    );
+
+    vfs_test!(test_create_directory_success, |ctx| async move {
         let desc = create_test_descriptor(
             &mut ctx,
             DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
         );
-        ctx.create_directory_at(desc, "adir".to_string())
-            .await
-            .unwrap();
-
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "adir".to_string(),
-                OpenFlags::DIRECTORY,
-                DescriptorFlags::READ,
-            )
-            .await;
-
+        let result = ctx.create_directory_at(desc, "testdir".to_string()).await;
         assert!(result.is_ok());
-    }
 
-    #[tokio::test]
-    async fn test_open_at_create_and_directory_fails() {
-        // Per POSIX: O_CREAT + O_DIRECTORY is unspecified, we return Invalid
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
+        // Verify the directory was created
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testdir").unwrap();
+        assert_is_directory!(node);
+    });
 
+    vfs_test!(test_create_directory_insufficient_inodes_fails, inodes: 1, |ctx| async move {
+        // First directory creation should succeed (uses the 1 allowed inode)
+        create_test_directory(&mut ctx, "testdir").await;
+
+        // Second creation should fail due to insufficient inodes
         let desc = create_test_descriptor(
             &mut ctx,
             DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
         );
+        let result = ctx.create_directory_at(desc, "testdir2".to_string()).await;
+        assert!(result.is_err());
+    });
 
+    vfs_test!(test_create_directory_insufficient_space_fails, limited_space: 2, |ctx| async move {
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let result = ctx
+            .create_directory_at(
+                desc,
+                "/very_long_directory_name_with_a_bunch_of_limits".to_string(),
+            )
+            .await;
+        assert_error_code!(result, ErrorCode::InsufficientMemory);
+    });
+
+    vfs_test!(
+        test_create_directory_nested_path_success,
+        |ctx| async move {
+            // First create parent directory
+            create_test_directory(&mut ctx, "parent").await;
+
+            // Then create child directory
+            let desc = create_test_descriptor(
+                &mut ctx,
+                DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+            );
+            let result = ctx
+                .create_directory_at(desc, "parent/child".to_string())
+                .await;
+            assert!(result.is_ok());
+
+            // Verify both directories were created
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            assert!(ctx.node_at(desc, "parent").is_ok());
+
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            assert!(ctx.node_at(desc, "parent/child").is_ok());
+        }
+    );
+
+    vfs_test!(
+        test_create_directory_invalid_parent_fails,
+        |ctx| async move {
+            let desc = create_test_descriptor(
+                &mut ctx,
+                DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+            );
+            let result = ctx
+                .create_directory_at(desc, "nonexistent/child".to_string())
+                .await;
+            assert_error_code!(result, ErrorCode::NoEntry);
+        }
+    );
+
+    // ==================== open_at tests ====================
+
+    vfs_test!(
+        test_open_at_directory_flag_on_nonexistent_path_fails,
+        |ctx| async move {
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "nonexistent".to_string(),
+                    OpenFlags::DIRECTORY,
+                    DescriptorFlags::READ,
+                )
+                .await;
+            assert_error_code!(result, ErrorCode::NoEntry);
+        }
+    );
+
+    vfs_test!(
+        test_open_at_directory_flag_on_file_fails,
+        |ctx| async move {
+            create_test_file_via_open(&mut ctx, "afile").await;
+
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "afile".to_string(),
+                    OpenFlags::DIRECTORY,
+                    DescriptorFlags::READ,
+                )
+                .await;
+            assert_error_code!(result, ErrorCode::NotDirectory);
+        }
+    );
+
+    vfs_test!(
+        test_open_at_directory_flag_on_directory_succeeds,
+        |ctx| async move {
+            create_test_directory(&mut ctx, "adir").await;
+
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "adir".to_string(),
+                    OpenFlags::DIRECTORY,
+                    DescriptorFlags::READ,
+                )
+                .await;
+            assert!(result.is_ok());
+        }
+    );
+
+    vfs_test!(test_open_at_create_and_directory_fails, |ctx| async move {
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+        );
         let result = ctx
             .open_at(
                 desc,
@@ -1464,117 +1458,75 @@ mod tests {
                 DescriptorFlags::READ,
             )
             .await;
+        assert_error_code!(result, ErrorCode::Invalid);
+    });
 
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::Invalid);
-    }
+    vfs_test!(
+        test_open_at_create_exists_exclusive_fails,
+        |ctx| async move {
+            create_test_file_via_open(&mut ctx, "existingfile").await;
 
-    #[tokio::test]
-    async fn test_open_at_create_exists_exclusive_fails() {
-        // Per POSIX: "O_CREAT and O_EXCL are set, open() shall fail if the file exists" → EEXIST
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
+            let desc = create_test_descriptor(
+                &mut ctx,
+                DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+            );
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "existingfile".to_string(),
+                    OpenFlags::CREATE | OpenFlags::EXCLUSIVE,
+                    DescriptorFlags::READ,
+                )
+                .await;
+            assert_error_code!(result, ErrorCode::Exist);
+        }
+    );
 
-        // Create an existing file first
-        create_test_file_via_open(&mut ctx, "existingfile").await;
+    vfs_test!(
+        test_open_at_create_exists_not_exclusive_success,
+        |ctx| async move {
+            create_test_file_via_open(&mut ctx, "existingfile").await;
 
+            let desc = create_test_descriptor(
+                &mut ctx,
+                DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+            );
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "existingfile".to_string(),
+                    OpenFlags::CREATE,
+                    DescriptorFlags::READ,
+                )
+                .await;
+            assert!(result.is_ok());
+        }
+    );
+
+    vfs_test!(
+        test_open_at_create_no_mutate_permission_fails,
+        |ctx| async move {
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "newfile".to_string(),
+                    OpenFlags::CREATE,
+                    DescriptorFlags::READ,
+                )
+                .await;
+            assert_error_code!(result, ErrorCode::ReadOnly);
+        }
+    );
+
+    vfs_test!(test_open_at_create_new_file_success, |ctx| async move {
         let desc = create_test_descriptor(
             &mut ctx,
             DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
         );
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "existingfile".to_string(),
-                OpenFlags::CREATE | OpenFlags::EXCLUSIVE,
-                DescriptorFlags::READ,
-            )
-            .await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::Exist);
-    }
-
-    #[tokio::test]
-    async fn test_open_at_create_exists_not_exclusive_fail() {
-        // Per POSIX: O_CREAT without O_EXCL, file exists → opens existing file
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create an existing file first
-        create_test_file_via_open(&mut ctx, "existingfile").await;
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "existingfile".to_string(),
-                OpenFlags::CREATE,
-                DescriptorFlags::READ,
-            )
-            .await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::Unsupported);
-    }
-
-    #[tokio::test]
-    async fn test_open_at_create_no_mutate_permission_fails() {
-        // Per POSIX: Creating a file requires write permission on parent directory
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create descriptor without MUTATE_DIRECTORY permission
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "newfile".to_string(),
-                OpenFlags::CREATE,
-                DescriptorFlags::READ,
-            )
-            .await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::ReadOnly);
-    }
-
-    #[tokio::test]
-    async fn test_open_at_create_new_file_success() {
-        // Per POSIX: O_CREAT, file doesn't exist → create new file
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
         let result = ctx
             .open_at(
                 desc,
@@ -1584,45 +1536,21 @@ mod tests {
                 DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
             )
             .await;
-
         assert!(result.is_ok());
 
         // Verify the file was created
         let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-        let node = ctx.node_at(desc, "newfile");
-        assert!(node.is_ok());
+        let node = ctx.node_at(desc, "newfile").unwrap();
+        assert_empty_file!(node);
+    });
 
-        let node = node.unwrap();
-        let guard = node.read().unwrap();
-        match &guard.kind {
-            VfsNodeKind::File { content } => {
-                assert!(content.is_empty());
-            }
-            VfsNodeKind::Directory { .. } => {
-                panic!("Expected file, got directory");
-            }
-        }
-    }
-
-    #[tokio::test]
-    async fn test_open_at_create_parent_is_file_fails() {
-        // Per POSIX [ENOTDIR]: "A component of the path prefix names an existing file
-        // that is neither a directory nor a symbolic link to a directory"
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create a file first
+    vfs_test!(test_open_at_create_parent_is_file_fails, |ctx| async move {
         create_test_file_via_open(&mut ctx, "afile").await;
 
         let desc = create_test_descriptor(
             &mut ctx,
             DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
         );
-
-        // Try to create a file inside the file (invalid)
         let result = ctx
             .open_at(
                 desc,
@@ -1632,68 +1560,39 @@ mod tests {
                 DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
             )
             .await;
+        assert_error_code!(result, ErrorCode::NotDirectory);
+    });
 
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::NotDirectory);
-    }
-
-    #[tokio::test]
-    async fn test_open_at_create_exclusive_new_file_success() {
-        // Per POSIX: O_CREAT | O_EXCL, file doesn't exist → create and return new file
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        // Create a new file with O_CREAT | O_EXCL
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "brandnewfile".to_string(),
-                OpenFlags::CREATE | OpenFlags::EXCLUSIVE,
+    vfs_test!(
+        test_open_at_create_exclusive_new_file_success,
+        |ctx| async move {
+            let desc = create_test_descriptor(
+                &mut ctx,
                 DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-            )
-            .await;
+            );
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "brandnewfile".to_string(),
+                    OpenFlags::CREATE | OpenFlags::EXCLUSIVE,
+                    DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+                )
+                .await;
+            assert!(result.is_ok());
 
-        assert!(result.is_ok());
+            // Verify file was created
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let node = ctx.node_at(desc, "brandnewfile");
+            assert!(node.is_ok());
+        }
+    );
 
-        // Verify file was created
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-        let node = ctx.node_at(desc, "brandnewfile");
-        assert!(node.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_open_at_create_insufficient_inodes_fails() {
-        // Creating a file with insufficient inodes should fail
-        let limits = VfsLimits {
-            inodes: 0, // No inodes allowed
-            max_path_length: 255,
-            max_path_segment_size: 50,
-        };
-        let pool: Arc<dyn MemoryPool> = Arc::new(UnboundedMemoryPool::default());
-        let limiter = Limiter::new(StaticResourceLimits::default(), &pool);
-        let mut vfs_state = VfsState::new(limits, limiter);
-        let mut table = ResourceTable::new();
-
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
+    vfs_test!(test_open_at_create_insufficient_inodes_fails, inodes: 0, |ctx| async move {
         let desc = create_test_descriptor(
             &mut ctx,
             DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
         );
-
         let result = ctx
             .open_at(
                 desc,
@@ -1703,40 +1602,14 @@ mod tests {
                 DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
             )
             .await;
-
         assert!(result.is_err());
-    }
+    });
 
-    #[tokio::test]
-    async fn test_open_at_create_insufficient_memory_for_name_fails() {
-        // Creating a file with insufficient memory should fail
-        let limits = VfsLimits {
-            inodes: 100,
-            max_path_length: 255,
-            max_path_segment_size: 100,
-        };
-        let pool: Arc<dyn MemoryPool> = Arc::new(GreedyMemoryPool::new(10)); // Very limited memory
-        let static_limits = StaticResourceLimits {
-            n_elements_per_table: 100,
-            n_instances: 100,
-            n_tables: 100,
-            n_memories: 100,
-        };
-        let limiter = Limiter::new(static_limits, &pool);
-        let mut vfs_state = VfsState::new(limits, limiter);
-        let mut table = ResourceTable::new();
-
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
+    vfs_test!(test_open_at_create_insufficient_memory_for_name_fails, memory_pool_bytes: 10, |ctx| async move {
         let desc = create_test_descriptor(
             &mut ctx,
             DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
         );
-
-        // Use a filename long enough to exceed the limited memory pool
         let result = ctx
             .open_at(
                 desc,
@@ -1746,53 +1619,31 @@ mod tests {
                 DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
             )
             .await;
+        assert_error_code!(result, ErrorCode::InsufficientMemory);
+    });
 
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::InsufficientMemory);
-    }
+    vfs_test!(
+        test_open_at_no_create_nonexistent_file_fails,
+        |ctx| async move {
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "nonexistent".to_string(),
+                    OpenFlags::empty(),
+                    DescriptorFlags::READ,
+                )
+                .await;
+            assert_error_code!(result, ErrorCode::NoEntry);
+        }
+    );
 
-    #[tokio::test]
-    async fn test_open_at_no_create_nonexistent_file_fails() {
-        // Per POSIX [ENOENT]: "O_CREAT is not set and a component of path does not name an existing file"
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "nonexistent".to_string(),
-                OpenFlags::empty(), // No CREATE flag
-                DescriptorFlags::READ,
-            )
-            .await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::NoEntry);
-    }
-
-    #[tokio::test]
-    async fn test_open_at_truncate_file_success() {
-        // Per POSIX O_TRUNC: "If the file exists and is a regular file... its length shall be truncated to 0"
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create a file with content
+    vfs_test!(test_open_at_truncate_file_success, |ctx| async move {
         let content = vec![1, 2, 3, 4, 5];
         let file_node = create_file_with_content(&mut ctx, "testfile", content).await;
 
         let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ | DescriptorFlags::WRITE);
-
         let result = ctx
             .open_at(
                 desc,
@@ -1802,41 +1653,16 @@ mod tests {
                 DescriptorFlags::READ | DescriptorFlags::WRITE,
             )
             .await;
-
         assert!(result.is_ok());
 
         // Verify the file was truncated
-        let guard = file_node.read().unwrap();
-        match &guard.kind {
-            VfsNodeKind::File { content } => {
-                assert!(content.is_empty(), "File should be truncated");
-            }
-            VfsNodeKind::Directory { .. } => {
-                panic!("Expected file, got directory");
-            }
-        }
-    }
+        assert_empty_file!(file_node);
+    });
 
-    #[tokio::test]
-    async fn test_open_at_truncate_directory_fails() {
-        // Per POSIX [EISDIR]: Truncating a directory should fail
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // Create a directory first
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-        ctx.create_directory_at(desc, "adir".to_string())
-            .await
-            .unwrap();
+    vfs_test!(test_open_at_truncate_directory_fails, |ctx| async move {
+        create_test_directory(&mut ctx, "adir").await;
 
         let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ | DescriptorFlags::WRITE);
-
         let result = ctx
             .open_at(
                 desc,
@@ -1846,254 +1672,165 @@ mod tests {
                 DescriptorFlags::READ | DescriptorFlags::WRITE,
             )
             .await;
+        assert_error_code!(result, ErrorCode::IsDirectory);
+    });
 
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::IsDirectory);
-    }
+    vfs_test!(
+        test_open_at_existing_file_no_flags_success,
+        |ctx| async move {
+            create_test_file_via_open(&mut ctx, "existingfile").await;
 
-    #[tokio::test]
-    async fn test_open_at_existing_file_no_flags_fail() {
-        // Opening an existing file without special flags should fail
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "existingfile".to_string(),
+                    OpenFlags::empty(),
+                    DescriptorFlags::READ,
+                )
+                .await;
+            assert!(result.is_ok());
+        }
+    );
 
-        // Create a file first
-        create_test_file_via_open(&mut ctx, "existingfile").await;
+    vfs_test!(
+        test_open_at_create_with_nested_path_success,
+        |ctx| async move {
+            create_test_directory(&mut ctx, "subdir").await;
 
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "existingfile".to_string(),
-                OpenFlags::empty(), // No special flags
-                DescriptorFlags::READ,
-            )
-            .await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::Unsupported);
-    }
-
-    #[tokio::test]
-    async fn test_open_at_create_with_nested_path_success() {
-        // Creating a file in a nested directory should work
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        // First create a directory
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-        let result = ctx.create_directory_at(desc, "subdir".to_string()).await;
-        assert!(result.is_ok());
-
-        // Now create a file in that directory
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "subdir/newfile".to_string(),
-                OpenFlags::CREATE,
+            let desc = create_test_descriptor(
+                &mut ctx,
                 DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-            )
-            .await;
+            );
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "subdir/newfile".to_string(),
+                    OpenFlags::CREATE,
+                    DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+                )
+                .await;
+            assert!(result.is_ok());
 
-        assert!(result.is_ok());
+            // Verify the file was created
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let node = ctx.node_at(desc, "subdir/newfile");
+            assert!(node.is_ok());
+        }
+    );
 
-        // Verify the file was created
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-        let node = ctx.node_at(desc, "subdir/newfile");
-        assert!(node.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_open_at_create_nonexistent_parent_path_fails() {
-        // Per POSIX [ENOENT]: "O_CREAT is set and a component of the path prefix of path
-        // does not name an existing file"
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "nonexistent/newfile".to_string(),
-                OpenFlags::CREATE,
+    vfs_test!(
+        test_open_at_create_nonexistent_parent_path_fails,
+        |ctx| async move {
+            let desc = create_test_descriptor(
+                &mut ctx,
                 DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
-            )
-            .await;
-
-        assert!(result.is_err());
-        let err = result.unwrap_err();
-        assert_eq!(*err.downcast_ref().unwrap(), ErrorCode::NoEntry);
-    }
-
-    #[tokio::test]
-    async fn test_open_at_create_and_truncate_new_file() {
-        // O_CREAT | O_TRUNC on non-existent file should create empty file
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "newfile".to_string(),
-                OpenFlags::CREATE | OpenFlags::TRUNCATE,
-                DescriptorFlags::READ | DescriptorFlags::WRITE,
-            )
-            .await;
-
-        assert!(result.is_ok());
-
-        // Verify file exists and is empty
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-        let node = ctx.node_at(desc, "newfile").unwrap();
-        let guard = node.read().unwrap();
-        match &guard.kind {
-            VfsNodeKind::File { content } => {
-                assert!(content.is_empty());
-            }
-            _ => panic!("Expected file"),
+            );
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "nonexistent/newfile".to_string(),
+                    OpenFlags::CREATE,
+                    DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
+                )
+                .await;
+            assert_error_code!(result, ErrorCode::NoEntry);
         }
-    }
+    );
 
-    #[tokio::test]
-    async fn test_open_at_create_and_truncate_existing_file() {
-        // O_CREAT | O_TRUNC on existing file should truncate it
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
+    vfs_test!(
+        test_open_at_create_and_truncate_new_file,
+        |ctx| async move {
+            let desc = create_test_descriptor(
+                &mut ctx,
+                DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+            );
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "newfile".to_string(),
+                    OpenFlags::CREATE | OpenFlags::TRUNCATE,
+                    DescriptorFlags::READ | DescriptorFlags::WRITE,
+                )
+                .await;
+            assert!(result.is_ok());
 
-        // Create a file with content
-        let content = vec![1, 2, 3, 4, 5];
-        let file_node = create_file_with_content(&mut ctx, "existingfile", content).await;
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "existingfile".to_string(),
-                OpenFlags::CREATE | OpenFlags::TRUNCATE,
-                DescriptorFlags::READ | DescriptorFlags::WRITE,
-            )
-            .await;
-
-        assert!(result.is_ok());
-
-        // Verify file was truncated
-        let guard = file_node.read().unwrap();
-        match &guard.kind {
-            VfsNodeKind::File { content } => {
-                assert!(content.is_empty(), "File should be truncated");
-            }
-            _ => panic!("Expected file"),
+            // Verify file exists and is empty
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let node = ctx.node_at(desc, "newfile").unwrap();
+            assert_empty_file!(node);
         }
-    }
+    );
 
-    #[tokio::test]
-    async fn test_open_at_truncate_without_write_permission_no_truncate() {
-        // Per POSIX: "The result of using O_TRUNC without either O_RDWR or O_WRONLY is undefined"
-        // We choose to not truncate if WRITE flag is not set
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
+    vfs_test!(
+        test_open_at_create_and_truncate_existing_file,
+        |ctx| async move {
+            let content = vec![1, 2, 3, 4, 5];
+            let file_node = create_file_with_content(&mut ctx, "existingfile", content).await;
 
-        // Create a file with content
-        let content = vec![1, 2, 3, 4, 5];
-        let file_node = create_file_with_content(&mut ctx, "testfile", content.clone()).await;
+            let desc = create_test_descriptor(
+                &mut ctx,
+                DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+            );
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "existingfile".to_string(),
+                    OpenFlags::CREATE | OpenFlags::TRUNCATE,
+                    DescriptorFlags::READ | DescriptorFlags::WRITE,
+                )
+                .await;
+            assert!(result.is_ok());
 
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
-
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "testfile".to_string(),
-                OpenFlags::TRUNCATE,
-                DescriptorFlags::READ, // No WRITE permission
-            )
-            .await;
-
-        assert!(result.is_ok());
-
-        // Verify file was NOT truncated (since no WRITE permission)
-        let guard = file_node.read().unwrap();
-        match &guard.kind {
-            VfsNodeKind::File { content: c } => {
-                assert_eq!(*c, content, "File should not be truncated without WRITE");
-            }
-            _ => panic!("Expected file"),
+            // Verify file was truncated
+            assert_empty_file!(file_node);
         }
-    }
+    );
 
-    #[tokio::test]
-    async fn test_open_at_exclusive_without_create_is_ignored() {
-        // Per POSIX: "If O_EXCL is set and O_CREAT is not set, the result is undefined"
-        // We choose to ignore O_EXCL in this case
-        let (mut table, mut vfs_state) = create_test_vfs();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
+    vfs_test!(
+        test_open_at_truncate_without_write_permission_no_truncate,
+        |ctx| async move {
+            let content = vec![1, 2, 3, 4, 5];
+            let file_node = create_file_with_content(&mut ctx, "testfile", content.clone()).await;
 
-        // Create a file first
-        create_test_file_via_open(&mut ctx, "existingfile").await;
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "testfile".to_string(),
+                    OpenFlags::TRUNCATE,
+                    DescriptorFlags::READ,
+                )
+                .await;
+            assert!(result.is_ok());
 
-        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            // Verify file was NOT truncated (since no WRITE permission)
+            assert_file_content!(file_node, content);
+        }
+    );
 
-        // O_EXCL without O_CREAT should just open the file
-        let result = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "existingfile".to_string(),
-                OpenFlags::EXCLUSIVE, // Without CREATE
-                DescriptorFlags::READ,
-            )
-            .await;
+    vfs_test!(
+        test_open_at_exclusive_without_create_is_ignored,
+        |ctx| async move {
+            create_test_file_via_open(&mut ctx, "existingfile").await;
 
-        assert!(result.is_ok());
-    }
+            let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+            let result = ctx
+                .open_at(
+                    desc,
+                    PathFlags::empty(),
+                    "existingfile".to_string(),
+                    OpenFlags::EXCLUSIVE,
+                    DescriptorFlags::READ,
+                )
+                .await;
+            assert!(result.is_ok());
+        }
+    );
 }
