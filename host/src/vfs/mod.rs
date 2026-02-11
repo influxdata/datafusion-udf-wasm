@@ -465,9 +465,8 @@ impl<'a> VfsCtxView<'a> {
             .ok_or_else(|| FsError::trap(ErrorCode::Invalid))?
         {
             Ok(PathTraversal::Down(segment)) => segment,
-            _other @ (Ok(PathTraversal::Stay) | Ok(PathTraversal::Up)) => {
-                return Err(FsError::trap(ErrorCode::InvalidSeek));
-            }
+            Ok(PathTraversal::Stay) => PathSegment::new(".", &self.vfs_state.limits)?,
+            Ok(PathTraversal::Up) => PathSegment::new("..", &self.vfs_state.limits)?,
             Err(_) => {
                 return Err(FsError::trap(ErrorCode::Invalid));
             }
