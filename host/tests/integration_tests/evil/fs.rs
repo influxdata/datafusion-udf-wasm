@@ -49,37 +49,38 @@ async fn test_canonicalize() {
     insta::assert_snapshot!(
         run_1(&udf).await,
         @r"
-    +-------------+-------------------------------------------------+
-    | path        | result                                          |
-    +-------------+-------------------------------------------------+
-    |             | ERR: No such file or directory (os error 44)    |
-    | .           | OK: /                                           |
-    | ..          | OK: /                                           |
-    | /           | OK: /                                           |
-    | /bin        | ERR: Not supported (os error 58)                |
-    | /boot       | ERR: Not supported (os error 58)                |
-    | /dev        | ERR: Not supported (os error 58)                |
-    | /etc        | ERR: Not supported (os error 58)                |
-    | /etc/group  | ERR: Not supported (os error 58)                |
-    | /etc/passwd | ERR: Not supported (os error 58)                |
-    | /etc/shadow | ERR: Not supported (os error 58)                |
-    | /home       | ERR: Not supported (os error 58)                |
-    | /lib        | ERR: Not supported (os error 58)                |
-    | /lib64      | ERR: Not supported (os error 58)                |
-    | /opt        | ERR: Not supported (os error 58)                |
-    | /proc       | ERR: Not supported (os error 58)                |
-    | /proc/self  | ERR: Not supported (os error 58)                |
-    | /root       | ERR: Not supported (os error 58)                |
-    | /run        | ERR: Not supported (os error 58)                |
-    | /sbin       | ERR: Not supported (os error 58)                |
-    | /srv        | ERR: Not supported (os error 58)                |
-    | /sys        | ERR: Not supported (os error 58)                |
-    | /tmp        | ERR: Not supported (os error 58)                |
-    | /usr        | ERR: Not supported (os error 58)                |
-    | /var        | ERR: Not supported (os error 58)                |
-    | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Not supported (os error 58)                |
-    +-------------+-------------------------------------------------+
+        +-------------+-----------------------------------------------+
+        | path        | result                                        |
+        +-------------+-----------------------------------------------+
+        |             | ERR: operation not supported on this platform |
+        | .           | ERR: operation not supported on this platform |
+        | ..          | ERR: operation not supported on this platform |
+        | /           | ERR: operation not supported on this platform |
+        | /bin        | ERR: operation not supported on this platform |
+        | /boot       | ERR: operation not supported on this platform |
+        | /dev        | ERR: operation not supported on this platform |
+        | /etc        | ERR: operation not supported on this platform |
+        | /etc/group  | ERR: operation not supported on this platform |
+        | /etc/passwd | ERR: operation not supported on this platform |
+        | /etc/shadow | ERR: operation not supported on this platform |
+        | /home       | ERR: operation not supported on this platform |
+        | /lib        | ERR: operation not supported on this platform |
+        | /lib64      | ERR: operation not supported on this platform |
+        | /opt        | ERR: operation not supported on this platform |
+        | /proc       | ERR: operation not supported on this platform |
+        | /proc/self  | ERR: operation not supported on this platform |
+        | /root       | ERR: operation not supported on this platform |
+        | /run        | ERR: operation not supported on this platform |
+        | /sbin       | ERR: operation not supported on this platform |
+        | /srv        | ERR: operation not supported on this platform |
+        | /sys        | ERR: operation not supported on this platform |
+        | /tmp        | ERR: operation not supported on this platform |
+        | /usr        | ERR: operation not supported on this platform |
+        | /var        | ERR: operation not supported on this platform |
+        | \0          | ERR: operation not supported on this platform |
+        | /x/..       | ERR: operation not supported on this platform |
+        +-------------+-----------------------------------------------+
+
     ",
     );
 }
@@ -91,739 +92,739 @@ async fn test_copy() {
     insta::assert_snapshot!(
         run_2(&udf).await,
         @r"
-    +-------------+-------------+--------------------------------------------------------------------------------+
-    | from        | to          | output                                                                         |
-    +-------------+-------------+--------------------------------------------------------------------------------+
-    |             |             | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | .           | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | ..          | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /           | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /bin        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /boot       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /dev        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /etc        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /etc/group  | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /etc/passwd | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /etc/shadow | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /home       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /lib        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /lib64      | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /opt        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /proc       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /proc/self  | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /root       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /run        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /sbin       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /srv        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /sys        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /tmp        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /usr        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /var        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | \0          | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    |             | /x/..       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           |             | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | .           | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | ..          | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /           | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /bin        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /boot       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /dev        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /etc        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /etc/group  | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /etc/passwd | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /etc/shadow | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /home       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /lib        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /lib64      | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /opt        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /proc       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /proc/self  | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /root       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /run        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /sbin       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /srv        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /sys        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /tmp        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /usr        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /var        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | \0          | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | .           | /x/..       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          |             | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | .           | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | ..          | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /           | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /bin        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /boot       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /dev        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /etc        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /etc/group  | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /etc/passwd | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /etc/shadow | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /home       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /lib        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /lib64      | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /opt        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /proc       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /proc/self  | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /root       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /run        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /sbin       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /srv        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /sys        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /tmp        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /usr        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /var        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | \0          | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | ..          | /x/..       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           |             | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | .           | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | ..          | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /           | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /bin        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /boot       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /dev        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /etc        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /etc/group  | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /etc/passwd | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /etc/shadow | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /home       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /lib        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /lib64      | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /opt        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /proc       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /proc/self  | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /root       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /run        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /sbin       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /srv        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /sys        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /tmp        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /usr        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /var        | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | \0          | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /           | /x/..       | ERR: the source path is neither a regular file nor a symlink to a regular file |
-    | /bin        |             | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /bin        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /boot       |             | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | .           | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /           | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /boot       | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /dev        |             | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /dev        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /etc        |             | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /etc        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  |             | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | .           | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /           | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /etc/group  | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd |             | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | .           | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /           | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /etc/passwd | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow |             | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | .           | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /           | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /etc/shadow | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /home       |             | ERR: No such file or directory (os error 44)                                   |
-    | /home       | .           | ERR: No such file or directory (os error 44)                                   |
-    | /home       | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /           | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /home       | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /home       | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /lib        |             | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /lib        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      |             | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | .           | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /           | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /lib64      | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /opt        |             | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /opt        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /proc       |             | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | .           | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /           | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /proc       | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  |             | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | .           | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /           | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /proc/self  | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /root       |             | ERR: No such file or directory (os error 44)                                   |
-    | /root       | .           | ERR: No such file or directory (os error 44)                                   |
-    | /root       | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /           | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /root       | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /root       | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /run        |             | ERR: No such file or directory (os error 44)                                   |
-    | /run        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /run        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /run        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /run        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       |             | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | .           | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /           | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /sbin       | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /srv        |             | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /srv        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /sys        |             | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /sys        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        |             | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /tmp        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /usr        |             | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /usr        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | /var        |             | ERR: No such file or directory (os error 44)                                   |
-    | /var        | .           | ERR: No such file or directory (os error 44)                                   |
-    | /var        | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /           | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /var        | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /var        | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    | \0          |             | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | .           | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | ..          | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /           | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /bin        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /boot       | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /dev        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /etc        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /etc/group  | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /etc/passwd | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /etc/shadow | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /home       | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /lib        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /lib64      | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /opt        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /proc       | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /proc/self  | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /root       | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /run        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /sbin       | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /srv        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /sys        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /tmp        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /usr        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /var        | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | \0          | ERR: file name contained an unexpected NUL byte                                |
-    | \0          | /x/..       | ERR: file name contained an unexpected NUL byte                                |
-    | /x/..       |             | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | .           | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | ..          | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /           | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /bin        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /boot       | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /dev        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /etc        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /etc/group  | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /etc/passwd | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /etc/shadow | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /home       | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /lib        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /lib64      | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /opt        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /proc       | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /proc/self  | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /root       | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /run        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /sbin       | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /srv        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /sys        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /tmp        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /usr        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /var        | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | \0          | ERR: No such file or directory (os error 44)                                   |
-    | /x/..       | /x/..       | ERR: No such file or directory (os error 44)                                   |
-    +-------------+-------------+--------------------------------------------------------------------------------+
+        +-------------+-------------+-------------------------------------------------+
+        | from        | to          | output                                          |
+        +-------------+-------------+-------------------------------------------------+
+        |             |             | ERR: Is a directory (os error 31)               |
+        |             | .           | ERR: Is a directory (os error 31)               |
+        |             | ..          | ERR: Is a directory (os error 31)               |
+        |             | /           | ERR: Is a directory (os error 31)               |
+        |             | /bin        | ERR: Bad file descriptor (os error 8)           |
+        |             | /boot       | ERR: Bad file descriptor (os error 8)           |
+        |             | /dev        | ERR: Bad file descriptor (os error 8)           |
+        |             | /etc        | ERR: Bad file descriptor (os error 8)           |
+        |             | /etc/group  | ERR: Not a directory (os error 54)              |
+        |             | /etc/passwd | ERR: Not a directory (os error 54)              |
+        |             | /etc/shadow | ERR: Not a directory (os error 54)              |
+        |             | /home       | ERR: Bad file descriptor (os error 8)           |
+        |             | /lib        | ERR: Bad file descriptor (os error 8)           |
+        |             | /lib64      | ERR: Bad file descriptor (os error 8)           |
+        |             | /opt        | ERR: Bad file descriptor (os error 8)           |
+        |             | /proc       | ERR: Bad file descriptor (os error 8)           |
+        |             | /proc/self  | ERR: Not a directory (os error 54)              |
+        |             | /root       | ERR: Bad file descriptor (os error 8)           |
+        |             | /run        | ERR: Bad file descriptor (os error 8)           |
+        |             | /sbin       | ERR: Bad file descriptor (os error 8)           |
+        |             | /srv        | ERR: Bad file descriptor (os error 8)           |
+        |             | /sys        | ERR: Bad file descriptor (os error 8)           |
+        |             | /tmp        | ERR: Bad file descriptor (os error 8)           |
+        |             | /usr        | ERR: Bad file descriptor (os error 8)           |
+        |             | /var        | ERR: Bad file descriptor (os error 8)           |
+        |             | \0          | ERR: file name contained an unexpected NUL byte |
+        |             | /x/..       | ERR: Invalid seek (os error 70)                 |
+        | .           |             | ERR: Is a directory (os error 31)               |
+        | .           | .           | ERR: Is a directory (os error 31)               |
+        | .           | ..          | ERR: Is a directory (os error 31)               |
+        | .           | /           | ERR: Is a directory (os error 31)               |
+        | .           | /bin        | ERR: Bad file descriptor (os error 8)           |
+        | .           | /boot       | ERR: Bad file descriptor (os error 8)           |
+        | .           | /dev        | ERR: Bad file descriptor (os error 8)           |
+        | .           | /etc        | ERR: Bad file descriptor (os error 8)           |
+        | .           | /etc/group  | ERR: Not a directory (os error 54)              |
+        | .           | /etc/passwd | ERR: Not a directory (os error 54)              |
+        | .           | /etc/shadow | ERR: Not a directory (os error 54)              |
+        | .           | /home       | ERR: Bad file descriptor (os error 8)           |
+        | .           | /lib        | ERR: Bad file descriptor (os error 8)           |
+        | .           | /lib64      | ERR: Bad file descriptor (os error 8)           |
+        | .           | /opt        | ERR: Bad file descriptor (os error 8)           |
+        | .           | /proc       | ERR: Bad file descriptor (os error 8)           |
+        | .           | /proc/self  | ERR: Not a directory (os error 54)              |
+        | .           | /root       | ERR: Bad file descriptor (os error 8)           |
+        | .           | /run        | ERR: Bad file descriptor (os error 8)           |
+        | .           | /sbin       | ERR: Bad file descriptor (os error 8)           |
+        | .           | /srv        | ERR: Bad file descriptor (os error 8)           |
+        | .           | /sys        | ERR: Bad file descriptor (os error 8)           |
+        | .           | /tmp        | ERR: Bad file descriptor (os error 8)           |
+        | .           | /usr        | ERR: Bad file descriptor (os error 8)           |
+        | .           | /var        | ERR: Bad file descriptor (os error 8)           |
+        | .           | \0          | ERR: file name contained an unexpected NUL byte |
+        | .           | /x/..       | ERR: Invalid seek (os error 70)                 |
+        | ..          |             | ERR: Is a directory (os error 31)               |
+        | ..          | .           | ERR: Is a directory (os error 31)               |
+        | ..          | ..          | ERR: Is a directory (os error 31)               |
+        | ..          | /           | ERR: Is a directory (os error 31)               |
+        | ..          | /bin        | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /boot       | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /dev        | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /etc        | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /etc/group  | ERR: Not a directory (os error 54)              |
+        | ..          | /etc/passwd | ERR: Not a directory (os error 54)              |
+        | ..          | /etc/shadow | ERR: Not a directory (os error 54)              |
+        | ..          | /home       | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /lib        | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /lib64      | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /opt        | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /proc       | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /proc/self  | ERR: Not a directory (os error 54)              |
+        | ..          | /root       | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /run        | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /sbin       | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /srv        | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /sys        | ERR: Bad file descriptor (os error 8)           |
+        | ..          | /tmp        | ERR: Out of memory (os error 48)                |
+        | ..          | /usr        | ERR: Out of memory (os error 48)                |
+        | ..          | /var        | ERR: Out of memory (os error 48)                |
+        | ..          | \0          | ERR: Out of memory (os error 48)                |
+        | ..          | /x/..       | ERR: Out of memory (os error 48)                |
+        | /           |             | ERR: Out of memory (os error 48)                |
+        | /           | .           | ERR: Out of memory (os error 48)                |
+        | /           | ..          | ERR: Out of memory (os error 48)                |
+        | /           | /           | ERR: Out of memory (os error 48)                |
+        | /           | /bin        | ERR: Out of memory (os error 48)                |
+        | /           | /boot       | ERR: Out of memory (os error 48)                |
+        | /           | /dev        | ERR: Out of memory (os error 48)                |
+        | /           | /etc        | ERR: Out of memory (os error 48)                |
+        | /           | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /           | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /           | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /           | /home       | ERR: Out of memory (os error 48)                |
+        | /           | /lib        | ERR: Out of memory (os error 48)                |
+        | /           | /lib64      | ERR: Out of memory (os error 48)                |
+        | /           | /opt        | ERR: Out of memory (os error 48)                |
+        | /           | /proc       | ERR: Out of memory (os error 48)                |
+        | /           | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /           | /root       | ERR: Out of memory (os error 48)                |
+        | /           | /run        | ERR: Out of memory (os error 48)                |
+        | /           | /sbin       | ERR: Out of memory (os error 48)                |
+        | /           | /srv        | ERR: Out of memory (os error 48)                |
+        | /           | /sys        | ERR: Out of memory (os error 48)                |
+        | /           | /tmp        | ERR: Out of memory (os error 48)                |
+        | /           | /usr        | ERR: Out of memory (os error 48)                |
+        | /           | /var        | ERR: Out of memory (os error 48)                |
+        | /           | \0          | ERR: Out of memory (os error 48)                |
+        | /           | /x/..       | ERR: Out of memory (os error 48)                |
+        | /bin        |             | ERR: Out of memory (os error 48)                |
+        | /bin        | .           | ERR: Out of memory (os error 48)                |
+        | /bin        | ..          | ERR: Out of memory (os error 48)                |
+        | /bin        | /           | ERR: Out of memory (os error 48)                |
+        | /bin        | /bin        | ERR: Out of memory (os error 48)                |
+        | /bin        | /boot       | ERR: Out of memory (os error 48)                |
+        | /bin        | /dev        | ERR: Out of memory (os error 48)                |
+        | /bin        | /etc        | ERR: Out of memory (os error 48)                |
+        | /bin        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /bin        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /bin        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /bin        | /home       | ERR: Out of memory (os error 48)                |
+        | /bin        | /lib        | ERR: Out of memory (os error 48)                |
+        | /bin        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /bin        | /opt        | ERR: Out of memory (os error 48)                |
+        | /bin        | /proc       | ERR: Out of memory (os error 48)                |
+        | /bin        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /bin        | /root       | ERR: Out of memory (os error 48)                |
+        | /bin        | /run        | ERR: Out of memory (os error 48)                |
+        | /bin        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /bin        | /srv        | ERR: Out of memory (os error 48)                |
+        | /bin        | /sys        | ERR: Out of memory (os error 48)                |
+        | /bin        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /bin        | /usr        | ERR: Out of memory (os error 48)                |
+        | /bin        | /var        | ERR: Out of memory (os error 48)                |
+        | /bin        | \0          | ERR: Out of memory (os error 48)                |
+        | /bin        | /x/..       | ERR: Out of memory (os error 48)                |
+        | /boot       |             | ERR: Out of memory (os error 48)                |
+        | /boot       | .           | ERR: Out of memory (os error 48)                |
+        | /boot       | ..          | ERR: Out of memory (os error 48)                |
+        | /boot       | /           | ERR: Out of memory (os error 48)                |
+        | /boot       | /bin        | ERR: Out of memory (os error 48)                |
+        | /boot       | /boot       | ERR: Out of memory (os error 48)                |
+        | /boot       | /dev        | ERR: Out of memory (os error 48)                |
+        | /boot       | /etc        | ERR: Out of memory (os error 48)                |
+        | /boot       | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /boot       | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /boot       | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /boot       | /home       | ERR: Out of memory (os error 48)                |
+        | /boot       | /lib        | ERR: Out of memory (os error 48)                |
+        | /boot       | /lib64      | ERR: Out of memory (os error 48)                |
+        | /boot       | /opt        | ERR: Out of memory (os error 48)                |
+        | /boot       | /proc       | ERR: Out of memory (os error 48)                |
+        | /boot       | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /boot       | /root       | ERR: Out of memory (os error 48)                |
+        | /boot       | /run        | ERR: Out of memory (os error 48)                |
+        | /boot       | /sbin       | ERR: Out of memory (os error 48)                |
+        | /boot       | /srv        | ERR: Out of memory (os error 48)                |
+        | /boot       | /sys        | ERR: Out of memory (os error 48)                |
+        | /boot       | /tmp        | ERR: Out of memory (os error 48)                |
+        | /boot       | /usr        | ERR: Out of memory (os error 48)                |
+        | /boot       | /var        | ERR: Out of memory (os error 48)                |
+        | /boot       | \0          | ERR: Out of memory (os error 48)                |
+        | /boot       | /x/..       | ERR: Out of memory (os error 48)                |
+        | /dev        |             | ERR: Out of memory (os error 48)                |
+        | /dev        | .           | ERR: Out of memory (os error 48)                |
+        | /dev        | ..          | ERR: Out of memory (os error 48)                |
+        | /dev        | /           | ERR: Out of memory (os error 48)                |
+        | /dev        | /bin        | ERR: Out of memory (os error 48)                |
+        | /dev        | /boot       | ERR: Out of memory (os error 48)                |
+        | /dev        | /dev        | ERR: Out of memory (os error 48)                |
+        | /dev        | /etc        | ERR: Out of memory (os error 48)                |
+        | /dev        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /dev        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /dev        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /dev        | /home       | ERR: Out of memory (os error 48)                |
+        | /dev        | /lib        | ERR: Out of memory (os error 48)                |
+        | /dev        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /dev        | /opt        | ERR: Out of memory (os error 48)                |
+        | /dev        | /proc       | ERR: Out of memory (os error 48)                |
+        | /dev        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /dev        | /root       | ERR: Out of memory (os error 48)                |
+        | /dev        | /run        | ERR: Out of memory (os error 48)                |
+        | /dev        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /dev        | /srv        | ERR: Out of memory (os error 48)                |
+        | /dev        | /sys        | ERR: Out of memory (os error 48)                |
+        | /dev        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /dev        | /usr        | ERR: Out of memory (os error 48)                |
+        | /dev        | /var        | ERR: Out of memory (os error 48)                |
+        | /dev        | \0          | ERR: Out of memory (os error 48)                |
+        | /dev        | /x/..       | ERR: Out of memory (os error 48)                |
+        | /etc        |             | ERR: Out of memory (os error 48)                |
+        | /etc        | .           | ERR: Out of memory (os error 48)                |
+        | /etc        | ..          | ERR: Out of memory (os error 48)                |
+        | /etc        | /           | ERR: Out of memory (os error 48)                |
+        | /etc        | /bin        | ERR: Out of memory (os error 48)                |
+        | /etc        | /boot       | ERR: Out of memory (os error 48)                |
+        | /etc        | /dev        | ERR: Out of memory (os error 48)                |
+        | /etc        | /etc        | ERR: Out of memory (os error 48)                |
+        | /etc        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /etc        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /etc        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /etc        | /home       | ERR: Out of memory (os error 48)                |
+        | /etc        | /lib        | ERR: Out of memory (os error 48)                |
+        | /etc        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /etc        | /opt        | ERR: Out of memory (os error 48)                |
+        | /etc        | /proc       | ERR: Out of memory (os error 48)                |
+        | /etc        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /etc        | /root       | ERR: Out of memory (os error 48)                |
+        | /etc        | /run        | ERR: Out of memory (os error 48)                |
+        | /etc        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /etc        | /srv        | ERR: Out of memory (os error 48)                |
+        | /etc        | /sys        | ERR: Out of memory (os error 48)                |
+        | /etc        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /etc        | /usr        | ERR: Out of memory (os error 48)                |
+        | /etc        | /var        | ERR: Out of memory (os error 48)                |
+        | /etc        | \0          | ERR: Out of memory (os error 48)                |
+        | /etc        | /x/..       | ERR: Out of memory (os error 48)                |
+        | /etc/group  |             | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | .           | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | ..          | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /           | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /bin        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /boot       | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /dev        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /etc        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /etc/group  | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /etc/passwd | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /etc/shadow | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /home       | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /lib        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /lib64      | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /opt        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /proc       | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /proc/self  | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /root       | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /run        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /sbin       | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /srv        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /sys        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /tmp        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /usr        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /var        | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | \0          | ERR: No such file or directory (os error 44)    |
+        | /etc/group  | /x/..       | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd |             | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | .           | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | ..          | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /           | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /bin        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /boot       | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /dev        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /etc        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /etc/group  | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /etc/passwd | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /etc/shadow | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /home       | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /lib        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /lib64      | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /opt        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /proc       | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /proc/self  | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /root       | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /run        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /sbin       | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /srv        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /sys        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /tmp        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /usr        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /var        | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | \0          | ERR: No such file or directory (os error 44)    |
+        | /etc/passwd | /x/..       | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow |             | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | .           | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | ..          | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /           | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /bin        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /boot       | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /dev        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /etc        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /etc/group  | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /etc/passwd | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /etc/shadow | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /home       | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /lib        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /lib64      | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /opt        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /proc       | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /proc/self  | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /root       | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /run        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /sbin       | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /srv        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /sys        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /tmp        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /usr        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /var        | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | \0          | ERR: No such file or directory (os error 44)    |
+        | /etc/shadow | /x/..       | ERR: No such file or directory (os error 44)    |
+        | /home       |             | ERR: Out of memory (os error 48)                |
+        | /home       | .           | ERR: Out of memory (os error 48)                |
+        | /home       | ..          | ERR: Out of memory (os error 48)                |
+        | /home       | /           | ERR: Out of memory (os error 48)                |
+        | /home       | /bin        | ERR: Out of memory (os error 48)                |
+        | /home       | /boot       | ERR: Out of memory (os error 48)                |
+        | /home       | /dev        | ERR: Out of memory (os error 48)                |
+        | /home       | /etc        | ERR: Out of memory (os error 48)                |
+        | /home       | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /home       | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /home       | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /home       | /home       | ERR: Out of memory (os error 48)                |
+        | /home       | /lib        | ERR: Out of memory (os error 48)                |
+        | /home       | /lib64      | ERR: Out of memory (os error 48)                |
+        | /home       | /opt        | ERR: Out of memory (os error 48)                |
+        | /home       | /proc       | ERR: Out of memory (os error 48)                |
+        | /home       | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /home       | /root       | ERR: Out of memory (os error 48)                |
+        | /home       | /run        | ERR: Out of memory (os error 48)                |
+        | /home       | /sbin       | ERR: Out of memory (os error 48)                |
+        | /home       | /srv        | ERR: Out of memory (os error 48)                |
+        | /home       | /sys        | ERR: Out of memory (os error 48)                |
+        | /home       | /tmp        | ERR: Out of memory (os error 48)                |
+        | /home       | /usr        | ERR: Out of memory (os error 48)                |
+        | /home       | /var        | ERR: Out of memory (os error 48)                |
+        | /home       | \0          | ERR: Out of memory (os error 48)                |
+        | /home       | /x/..       | ERR: Out of memory (os error 48)                |
+        | /lib        |             | ERR: Out of memory (os error 48)                |
+        | /lib        | .           | ERR: Out of memory (os error 48)                |
+        | /lib        | ..          | ERR: Out of memory (os error 48)                |
+        | /lib        | /           | ERR: Out of memory (os error 48)                |
+        | /lib        | /bin        | ERR: Out of memory (os error 48)                |
+        | /lib        | /boot       | ERR: Out of memory (os error 48)                |
+        | /lib        | /dev        | ERR: Out of memory (os error 48)                |
+        | /lib        | /etc        | ERR: Out of memory (os error 48)                |
+        | /lib        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /lib        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /lib        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /lib        | /home       | ERR: Out of memory (os error 48)                |
+        | /lib        | /lib        | ERR: Out of memory (os error 48)                |
+        | /lib        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /lib        | /opt        | ERR: Out of memory (os error 48)                |
+        | /lib        | /proc       | ERR: Out of memory (os error 48)                |
+        | /lib        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /lib        | /root       | ERR: Out of memory (os error 48)                |
+        | /lib        | /run        | ERR: Out of memory (os error 48)                |
+        | /lib        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /lib        | /srv        | ERR: Out of memory (os error 48)                |
+        | /lib        | /sys        | ERR: Out of memory (os error 48)                |
+        | /lib        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /lib        | /usr        | ERR: Out of memory (os error 48)                |
+        | /lib        | /var        | ERR: Out of memory (os error 48)                |
+        | /lib        | \0          | ERR: Out of memory (os error 48)                |
+        | /lib        | /x/..       | ERR: Out of memory (os error 48)                |
+        | /lib64      |             | ERR: Out of memory (os error 48)                |
+        | /lib64      | .           | ERR: Out of memory (os error 48)                |
+        | /lib64      | ..          | ERR: Out of memory (os error 48)                |
+        | /lib64      | /           | ERR: Out of memory (os error 48)                |
+        | /lib64      | /bin        | ERR: Out of memory (os error 48)                |
+        | /lib64      | /boot       | ERR: Out of memory (os error 48)                |
+        | /lib64      | /dev        | ERR: Out of memory (os error 48)                |
+        | /lib64      | /etc        | ERR: Out of memory (os error 48)                |
+        | /lib64      | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /lib64      | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /lib64      | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /lib64      | /home       | ERR: Out of memory (os error 48)                |
+        | /lib64      | /lib        | ERR: Out of memory (os error 48)                |
+        | /lib64      | /lib64      | ERR: Out of memory (os error 48)                |
+        | /lib64      | /opt        | ERR: Out of memory (os error 48)                |
+        | /lib64      | /proc       | ERR: Out of memory (os error 48)                |
+        | /lib64      | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /lib64      | /root       | ERR: Out of memory (os error 48)                |
+        | /lib64      | /run        | ERR: Out of memory (os error 48)                |
+        | /lib64      | /sbin       | ERR: Out of memory (os error 48)                |
+        | /lib64      | /srv        | ERR: Out of memory (os error 48)                |
+        | /lib64      | /sys        | ERR: Out of memory (os error 48)                |
+        | /lib64      | /tmp        | ERR: Out of memory (os error 48)                |
+        | /lib64      | /usr        | ERR: Out of memory (os error 48)                |
+        | /lib64      | /var        | ERR: Out of memory (os error 48)                |
+        | /lib64      | \0          | ERR: Out of memory (os error 48)                |
+        | /lib64      | /x/..       | ERR: Out of memory (os error 48)                |
+        | /opt        |             | ERR: Out of memory (os error 48)                |
+        | /opt        | .           | ERR: Out of memory (os error 48)                |
+        | /opt        | ..          | ERR: Out of memory (os error 48)                |
+        | /opt        | /           | ERR: Out of memory (os error 48)                |
+        | /opt        | /bin        | ERR: Out of memory (os error 48)                |
+        | /opt        | /boot       | ERR: Out of memory (os error 48)                |
+        | /opt        | /dev        | ERR: Out of memory (os error 48)                |
+        | /opt        | /etc        | ERR: Out of memory (os error 48)                |
+        | /opt        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /opt        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /opt        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /opt        | /home       | ERR: Out of memory (os error 48)                |
+        | /opt        | /lib        | ERR: Out of memory (os error 48)                |
+        | /opt        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /opt        | /opt        | ERR: Out of memory (os error 48)                |
+        | /opt        | /proc       | ERR: Out of memory (os error 48)                |
+        | /opt        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /opt        | /root       | ERR: Out of memory (os error 48)                |
+        | /opt        | /run        | ERR: Out of memory (os error 48)                |
+        | /opt        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /opt        | /srv        | ERR: Out of memory (os error 48)                |
+        | /opt        | /sys        | ERR: Out of memory (os error 48)                |
+        | /opt        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /opt        | /usr        | ERR: Out of memory (os error 48)                |
+        | /opt        | /var        | ERR: Out of memory (os error 48)                |
+        | /opt        | \0          | ERR: Out of memory (os error 48)                |
+        | /opt        | /x/..       | ERR: Out of memory (os error 48)                |
+        | /proc       |             | ERR: Out of memory (os error 48)                |
+        | /proc       | .           | ERR: Out of memory (os error 48)                |
+        | /proc       | ..          | ERR: Out of memory (os error 48)                |
+        | /proc       | /           | ERR: Out of memory (os error 48)                |
+        | /proc       | /bin        | ERR: Out of memory (os error 48)                |
+        | /proc       | /boot       | ERR: Out of memory (os error 48)                |
+        | /proc       | /dev        | ERR: Out of memory (os error 48)                |
+        | /proc       | /etc        | ERR: Out of memory (os error 48)                |
+        | /proc       | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /proc       | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /proc       | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /proc       | /home       | ERR: Out of memory (os error 48)                |
+        | /proc       | /lib        | ERR: Out of memory (os error 48)                |
+        | /proc       | /lib64      | ERR: Out of memory (os error 48)                |
+        | /proc       | /opt        | ERR: Out of memory (os error 48)                |
+        | /proc       | /proc       | ERR: Out of memory (os error 48)                |
+        | /proc       | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /proc       | /root       | ERR: Out of memory (os error 48)                |
+        | /proc       | /run        | ERR: Out of memory (os error 48)                |
+        | /proc       | /sbin       | ERR: Out of memory (os error 48)                |
+        | /proc       | /srv        | ERR: Out of memory (os error 48)                |
+        | /proc       | /sys        | ERR: Out of memory (os error 48)                |
+        | /proc       | /tmp        | ERR: Out of memory (os error 48)                |
+        | /proc       | /usr        | ERR: Out of memory (os error 48)                |
+        | /proc       | /var        | ERR: Out of memory (os error 48)                |
+        | /proc       | \0          | ERR: Out of memory (os error 48)                |
+        | /proc       | /x/..       | ERR: Out of memory (os error 48)                |
+        | /proc/self  |             | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | .           | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | ..          | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /           | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /bin        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /boot       | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /dev        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /etc        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /etc/group  | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /etc/passwd | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /etc/shadow | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /home       | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /lib        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /lib64      | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /opt        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /proc       | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /proc/self  | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /root       | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /run        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /sbin       | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /srv        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /sys        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /tmp        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /usr        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /var        | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | \0          | ERR: No such file or directory (os error 44)    |
+        | /proc/self  | /x/..       | ERR: No such file or directory (os error 44)    |
+        | /root       |             | ERR: Out of memory (os error 48)                |
+        | /root       | .           | ERR: Out of memory (os error 48)                |
+        | /root       | ..          | ERR: Out of memory (os error 48)                |
+        | /root       | /           | ERR: Out of memory (os error 48)                |
+        | /root       | /bin        | ERR: Out of memory (os error 48)                |
+        | /root       | /boot       | ERR: Out of memory (os error 48)                |
+        | /root       | /dev        | ERR: Out of memory (os error 48)                |
+        | /root       | /etc        | ERR: Out of memory (os error 48)                |
+        | /root       | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /root       | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /root       | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /root       | /home       | ERR: Out of memory (os error 48)                |
+        | /root       | /lib        | ERR: Out of memory (os error 48)                |
+        | /root       | /lib64      | ERR: Out of memory (os error 48)                |
+        | /root       | /opt        | ERR: Out of memory (os error 48)                |
+        | /root       | /proc       | ERR: Out of memory (os error 48)                |
+        | /root       | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /root       | /root       | ERR: Out of memory (os error 48)                |
+        | /root       | /run        | ERR: Out of memory (os error 48)                |
+        | /root       | /sbin       | ERR: Out of memory (os error 48)                |
+        | /root       | /srv        | ERR: Out of memory (os error 48)                |
+        | /root       | /sys        | ERR: Out of memory (os error 48)                |
+        | /root       | /tmp        | ERR: Out of memory (os error 48)                |
+        | /root       | /usr        | ERR: Out of memory (os error 48)                |
+        | /root       | /var        | ERR: Out of memory (os error 48)                |
+        | /root       | \0          | ERR: Out of memory (os error 48)                |
+        | /root       | /x/..       | ERR: Out of memory (os error 48)                |
+        | /run        |             | ERR: Out of memory (os error 48)                |
+        | /run        | .           | ERR: Out of memory (os error 48)                |
+        | /run        | ..          | ERR: Out of memory (os error 48)                |
+        | /run        | /           | ERR: Out of memory (os error 48)                |
+        | /run        | /bin        | ERR: Out of memory (os error 48)                |
+        | /run        | /boot       | ERR: Out of memory (os error 48)                |
+        | /run        | /dev        | ERR: Out of memory (os error 48)                |
+        | /run        | /etc        | ERR: Out of memory (os error 48)                |
+        | /run        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /run        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /run        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /run        | /home       | ERR: Out of memory (os error 48)                |
+        | /run        | /lib        | ERR: Out of memory (os error 48)                |
+        | /run        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /run        | /opt        | ERR: Out of memory (os error 48)                |
+        | /run        | /proc       | ERR: Out of memory (os error 48)                |
+        | /run        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /run        | /root       | ERR: Out of memory (os error 48)                |
+        | /run        | /run        | ERR: Out of memory (os error 48)                |
+        | /run        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /run        | /srv        | ERR: Out of memory (os error 48)                |
+        | /run        | /sys        | ERR: Out of memory (os error 48)                |
+        | /run        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /run        | /usr        | ERR: Out of memory (os error 48)                |
+        | /run        | /var        | ERR: Out of memory (os error 48)                |
+        | /run        | \0          | ERR: Out of memory (os error 48)                |
+        | /run        | /x/..       | ERR: Out of memory (os error 48)                |
+        | /sbin       |             | ERR: Out of memory (os error 48)                |
+        | /sbin       | .           | ERR: Out of memory (os error 48)                |
+        | /sbin       | ..          | ERR: Out of memory (os error 48)                |
+        | /sbin       | /           | ERR: Out of memory (os error 48)                |
+        | /sbin       | /bin        | ERR: Out of memory (os error 48)                |
+        | /sbin       | /boot       | ERR: Out of memory (os error 48)                |
+        | /sbin       | /dev        | ERR: Out of memory (os error 48)                |
+        | /sbin       | /etc        | ERR: Out of memory (os error 48)                |
+        | /sbin       | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /sbin       | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /sbin       | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /sbin       | /home       | ERR: Out of memory (os error 48)                |
+        | /sbin       | /lib        | ERR: Out of memory (os error 48)                |
+        | /sbin       | /lib64      | ERR: Out of memory (os error 48)                |
+        | /sbin       | /opt        | ERR: Out of memory (os error 48)                |
+        | /sbin       | /proc       | ERR: Out of memory (os error 48)                |
+        | /sbin       | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /sbin       | /root       | ERR: Out of memory (os error 48)                |
+        | /sbin       | /run        | ERR: Out of memory (os error 48)                |
+        | /sbin       | /sbin       | ERR: Out of memory (os error 48)                |
+        | /sbin       | /srv        | ERR: Out of memory (os error 48)                |
+        | /sbin       | /sys        | ERR: Out of memory (os error 48)                |
+        | /sbin       | /tmp        | ERR: Out of memory (os error 48)                |
+        | /sbin       | /usr        | ERR: Out of memory (os error 48)                |
+        | /sbin       | /var        | ERR: Out of memory (os error 48)                |
+        | /sbin       | \0          | ERR: Out of memory (os error 48)                |
+        | /sbin       | /x/..       | ERR: Out of memory (os error 48)                |
+        | /srv        |             | ERR: Out of memory (os error 48)                |
+        | /srv        | .           | ERR: Out of memory (os error 48)                |
+        | /srv        | ..          | ERR: Out of memory (os error 48)                |
+        | /srv        | /           | ERR: Out of memory (os error 48)                |
+        | /srv        | /bin        | ERR: Out of memory (os error 48)                |
+        | /srv        | /boot       | ERR: Out of memory (os error 48)                |
+        | /srv        | /dev        | ERR: Out of memory (os error 48)                |
+        | /srv        | /etc        | ERR: Out of memory (os error 48)                |
+        | /srv        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /srv        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /srv        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /srv        | /home       | ERR: Out of memory (os error 48)                |
+        | /srv        | /lib        | ERR: Out of memory (os error 48)                |
+        | /srv        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /srv        | /opt        | ERR: Out of memory (os error 48)                |
+        | /srv        | /proc       | ERR: Out of memory (os error 48)                |
+        | /srv        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /srv        | /root       | ERR: Out of memory (os error 48)                |
+        | /srv        | /run        | ERR: Out of memory (os error 48)                |
+        | /srv        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /srv        | /srv        | ERR: Out of memory (os error 48)                |
+        | /srv        | /sys        | ERR: Out of memory (os error 48)                |
+        | /srv        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /srv        | /usr        | ERR: Out of memory (os error 48)                |
+        | /srv        | /var        | ERR: Out of memory (os error 48)                |
+        | /srv        | \0          | ERR: Out of memory (os error 48)                |
+        | /srv        | /x/..       | ERR: Out of memory (os error 48)                |
+        | /sys        |             | ERR: Out of memory (os error 48)                |
+        | /sys        | .           | ERR: Out of memory (os error 48)                |
+        | /sys        | ..          | ERR: Out of memory (os error 48)                |
+        | /sys        | /           | ERR: Out of memory (os error 48)                |
+        | /sys        | /bin        | ERR: Out of memory (os error 48)                |
+        | /sys        | /boot       | ERR: Out of memory (os error 48)                |
+        | /sys        | /dev        | ERR: Out of memory (os error 48)                |
+        | /sys        | /etc        | ERR: Out of memory (os error 48)                |
+        | /sys        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /sys        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /sys        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /sys        | /home       | ERR: Out of memory (os error 48)                |
+        | /sys        | /lib        | ERR: Out of memory (os error 48)                |
+        | /sys        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /sys        | /opt        | ERR: Out of memory (os error 48)                |
+        | /sys        | /proc       | ERR: Out of memory (os error 48)                |
+        | /sys        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /sys        | /root       | ERR: Out of memory (os error 48)                |
+        | /sys        | /run        | ERR: Out of memory (os error 48)                |
+        | /sys        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /sys        | /srv        | ERR: Out of memory (os error 48)                |
+        | /sys        | /sys        | ERR: Out of memory (os error 48)                |
+        | /sys        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /sys        | /usr        | ERR: Out of memory (os error 48)                |
+        | /sys        | /var        | ERR: Out of memory (os error 48)                |
+        | /sys        | \0          | ERR: Out of memory (os error 48)                |
+        | /sys        | /x/..       | ERR: Out of memory (os error 48)                |
+        | /tmp        |             | ERR: Out of memory (os error 48)                |
+        | /tmp        | .           | ERR: Out of memory (os error 48)                |
+        | /tmp        | ..          | ERR: Out of memory (os error 48)                |
+        | /tmp        | /           | ERR: Out of memory (os error 48)                |
+        | /tmp        | /bin        | ERR: Out of memory (os error 48)                |
+        | /tmp        | /boot       | ERR: Out of memory (os error 48)                |
+        | /tmp        | /dev        | ERR: Out of memory (os error 48)                |
+        | /tmp        | /etc        | ERR: Out of memory (os error 48)                |
+        | /tmp        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /tmp        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /tmp        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /tmp        | /home       | ERR: Out of memory (os error 48)                |
+        | /tmp        | /lib        | ERR: Out of memory (os error 48)                |
+        | /tmp        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /tmp        | /opt        | ERR: Out of memory (os error 48)                |
+        | /tmp        | /proc       | ERR: Out of memory (os error 48)                |
+        | /tmp        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /tmp        | /root       | ERR: Out of memory (os error 48)                |
+        | /tmp        | /run        | ERR: Out of memory (os error 48)                |
+        | /tmp        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /tmp        | /srv        | ERR: Out of memory (os error 48)                |
+        | /tmp        | /sys        | ERR: Out of memory (os error 48)                |
+        | /tmp        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /tmp        | /usr        | ERR: Out of memory (os error 48)                |
+        | /tmp        | /var        | ERR: Out of memory (os error 48)                |
+        | /tmp        | \0          | ERR: Out of memory (os error 48)                |
+        | /tmp        | /x/..       | ERR: Out of memory (os error 48)                |
+        | /usr        |             | ERR: Out of memory (os error 48)                |
+        | /usr        | .           | ERR: Out of memory (os error 48)                |
+        | /usr        | ..          | ERR: Out of memory (os error 48)                |
+        | /usr        | /           | ERR: Out of memory (os error 48)                |
+        | /usr        | /bin        | ERR: Out of memory (os error 48)                |
+        | /usr        | /boot       | ERR: Out of memory (os error 48)                |
+        | /usr        | /dev        | ERR: Out of memory (os error 48)                |
+        | /usr        | /etc        | ERR: Out of memory (os error 48)                |
+        | /usr        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /usr        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /usr        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /usr        | /home       | ERR: Out of memory (os error 48)                |
+        | /usr        | /lib        | ERR: Out of memory (os error 48)                |
+        | /usr        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /usr        | /opt        | ERR: Out of memory (os error 48)                |
+        | /usr        | /proc       | ERR: Out of memory (os error 48)                |
+        | /usr        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /usr        | /root       | ERR: Out of memory (os error 48)                |
+        | /usr        | /run        | ERR: Out of memory (os error 48)                |
+        | /usr        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /usr        | /srv        | ERR: Out of memory (os error 48)                |
+        | /usr        | /sys        | ERR: Out of memory (os error 48)                |
+        | /usr        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /usr        | /usr        | ERR: Out of memory (os error 48)                |
+        | /usr        | /var        | ERR: Out of memory (os error 48)                |
+        | /usr        | \0          | ERR: Out of memory (os error 48)                |
+        | /usr        | /x/..       | ERR: Out of memory (os error 48)                |
+        | /var        |             | ERR: Out of memory (os error 48)                |
+        | /var        | .           | ERR: Out of memory (os error 48)                |
+        | /var        | ..          | ERR: Out of memory (os error 48)                |
+        | /var        | /           | ERR: Out of memory (os error 48)                |
+        | /var        | /bin        | ERR: Out of memory (os error 48)                |
+        | /var        | /boot       | ERR: Out of memory (os error 48)                |
+        | /var        | /dev        | ERR: Out of memory (os error 48)                |
+        | /var        | /etc        | ERR: Out of memory (os error 48)                |
+        | /var        | /etc/group  | ERR: Out of memory (os error 48)                |
+        | /var        | /etc/passwd | ERR: Out of memory (os error 48)                |
+        | /var        | /etc/shadow | ERR: Out of memory (os error 48)                |
+        | /var        | /home       | ERR: Out of memory (os error 48)                |
+        | /var        | /lib        | ERR: Out of memory (os error 48)                |
+        | /var        | /lib64      | ERR: Out of memory (os error 48)                |
+        | /var        | /opt        | ERR: Out of memory (os error 48)                |
+        | /var        | /proc       | ERR: Out of memory (os error 48)                |
+        | /var        | /proc/self  | ERR: Out of memory (os error 48)                |
+        | /var        | /root       | ERR: Out of memory (os error 48)                |
+        | /var        | /run        | ERR: Out of memory (os error 48)                |
+        | /var        | /sbin       | ERR: Out of memory (os error 48)                |
+        | /var        | /srv        | ERR: Out of memory (os error 48)                |
+        | /var        | /sys        | ERR: Out of memory (os error 48)                |
+        | /var        | /tmp        | ERR: Out of memory (os error 48)                |
+        | /var        | /usr        | ERR: Out of memory (os error 48)                |
+        | /var        | /var        | ERR: Out of memory (os error 48)                |
+        | /var        | \0          | ERR: Out of memory (os error 48)                |
+        | /var        | /x/..       | ERR: Out of memory (os error 48)                |
+        | \0          |             | ERR: file name contained an unexpected NUL byte |
+        | \0          | .           | ERR: file name contained an unexpected NUL byte |
+        | \0          | ..          | ERR: file name contained an unexpected NUL byte |
+        | \0          | /           | ERR: file name contained an unexpected NUL byte |
+        | \0          | /bin        | ERR: file name contained an unexpected NUL byte |
+        | \0          | /boot       | ERR: file name contained an unexpected NUL byte |
+        | \0          | /dev        | ERR: file name contained an unexpected NUL byte |
+        | \0          | /etc        | ERR: file name contained an unexpected NUL byte |
+        | \0          | /etc/group  | ERR: file name contained an unexpected NUL byte |
+        | \0          | /etc/passwd | ERR: file name contained an unexpected NUL byte |
+        | \0          | /etc/shadow | ERR: file name contained an unexpected NUL byte |
+        | \0          | /home       | ERR: file name contained an unexpected NUL byte |
+        | \0          | /lib        | ERR: file name contained an unexpected NUL byte |
+        | \0          | /lib64      | ERR: file name contained an unexpected NUL byte |
+        | \0          | /opt        | ERR: file name contained an unexpected NUL byte |
+        | \0          | /proc       | ERR: file name contained an unexpected NUL byte |
+        | \0          | /proc/self  | ERR: file name contained an unexpected NUL byte |
+        | \0          | /root       | ERR: file name contained an unexpected NUL byte |
+        | \0          | /run        | ERR: file name contained an unexpected NUL byte |
+        | \0          | /sbin       | ERR: file name contained an unexpected NUL byte |
+        | \0          | /srv        | ERR: file name contained an unexpected NUL byte |
+        | \0          | /sys        | ERR: file name contained an unexpected NUL byte |
+        | \0          | /tmp        | ERR: file name contained an unexpected NUL byte |
+        | \0          | /usr        | ERR: file name contained an unexpected NUL byte |
+        | \0          | /var        | ERR: file name contained an unexpected NUL byte |
+        | \0          | \0          | ERR: file name contained an unexpected NUL byte |
+        | \0          | /x/..       | ERR: file name contained an unexpected NUL byte |
+        | /x/..       |             | ERR: No such file or directory (os error 44)    |
+        | /x/..       | .           | ERR: No such file or directory (os error 44)    |
+        | /x/..       | ..          | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /           | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /bin        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /boot       | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /dev        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /etc        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /etc/group  | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /etc/passwd | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /etc/shadow | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /home       | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /lib        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /lib64      | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /opt        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /proc       | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /proc/self  | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /root       | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /run        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /sbin       | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /srv        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /sys        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /tmp        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /usr        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /var        | ERR: No such file or directory (os error 44)    |
+        | /x/..       | \0          | ERR: No such file or directory (os error 44)    |
+        | /x/..       | /x/..       | ERR: No such file or directory (os error 44)    |
+        +-------------+-------------+-------------------------------------------------+
     ",
     );
 }
@@ -838,10 +839,10 @@ async fn test_create_dir() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | OK: created                                     |
-    | .           | ERR: File exists (os error 20)                  |
-    | ..          | OK: created                                     |
-    | /           | ERR: File exists (os error 20)                  |
+    |             | ERR: Invalid seek (os error 70)                 |
+    | .           | ERR: Invalid seek (os error 70)                 |
+    | ..          | ERR: Invalid seek (os error 70)                 |
+    | /           | ERR: Invalid seek (os error 70)                 |
     | /bin        | OK: created                                     |
     | /boot       | OK: created                                     |
     | /dev        | OK: created                                     |
@@ -864,7 +865,7 @@ async fn test_create_dir() {
     | /usr        | OK: created                                     |
     | /var        | OK: created                                     |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: No such file or directory (os error 44)    |
+    | /x/..       | ERR: Invalid seek (os error 70)                 |
     +-------------+-------------------------------------------------+
     ",
     );
@@ -1754,27 +1755,27 @@ async fn test_open_create() {
     | .           | OK: opened                                      |
     | ..          | OK: opened                                      |
     | /           | OK: opened                                      |
-    | /bin        | OK: opened                                      |
-    | /boot       | OK: opened                                      |
-    | /dev        | OK: opened                                      |
-    | /etc        | OK: opened                                      |
-    | /etc/group  | ERR: Not a directory (os error 54)              |
-    | /etc/passwd | ERR: Not a directory (os error 54)              |
-    | /etc/shadow | ERR: Not a directory (os error 54)              |
-    | /home       | OK: opened                                      |
-    | /lib        | OK: opened                                      |
-    | /lib64      | OK: opened                                      |
-    | /opt        | OK: opened                                      |
-    | /proc       | OK: opened                                      |
-    | /proc/self  | ERR: Not a directory (os error 54)              |
-    | /root       | OK: opened                                      |
-    | /run        | OK: opened                                      |
-    | /sbin       | OK: opened                                      |
-    | /srv        | OK: opened                                      |
-    | /sys        | OK: opened                                      |
-    | /tmp        | OK: opened                                      |
-    | /usr        | OK: opened                                      |
-    | /var        | OK: opened                                      |
+    | /bin        | ERR: No such file or directory (os error 44)    |
+    | /boot       | ERR: No such file or directory (os error 44)    |
+    | /dev        | ERR: No such file or directory (os error 44)    |
+    | /etc        | ERR: No such file or directory (os error 44)    |
+    | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | /home       | ERR: No such file or directory (os error 44)    |
+    | /lib        | ERR: No such file or directory (os error 44)    |
+    | /lib64      | ERR: No such file or directory (os error 44)    |
+    | /opt        | ERR: No such file or directory (os error 44)    |
+    | /proc       | ERR: No such file or directory (os error 44)    |
+    | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | /root       | ERR: No such file or directory (os error 44)    |
+    | /run        | ERR: No such file or directory (os error 44)    |
+    | /sbin       | ERR: No such file or directory (os error 44)    |
+    | /srv        | ERR: No such file or directory (os error 44)    |
+    | /sys        | ERR: No such file or directory (os error 44)    |
+    | /tmp        | ERR: No such file or directory (os error 44)    |
+    | /usr        | ERR: No such file or directory (os error 44)    |
+    | /var        | ERR: No such file or directory (os error 44)    |
     | \0          | ERR: file name contained an unexpected NUL byte |
     | /x/..       | ERR: No such file or directory (os error 44)    |
     +-------------+-------------------------------------------------+
@@ -1818,7 +1819,7 @@ async fn test_open_create_new() {
     | /usr        | OK: opened                                      |
     | /var        | OK: opened                                      |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: No such file or directory (os error 44)    |
+    | /x/..       | ERR: Invalid seek (os error 70)                 |
     +-------------+-------------------------------------------------+
     ",
     );
@@ -2006,29 +2007,29 @@ async fn test_read_link() {
     | .           | ERR: Not supported (os error 58)                |
     | ..          | ERR: Not supported (os error 58)                |
     | /           | ERR: Not supported (os error 58)                |
-    | /bin        | ERR: Not supported (os error 58)                |
-    | /boot       | ERR: Not supported (os error 58)                |
-    | /dev        | ERR: Not supported (os error 58)                |
-    | /etc        | ERR: Not supported (os error 58)                |
-    | /etc/group  | ERR: Not supported (os error 58)                |
-    | /etc/passwd | ERR: Not supported (os error 58)                |
-    | /etc/shadow | ERR: Not supported (os error 58)                |
-    | /home       | ERR: Not supported (os error 58)                |
-    | /lib        | ERR: Not supported (os error 58)                |
-    | /lib64      | ERR: Not supported (os error 58)                |
-    | /opt        | ERR: Not supported (os error 58)                |
-    | /proc       | ERR: Not supported (os error 58)                |
-    | /proc/self  | ERR: Not supported (os error 58)                |
-    | /root       | ERR: Not supported (os error 58)                |
-    | /run        | ERR: Not supported (os error 58)                |
-    | /sbin       | ERR: Not supported (os error 58)                |
-    | /srv        | ERR: Not supported (os error 58)                |
-    | /sys        | ERR: Not supported (os error 58)                |
-    | /tmp        | ERR: Not supported (os error 58)                |
-    | /usr        | ERR: Not supported (os error 58)                |
-    | /var        | ERR: Not supported (os error 58)                |
+    | /bin        | ERR: No such file or directory (os error 44)    |
+    | /boot       | ERR: No such file or directory (os error 44)    |
+    | /dev        | ERR: No such file or directory (os error 44)    |
+    | /etc        | ERR: No such file or directory (os error 44)    |
+    | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | /home       | ERR: No such file or directory (os error 44)    |
+    | /lib        | ERR: No such file or directory (os error 44)    |
+    | /lib64      | ERR: No such file or directory (os error 44)    |
+    | /opt        | ERR: No such file or directory (os error 44)    |
+    | /proc       | ERR: No such file or directory (os error 44)    |
+    | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | /root       | ERR: No such file or directory (os error 44)    |
+    | /run        | ERR: No such file or directory (os error 44)    |
+    | /sbin       | ERR: No such file or directory (os error 44)    |
+    | /srv        | ERR: No such file or directory (os error 44)    |
+    | /sys        | ERR: No such file or directory (os error 44)    |
+    | /tmp        | ERR: No such file or directory (os error 44)    |
+    | /usr        | ERR: No such file or directory (os error 44)    |
+    | /var        | ERR: No such file or directory (os error 44)    |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Not supported (os error 58)                |
+    | /x/..       | ERR: No such file or directory (os error 44)    |
     +-------------+-------------------------------------------------+
     ",
     );
@@ -2869,37 +2870,38 @@ async fn test_set_permissions() {
     insta::assert_snapshot!(
         run_1(&udf).await,
         @r"
-    +-------------+-------------------------------------------------+
-    | path        | result                                          |
-    +-------------+-------------------------------------------------+
-    |             | ERR: Function not implemented (os error 52)     |
-    | .           | ERR: Function not implemented (os error 52)     |
-    | ..          | ERR: Function not implemented (os error 52)     |
-    | /           | ERR: Function not implemented (os error 52)     |
-    | /bin        | ERR: Function not implemented (os error 52)     |
-    | /boot       | ERR: Function not implemented (os error 52)     |
-    | /dev        | ERR: Function not implemented (os error 52)     |
-    | /etc        | ERR: Function not implemented (os error 52)     |
-    | /etc/group  | ERR: Function not implemented (os error 52)     |
-    | /etc/passwd | ERR: Function not implemented (os error 52)     |
-    | /etc/shadow | ERR: Function not implemented (os error 52)     |
-    | /home       | ERR: Function not implemented (os error 52)     |
-    | /lib        | ERR: Function not implemented (os error 52)     |
-    | /lib64      | ERR: Function not implemented (os error 52)     |
-    | /opt        | ERR: Function not implemented (os error 52)     |
-    | /proc       | ERR: Function not implemented (os error 52)     |
-    | /proc/self  | ERR: Function not implemented (os error 52)     |
-    | /root       | ERR: Function not implemented (os error 52)     |
-    | /run        | ERR: Function not implemented (os error 52)     |
-    | /sbin       | ERR: Function not implemented (os error 52)     |
-    | /srv        | ERR: Function not implemented (os error 52)     |
-    | /sys        | ERR: Function not implemented (os error 52)     |
-    | /tmp        | ERR: Function not implemented (os error 52)     |
-    | /usr        | ERR: Function not implemented (os error 52)     |
-    | /var        | ERR: Function not implemented (os error 52)     |
-    | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Function not implemented (os error 52)     |
-    +-------------+-------------------------------------------------+
+        +-------------+-----------------------------------------------+
+        | path        | result                                        |
+        +-------------+-----------------------------------------------+
+        |             | ERR: operation not supported on this platform |
+        | .           | ERR: operation not supported on this platform |
+        | ..          | ERR: operation not supported on this platform |
+        | /           | ERR: operation not supported on this platform |
+        | /bin        | ERR: operation not supported on this platform |
+        | /boot       | ERR: operation not supported on this platform |
+        | /dev        | ERR: operation not supported on this platform |
+        | /etc        | ERR: operation not supported on this platform |
+        | /etc/group  | ERR: operation not supported on this platform |
+        | /etc/passwd | ERR: operation not supported on this platform |
+        | /etc/shadow | ERR: operation not supported on this platform |
+        | /home       | ERR: operation not supported on this platform |
+        | /lib        | ERR: operation not supported on this platform |
+        | /lib64      | ERR: operation not supported on this platform |
+        | /opt        | ERR: operation not supported on this platform |
+        | /proc       | ERR: operation not supported on this platform |
+        | /proc/self  | ERR: operation not supported on this platform |
+        | /root       | ERR: operation not supported on this platform |
+        | /run        | ERR: operation not supported on this platform |
+        | /sbin       | ERR: operation not supported on this platform |
+        | /srv        | ERR: operation not supported on this platform |
+        | /sys        | ERR: operation not supported on this platform |
+        | /tmp        | ERR: operation not supported on this platform |
+        | /usr        | ERR: operation not supported on this platform |
+        | /var        | ERR: operation not supported on this platform |
+        | \0          | ERR: operation not supported on this platform |
+        | /x/..       | ERR: operation not supported on this platform |
+        +-------------+-----------------------------------------------+
+
     ",
     );
 }
