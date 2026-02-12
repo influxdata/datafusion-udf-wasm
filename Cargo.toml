@@ -56,7 +56,7 @@ wasmtime-wasi-http = { version = "41.0.3", default-features = false, features = 
   "default-send-request"
 ] }
 wasmtime-wasi-io = { version = "41.0.0", default-features = false }
-wit-bindgen = { version = "0.52", default-features = false, features = [
+wit-bindgen = { version = "0.53", default-features = false, features = [
   "macros"
 ] }
 
