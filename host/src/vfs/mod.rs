@@ -735,26 +735,31 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         let base_node = Arc::clone(&base_desc.node);
         let base_flags = base_desc.flags;
 
-        let wants_create = open_flags.contains(OpenFlags::CREATE);
-        let wants_exclusive = open_flags.contains(OpenFlags::EXCLUSIVE);
-        let wants_directory = open_flags.contains(OpenFlags::DIRECTORY);
-        let wants_truncate = open_flags.contains(OpenFlags::TRUNCATE);
+        let create = open_flags.contains(OpenFlags::CREATE);
+        let directory = open_flags.contains(OpenFlags::DIRECTORY);
+        let exclusive = open_flags.contains(OpenFlags::EXCLUSIVE);
+        let truncate = open_flags.contains(OpenFlags::TRUNCATE);
 
         // Per POSIX: O_CREAT only creates regular files, not directories.
         // https://github.com/WebAssembly/WASI/blob/184b0c0e9fd437e5e5601d6e327a28feddbbd7f7/proposals/filesystem/wit/types.wit#L145-L146
         // "If O_CREAT and O_DIRECTORY are set and the requested access mode is neither
         // O_WRONLY nor O_RDWR, the result is unspecified."
         // We choose to disallow this combination entirely.
-        if wants_create && wants_directory {
+        if create && directory {
             return Err(FsError::trap(ErrorCode::Invalid));
         }
 
         // Try to resolve the path to an existing node
         let existing = self.get_node_from_start(&path, Arc::clone(&base_node));
 
-        // Per POSIX O_DIRECTORY: "If path resolves to a non-directory file, fail and set errno to [ENOTDIR]."
-        let node = match existing {
-            Ok(node) if wants_directory => {
+        let node = match (existing, create, directory, exclusive, truncate) {
+            (Ok(node), true, _, false, _) => node, // Per POSIX: "If the file exists, O_CREAT has no effect except as noted under O_EXCL below.
+            (Ok(_), true, _, true, _) => {
+                // Per POSIX: "O_CREAT and O_EXCL are set, open() shall fail if the file exists"
+                return Err(FsError::trap(ErrorCode::Exist));
+            }
+            (Ok(node), false, true, false, false) => {
+                // Per POSIX: "O_DIRECTORY: "If path resolves to a non-directory file, fail and set errno to [ENOTDIR]."
                 let guard = node.read().unwrap();
                 if !matches!(guard.kind, VfsNodeKind::Directory { .. }) {
                     return Err(FsError::trap(ErrorCode::NotDirectory));
@@ -762,14 +767,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 drop(guard);
                 node
             }
-            Ok(node) if wants_exclusive => {
-                if wants_create {
-                    // Per POSIX: "O_CREAT and O_EXCL are set, open() shall fail if the file exists"
-                    return Err(FsError::trap(ErrorCode::Exist));
-                }
-                node
-            }
-            Ok(node) if wants_truncate => {
+            (Ok(node), _, _, _, true) => {
                 let mut guard = node.write().unwrap();
                 match &mut guard.kind {
                     VfsNodeKind::File { content } => {
@@ -791,14 +789,15 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 drop(guard);
                 node
             }
-            Ok(node) => node,
-            Err(_) => {
-                if !wants_create {
-                    // Per POSIX [ENOENT]: "O_CREAT is not set and a component of path does
-                    // not name an existing file"
-                    return Err(FsError::trap(ErrorCode::NoEntry));
-                }
-
+            (Ok(node), _, _, _, _) => node,
+            (Err(_), false, _, _, _) => {
+                // "If O_CREAT is not set and the file does not exist, open()
+                // shall fail and set errno to [ENOENT]."
+                return Err(FsError::trap(ErrorCode::NoEntry));
+            }
+            (Err(_), true, _, _, _) => {
+                // "If O_CREAT is set and the file does not exist, it shall be
+                // created as a regular file with permissions"
                 if !base_flags.contains(DescriptorFlags::MUTATE_DIRECTORY) {
                     return Err(FsError::trap(ErrorCode::ReadOnly));
                 }
@@ -1780,7 +1779,7 @@ mod tests {
                     desc,
                     PathFlags::empty(),
                     "existingfile".to_string(),
-                    OpenFlags::CREATE | OpenFlags::TRUNCATE,
+                    OpenFlags::TRUNCATE,
                     DescriptorFlags::READ | DescriptorFlags::WRITE,
                 )
                 .await;
