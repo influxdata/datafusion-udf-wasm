@@ -79,10 +79,14 @@
 use std::{hint::black_box, io::Write, sync::Arc};
 
 use arrow::{
-    array::Int64Array,
+    array::{ArrayRef, GenericStringBuilder, Int64Array, StringArray},
     datatypes::{DataType, Field},
 };
-use datafusion_common::{Result as DataFusionResult, cast::as_int64_array, config::ConfigOptions};
+use datafusion_common::{
+    Result as DataFusionResult,
+    cast::{as_int64_array, as_string_array},
+    config::ConfigOptions,
+};
 use datafusion_execution::memory_pool::UnboundedMemoryPool;
 use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility,
@@ -162,6 +166,75 @@ impl AsyncScalarUDFImpl for AddOne {
     }
 }
 
+/// UDF that implements "sub str".
+#[derive(Debug, PartialEq, Eq, Hash)]
+pub(crate) struct SubStr {
+    /// Signature of the UDF.
+    ///
+    /// We store this here because [`ScalarUDFImpl::signature`] requires us to return a reference.
+    signature: Signature,
+}
+
+impl Default for SubStr {
+    fn default() -> Self {
+        Self {
+            signature: Signature::uniform(1, vec![DataType::Utf8], Volatility::Immutable),
+        }
+    }
+}
+
+impl ScalarUDFImpl for SubStr {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        "sub_str"
+    }
+
+    fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
+    fn return_type(&self, _arg_types: &[DataType]) -> DataFusionResult<DataType> {
+        Ok(DataType::Utf8)
+    }
+
+    fn invoke_with_args(&self, _args: ScalarFunctionArgs) -> DataFusionResult<ColumnarValue> {
+        unimplemented!()
+    }
+}
+
+#[async_trait]
+impl AsyncScalarUDFImpl for SubStr {
+    async fn invoke_async_with_args(
+        &self,
+        args: ScalarFunctionArgs,
+    ) -> DataFusionResult<ColumnarValue> {
+        let ScalarFunctionArgs {
+            args,
+            arg_fields: _,
+            number_rows: _,
+            return_field: _,
+            config_options: _,
+        } = args;
+
+        let ColumnarValue::Array(array) = &args[0] else {
+            unreachable!()
+        };
+        let array = as_string_array(array)?;
+
+        // perform calculation
+        let array = array
+            .iter()
+            .map(|s| s.and_then(|s| s.split(".").nth(1).map(|s| s.to_owned())))
+            .collect::<StringArray>();
+
+        // create output
+        Ok(ColumnarValue::Array(Arc::new(array)))
+    }
+}
+
 /// Compile the WASM component outside of Valgrind, because otherwise the setup step takes like 3+min per benchmark.
 fn build_wasm_module(binary: &[u8]) -> WasmComponentPrecompiled {
     let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_compile"))
@@ -198,6 +271,13 @@ fn build_wasm_module(binary: &[u8]) -> WasmComponentPrecompiled {
     res.unwrap()
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Payload {
+    AddOne,
+    SubStr,
+}
+
+#[derive(Debug, Clone, Copy)]
 enum Mode {
     Native,
     Wasm,
@@ -217,21 +297,28 @@ struct SetupLeftovers {
 }
 
 impl Setup {
-    fn new(mode: Mode, batch_size: usize, num_batches: usize) -> Self {
+    fn new(payload: Payload, mode: Mode, batch_size: usize, num_batches: usize) -> Self {
         let mut config_options = ConfigOptions::default();
         config_options.execution.batch_size = batch_size;
         let config_options = Arc::new(config_options);
 
         let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
             .build()
             .unwrap();
 
         let udf = match mode {
-            Mode::Native => Arc::new(AddOne::default()) as Arc<dyn AsyncScalarUDFImpl>,
+            Mode::Native => match payload {
+                Payload::AddOne => Arc::new(AddOne::default()) as Arc<dyn AsyncScalarUDFImpl>,
+                Payload::SubStr => Arc::new(SubStr::default()) as Arc<dyn AsyncScalarUDFImpl>,
+            },
             Mode::Wasm => {
                 let udf = rt.block_on(async {
-                    let component =
-                        build_wasm_module(datafusion_udf_wasm_bundle::BIN_EXAMPLE_ADD_ONE);
+                    let binary = match payload {
+                        Payload::AddOne => datafusion_udf_wasm_bundle::BIN_EXAMPLE_ADD_ONE,
+                        Payload::SubStr => datafusion_udf_wasm_bundle::BIN_EXAMPLE_SUB_STR,
+                    };
+                    let component = build_wasm_module(binary);
 
                     WasmScalarUdf::new(
                         &component,
@@ -252,16 +339,30 @@ impl Setup {
                 let udf = rt.block_on(async {
                     let component = build_wasm_module(datafusion_udf_wasm_bundle::BIN_PYTHON);
 
+                    let code = match payload {
+                        Payload::AddOne => {
+                            "
+def add_one(a: int) -> int:
+    return a + 1
+"
+                        }
+                        Payload::SubStr => {
+                            "
+def add_one(a: str) -> str | None:
+    try:
+        return a.split('.')[1]
+    except IndexError:
+        return None
+"
+                        }
+                    };
+
                     WasmScalarUdf::new(
                         &component,
                         &Default::default(),
                         Handle::current(),
                         &(Arc::new(UnboundedMemoryPool::default()) as _),
-                        "
-def add_one(a: int) -> int:
-    return a + 1
-"
-                        .to_owned(),
+                        code.to_owned(),
                     )
                     .await
                     .unwrap()
@@ -273,14 +374,60 @@ def add_one(a: int) -> int:
             }
         };
 
-        let mut input_gen = (0..).map(|x| (x % 2 == 0).then_some(x as i64));
-        let arg_field = Arc::new(Field::new("a", DataType::Int64, true));
-        let return_field = Arc::new(Field::new("r", DataType::Int64, true));
+        let mut array_gen: Box<dyn FnMut() -> ArrayRef> = match payload {
+            Payload::AddOne => {
+                let mut input_gen = (0..).map(|x| (x % 2 == 0).then_some(x as i64));
+
+                Box::new(move || Arc::new(Int64Array::from_iter((&mut input_gen).take(batch_size))))
+            }
+            Payload::SubStr => {
+                let mut char_gen = ('a'..='z').cycle();
+                // The cost model says that the cost per row should be roughly constant. Hence, we shall use a constant string length.
+                const SUB_STRING_LEN: usize = 97;
+                let mut string_gen =
+                    move || (&mut char_gen).take(SUB_STRING_LEN).collect::<String>();
+
+                let mut input_gen = (0..).map(move |x| match x % 4 {
+                    0 => None,
+                    1 => Some(string_gen()),
+                    2 => Some(format!("{}.{}", string_gen(), string_gen())),
+                    3 => Some(format!(
+                        "{}.{}.{}",
+                        string_gen(),
+                        string_gen(),
+                        string_gen()
+                    )),
+                    _ => unreachable!(),
+                });
+
+                Box::new(move || {
+                    // Collect strings first so we can allocate the string array with exact capacities. This is
+                    // important so that our cost model makes sense.
+                    let data = (&mut input_gen).take(batch_size).collect::<Vec<_>>();
+                    let mut builder = GenericStringBuilder::<i32>::with_capacity(
+                        data.len(),
+                        data.iter()
+                            .map(|maybe_str| {
+                                maybe_str.as_ref().map(|s| s.len()).unwrap_or_default()
+                            })
+                            .sum(),
+                    );
+                    builder.extend(data);
+                    Arc::new(builder.finish())
+                })
+            }
+        };
+
+        let dt = match payload {
+            Payload::AddOne => DataType::Int64,
+            Payload::SubStr => DataType::Utf8,
+        };
+        let arg_field = Arc::new(Field::new("a", dt.clone(), true));
+        let return_field = Arc::new(Field::new("r", dt, true));
+
         let batch_args = (0..num_batches)
             .map(|_| ScalarFunctionArgs {
-                args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter(
-                    (&mut input_gen).take(batch_size),
-                )))],
+                args: vec![ColumnarValue::Array(array_gen())],
                 arg_fields: vec![Arc::clone(&arg_field)],
                 number_rows: batch_size,
                 return_field: Arc::clone(&return_field),
@@ -318,38 +465,46 @@ mod actual_benchmark {
 
     /// Instantiate benchmarks for given mode.
     macro_rules! impl_benchmark {
-        ($mode:ident, $bench_name:ident) => {
+        ($payload:ident, $mode:ident, $bench_name:ident) => {
             #[library_benchmark(setup = Setup::new, teardown=drop)]
-            #[bench::batchsize_0_batches_0(Mode::$mode, 0, 0)]
-            #[bench::batchsize_0_batches_1(Mode::$mode, 0, 1)]
-            #[bench::batchsize_0_batches_2(Mode::$mode, 0, 2)]
-            #[bench::batchsize_0_batches_3(Mode::$mode, 0, 3)]
-            #[bench::batchsize_8192_batches_0(Mode::$mode, 8192, 0)]
-            #[bench::batchsize_8192_batches_1(Mode::$mode, 8192, 1)]
-            #[bench::batchsize_8192_batches_2(Mode::$mode, 8192, 2)]
-            #[bench::batchsize_8192_batches_3(Mode::$mode, 8192, 3)]
-            #[bench::batchsize_16384_batches_0(Mode::$mode, 16384, 0)]
-            #[bench::batchsize_16384_batches_1(Mode::$mode, 16384, 1)]
-            #[bench::batchsize_16384_batches_2(Mode::$mode, 16384, 2)]
-            #[bench::batchsize_16384_batches_3(Mode::$mode, 16384, 3)]
-            #[bench::batchsize_24576_batches_0(Mode::$mode, 24576, 0)]
-            #[bench::batchsize_24576_batches_1(Mode::$mode, 24576, 1)]
-            #[bench::batchsize_24576_batches_2(Mode::$mode, 24576, 2)]
-            #[bench::batchsize_24576_batches_3(Mode::$mode, 24576, 3)]
+            #[bench::batchsize_0_batches_0(Payload::$payload, Mode::$mode, 0, 0)]
+            #[bench::batchsize_0_batches_1(Payload::$payload, Mode::$mode, 0, 1)]
+            #[bench::batchsize_0_batches_2(Payload::$payload, Mode::$mode, 0, 2)]
+            #[bench::batchsize_0_batches_3(Payload::$payload, Mode::$mode, 0, 3)]
+            #[bench::batchsize_8192_batches_0(Payload::$payload, Mode::$mode, 8192, 0)]
+            #[bench::batchsize_8192_batches_1(Payload::$payload, Mode::$mode, 8192, 1)]
+            #[bench::batchsize_8192_batches_2(Payload::$payload, Mode::$mode, 8192, 2)]
+            #[bench::batchsize_8192_batches_3(Payload::$payload, Mode::$mode, 8192, 3)]
+            #[bench::batchsize_16384_batches_0(Payload::$payload, Mode::$mode, 16384, 0)]
+            #[bench::batchsize_16384_batches_1(Payload::$payload, Mode::$mode, 16384, 1)]
+            #[bench::batchsize_16384_batches_2(Payload::$payload, Mode::$mode, 16384, 2)]
+            #[bench::batchsize_16384_batches_3(Payload::$payload, Mode::$mode, 16384, 3)]
+            #[bench::batchsize_24576_batches_0(Payload::$payload, Mode::$mode, 24576, 0)]
+            #[bench::batchsize_24576_batches_1(Payload::$payload, Mode::$mode, 24576, 1)]
+            #[bench::batchsize_24576_batches_2(Payload::$payload, Mode::$mode, 24576, 2)]
+            #[bench::batchsize_24576_batches_3(Payload::$payload, Mode::$mode, 24576, 3)]
             fn $bench_name(setup: Setup) -> SetupLeftovers {
                 setup.run()
             }
         };
     }
 
-    impl_benchmark!(Native, bench_native);
-    impl_benchmark!(Wasm, bench_wasm);
-    impl_benchmark!(Python, bench_python);
+    impl_benchmark!(AddOne, Native, bench_addone_native);
+    impl_benchmark!(AddOne, Wasm, bench_addone_wasm);
+    impl_benchmark!(AddOne, Python, bench_addone_python);
+    impl_benchmark!(SubStr, Native, bench_substr_native);
+    impl_benchmark!(SubStr, Wasm, bench_substr_wasm);
+    impl_benchmark!(SubStr, Python, bench_substr_python);
 
     library_benchmark_group!(
         name = add_one;
         compare_by_id = true;
-        benchmarks = bench_native, bench_wasm, bench_python
+        benchmarks = bench_addone_native, bench_addone_wasm, bench_addone_python
+    );
+    library_benchmark_group!(
+        name = sub_str;
+        compare_by_id = true;
+        benchmarks = bench_substr_native, bench_substr_wasm, bench_substr_python
     );
 
     main!(
@@ -360,7 +515,7 @@ mod actual_benchmark {
                 "--trace-children=no",
             ]);
         ;
-        library_benchmark_groups = add_one
+        library_benchmark_groups = add_one, sub_str
     );
 
     // re-export `main`
@@ -375,14 +530,12 @@ fn main() {
         let batch_size = 2;
         let num_batches = 1;
 
-        println!("native");
-        Setup::new(Mode::Native, batch_size, num_batches).run();
-
-        println!("wasm");
-        Setup::new(Mode::Wasm, batch_size, num_batches).run();
-
-        println!("python");
-        Setup::new(Mode::Python, batch_size, num_batches).run();
+        for payload in [Payload::AddOne, Payload::SubStr] {
+            for mode in [Mode::Native, Mode::Wasm, Mode::Python] {
+                println!("payload={payload:?} mode={mode:?}");
+                Setup::new(payload, mode, batch_size, num_batches).run();
+            }
+        }
     } else {
         actual_benchmark::pub_main();
     }
