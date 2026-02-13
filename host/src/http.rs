@@ -64,18 +64,32 @@ pub struct HttpRequestMatcher {
 }
 
 /// Allow-list requests.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct AllowCertainHttpRequests {
     /// Set of all matchers.
     ///
     /// If ANY of them matches, the request will be allowed.
     matchers: HashSet<HttpRequestMatcher>,
+
+    /// Set of all allowed paths.
+    ///
+    /// The request path must start with one of these paths to be allowed.
+    allowed_paths: AllowHttpRequestPath,
+}
+
+impl Default for AllowCertainHttpRequests {
+    fn default() -> Self {
+        Self::new(vec!["/".to_string()])
+    }
 }
 
 impl AllowCertainHttpRequests {
     /// Create new, empty request matcher.
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(allowed_paths: Vec<String>) -> Self {
+        Self {
+            matchers: HashSet::new(),
+            allowed_paths: AllowHttpRequestPath::new(allowed_paths),
+        }
     }
 
     /// Allow given request.
@@ -90,6 +104,10 @@ impl HttpRequestValidator for AllowCertainHttpRequests {
         request: &hyper::Request<HyperOutgoingBody>,
         use_tls: bool,
     ) -> Result<(), HttpRequestRejected> {
+        if !self.allowed_paths.is_allowed(request.uri().path()) {
+            return Err(HttpRequestRejected);
+        }
+
         let matcher = HttpRequestMatcher {
             method: request.method().clone(),
             host: request
@@ -105,6 +123,43 @@ impl HttpRequestValidator for AllowCertainHttpRequests {
         };
 
         if self.matchers.contains(&matcher) {
+            Ok(())
+        } else {
+            Err(HttpRequestRejected)
+        }
+    }
+}
+
+/// Restrict HTTP request paths.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct AllowHttpRequestPath {
+    /// Allowed paths.
+    pub allowed_paths: Vec<String>,
+}
+
+impl AllowHttpRequestPath {
+    /// Create new path allow-list.
+    pub(crate) fn new(allowed_paths: Vec<String>) -> Self {
+        Self { allowed_paths }
+    }
+
+    /// Check if given path is allowed.
+    pub(crate) fn is_allowed(&self, path: &str) -> bool {
+        self.allowed_paths
+            .iter()
+            .any(|allowed| path.starts_with(allowed))
+    }
+}
+
+impl HttpRequestValidator for AllowHttpRequestPath {
+    fn validate(
+        &self,
+        request: &hyper::Request<HyperOutgoingBody>,
+        _use_tls: bool,
+    ) -> Result<(), HttpRequestRejected> {
+        let path = request.uri().path_and_query().map_or("", |pq| pq.as_str());
+
+        if self.is_allowed(path) {
             Ok(())
         } else {
             Err(HttpRequestRejected)
@@ -333,6 +388,41 @@ mod test {
                 policy.validate(&request_with_port, true),
                 result_with_port_with_tls,
             );
+        }
+    }
+
+    #[test]
+    fn restrict_paths() {
+        let policy =
+            AllowHttpRequestPath::new(vec!["/allowed".to_string(), "/also/allowed".to_string()]);
+
+        struct Case {
+            path: &'static str,
+            result: Result<(), HttpRequestRejected>,
+        }
+
+        let cases = [
+            Case {
+                path: "/allowed",
+                result: Ok(()),
+            },
+            Case {
+                path: "/also/allowed",
+                result: Ok(()),
+            },
+            Case {
+                path: "/not/allowed",
+                result: Err(HttpRequestRejected),
+            },
+        ];
+
+        for case in cases {
+            let request = hyper::Request::builder()
+                .uri(case.path)
+                .body(Default::default())
+                .unwrap();
+            let result = policy.validate(&request, false);
+            assert_eq!(result, case.result);
         }
     }
 }
