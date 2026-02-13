@@ -1,7 +1,7 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
 use arrow::{
-    array::{Array, Int64Array},
+    array::{Array, Int64Array, StringArray},
     datatypes::{DataType, Field},
 };
 use datafusion_common::ScalarValue;
@@ -28,7 +28,7 @@ use crate::integration_tests::test_utils::ColumnarValueExt;
 // incompatible with the current single-threaded tokio runtime used in tests.
 #[tokio::test(flavor = "multi_thread")]
 async fn test_add_one() {
-    let udf = udf().await;
+    let udf = udf_add_one().await;
 
     assert_eq!(udf.name(), "add_one");
 
@@ -80,9 +80,69 @@ async fn test_add_one() {
     assert_eq!(scalar, ScalarValue::Int64(Some(4)));
 }
 
+// FIXME: remove `multi_thread` flavor.
+//
+// This test relies on a non-exact function signature to verify error handling
+// in `return_type``. [WasmScalarUdf::return_type](ScalarUdfImpl::return_type)
+// is *not* async, and will need to compute the return type if the function
+// signature is not exact, which effectively means it will block; which is
+// incompatible with the current single-threaded tokio runtime used in tests.
+#[tokio::test(flavor = "multi_thread")]
+async fn test_sub_str() {
+    let udf = udf_sub_str().await;
+
+    assert_eq!(udf.name(), "sub_str");
+
+    assert_eq!(
+        udf.signature(),
+        &Signature::uniform(1, vec![DataType::Utf8], Volatility::Immutable),
+    );
+
+    assert_eq!(udf.return_type(&[DataType::Utf8]).unwrap(), DataType::Utf8,);
+    insta::assert_snapshot!(
+        udf.return_type(&[]).unwrap_err(),
+        @"Error during planning: sub_str expects exactly one argument",
+    );
+
+    let array = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter([
+                Some("foo".to_owned()),
+                None,
+                Some("foo.bar".to_owned()),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Utf8, true))],
+            number_rows: 3,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap()
+        .unwrap_array();
+    assert_eq!(
+        array.as_ref(),
+        &StringArray::from_iter([None, None, Some("bar".to_owned())]) as &dyn Array,
+    );
+
+    let scalar = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(
+                "foo.bar.baz".to_owned(),
+            )))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Utf8, true))],
+            number_rows: 3,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap()
+        .unwrap_scalar();
+    assert_eq!(scalar, ScalarValue::Utf8(Some("bar".to_owned())));
+}
+
 #[tokio::test]
 async fn test_invoke_with_args_returns_error() {
-    let udf = udf().await;
+    let udf = udf_add_one().await;
 
     let result = udf.invoke_with_args(ScalarFunctionArgs {
         args: vec![ColumnarValue::Scalar(ScalarValue::Int64(Some(3)))],
@@ -105,7 +165,7 @@ fn test_return_type_outside_tokio_context() {
     let rt = tokio::runtime::Builder::new_current_thread()
         .build()
         .unwrap();
-    let udf = rt.block_on(udf());
+    let udf = rt.block_on(udf_add_one());
 
     let err = udf.return_type(&[]).unwrap_err();
     insta::assert_snapshot!(
@@ -120,7 +180,7 @@ fn test_return_type_outside_tokio_context() {
 
 #[tokio::test]
 async fn test_return_type_no_multithread_runtime() {
-    let udf = udf().await;
+    let udf = udf_add_one().await;
 
     let err = udf.return_type(&[]).unwrap_err();
     insta::assert_snapshot!(
@@ -131,7 +191,7 @@ async fn test_return_type_no_multithread_runtime() {
 
 #[tokio::test]
 async fn test_stderr_is_included_in_mem() {
-    let component = component().await;
+    let component = component_add_one().await;
     let err = WasmScalarUdf::new(
         component,
         &WasmPermissions::default().with_stderr_bytes(10_000_001),
@@ -150,7 +210,7 @@ async fn test_stderr_is_included_in_mem() {
 
 #[tokio::test]
 async fn test_component_initial_mem_is_included_in_mem() {
-    let component = component().await;
+    let component = component_add_one().await;
     let err = WasmScalarUdf::new(
         component,
         &WasmPermissions::default(),
@@ -173,7 +233,7 @@ async fn test_component_initial_mem_is_included_in_mem() {
 
 #[tokio::test]
 async fn test_limit_initial_n_instances() {
-    let component = component().await;
+    let component = component_add_one().await;
     let err = WasmScalarUdf::new(
         component,
         &WasmPermissions::default().with_resource_limits(StaticResourceLimits {
@@ -199,7 +259,7 @@ async fn test_limit_initial_n_instances() {
 
 #[tokio::test]
 async fn test_limit_initial_n_tables() {
-    let component = component().await;
+    let component = component_add_one().await;
     let err = WasmScalarUdf::new(
         component,
         &WasmPermissions::default().with_resource_limits(StaticResourceLimits {
@@ -225,7 +285,7 @@ async fn test_limit_initial_n_tables() {
 
 #[tokio::test]
 async fn test_limit_initial_n_elements_per_table() {
-    let component = component().await;
+    let component = component_add_one().await;
     let err = WasmScalarUdf::new(
         component,
         &WasmPermissions::default().with_resource_limits(StaticResourceLimits {
@@ -251,7 +311,7 @@ async fn test_limit_initial_n_elements_per_table() {
 
 #[tokio::test]
 async fn test_limit_initial_n_memories() {
-    let component = component().await;
+    let component = component_add_one().await;
     let err = WasmScalarUdf::new(
         component,
         &WasmPermissions::default().with_resource_limits(StaticResourceLimits {
@@ -278,7 +338,7 @@ async fn test_limit_initial_n_memories() {
 #[tokio::test]
 async fn test_match_target() {
     let component = WasmComponentPrecompiled::compile(
-        datafusion_udf_wasm_bundle::BIN_EXAMPLE.into(),
+        datafusion_udf_wasm_bundle::BIN_EXAMPLE_ADD_ONE.into(),
         &CompilationFlags {
             target: Some(target_lexicon::HOST.to_string()),
         },
@@ -308,7 +368,7 @@ async fn test_match_target() {
 #[tokio::test]
 async fn test_mismatch_target() {
     let component = WasmComponentPrecompiled::compile(
-        datafusion_udf_wasm_bundle::BIN_EXAMPLE.into(),
+        datafusion_udf_wasm_bundle::BIN_EXAMPLE_ADD_ONE.into(),
         &CompilationFlags {
             // It's unlikely that someone is gonna run the tests on a RISC-V 64bit host, but if they do, we need to
             // make the test code smarter. It won't fail as expected.
@@ -355,7 +415,7 @@ async fn test_mismatch_target() {
 
 #[tokio::test]
 async fn test_undersize_resource_cache() {
-    let component = component().await;
+    let component = component_add_one().await;
     let udf = WasmScalarUdf::new(
         component,
         &WasmPermissions::default().with_max_cached_fields(
@@ -392,13 +452,13 @@ async fn test_undersize_resource_cache() {
     );
 }
 
-async fn component() -> &'static WasmComponentPrecompiled {
+async fn component_add_one() -> &'static WasmComponentPrecompiled {
     static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
 
     COMPONENT
         .get_or_init(async || {
             WasmComponentPrecompiled::compile(
-                datafusion_udf_wasm_bundle::BIN_EXAMPLE.into(),
+                datafusion_udf_wasm_bundle::BIN_EXAMPLE_ADD_ONE.into(),
                 &CompilationFlags::default(),
             )
             .await
@@ -407,8 +467,22 @@ async fn component() -> &'static WasmComponentPrecompiled {
         .await
 }
 
-async fn udf() -> WasmScalarUdf {
-    let component = component().await;
+async fn component_sub_str() -> &'static WasmComponentPrecompiled {
+    static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();
+
+    COMPONENT
+        .get_or_init(async || {
+            WasmComponentPrecompiled::compile(
+                datafusion_udf_wasm_bundle::BIN_EXAMPLE_SUB_STR.into(),
+                &CompilationFlags::default(),
+            )
+            .await
+            .unwrap()
+        })
+        .await
+}
+
+async fn udf(component: &WasmComponentPrecompiled) -> WasmScalarUdf {
     let mut udfs = WasmScalarUdf::new(
         component,
         &Default::default(),
@@ -420,4 +494,12 @@ async fn udf() -> WasmScalarUdf {
     .unwrap();
     assert_eq!(udfs.len(), 1);
     udfs.pop().unwrap()
+}
+
+async fn udf_add_one() -> WasmScalarUdf {
+    udf(component_add_one().await).await
+}
+
+async fn udf_sub_str() -> WasmScalarUdf {
+    udf(component_sub_str().await).await
 }

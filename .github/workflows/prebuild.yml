@@ -41,12 +41,12 @@ jobs:
         uses: ./.github/actions/free-disk-space
 
       - name: Install `uv`
-        uses: astral-sh/setup-uv@803947b9bd8e9f986429fa0c5a41c367cd732b41  # v7
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b  # v7
         with:
           version-file: "python-tooling/pyproject.toml"
 
       - name: Install `just`
-        uses: taiki-e/install-action@650c5ca14212efbbf3e580844b04bdccf68dac31  # v2
+        uses: taiki-e/install-action@1e67dedb5e3c590e1c9d9272ace46ef689da250d  # v2
         with:
           tool: just
 
@@ -62,6 +62,12 @@ jobs:
       - name: build "add one" example (release)
         run: just guests::rust::build-add-one-release
 
+      - name: build "sub str" example (debug)
+        run: just guests::rust::build-sub-str-debug
+
+      - name: build "sub str" example (release)
+        run: just guests::rust::build-sub-str-release
+
       - name: build python guest (debug)
         run: just guests::python::build-debug
 
@@ -74,6 +80,8 @@ jobs:
           mkdir out
           mv target/wasm32-wasip2/debug/examples/add_one.wasm             out/example_add_one.debug.wasm
           mv target/wasm32-wasip2/release/examples/add_one.wasm           out/example_add_one.release.wasm
+          mv target/wasm32-wasip2/debug/examples/sub_str.wasm             out/example_sub_str.debug.wasm
+          mv target/wasm32-wasip2/release/examples/sub_str.wasm           out/example_sub_str.release.wasm
           mv target/wasm32-wasip2/debug/datafusion_udf_wasm_python.wasm   out/datafusion_udf_wasm_python.debug.wasm
           mv target/wasm32-wasip2/release/datafusion_udf_wasm_python.wasm out/datafusion_udf_wasm_python.release.wasm
 
@@ -162,6 +170,7 @@ jobs:
             We build the following targets:
 
             - `example_add_one`: "add one" Rust example UDF
+            - `example_sub_str`: "sub str" Rust example UDF
             - `datafusion_udf_wasm_python`: Guest for Python-based UDFs, bundles CPython.
 
             Each of them is provided in `debug` and `release` builds. The artifacts have the file extension `.wasm`.
