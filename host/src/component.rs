@@ -298,7 +298,7 @@ impl WasmComponentInstance {
         let component = component.hydrate(&engine)?;
 
         // resource/mem limiter
-        let mut limiter = Limiter::new(permissions.resource_limits.clone(), memory_pool);
+        let limiter = Limiter::new(permissions.resource_limits.clone(), memory_pool);
 
         // Create in-memory VFS
         let vfs_state = VfsState::new(permissions.vfs.clone(), limiter.clone());

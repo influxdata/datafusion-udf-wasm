@@ -26,7 +26,7 @@ impl PathSegment {
     /// - the segment MUST NOT contain a NULL character
     /// - the segment MUST NOT contain a slash `/` character
     /// - the segment MUST NOT be empty
-    fn new(s: &str, limit: &VfsLimits) -> Result<Self, LimitExceeded> {
+    pub(crate) fn new(s: &str, limit: &VfsLimits) -> Result<Self, LimitExceeded> {
         assert!(!s.contains('\0'));
         assert!(!s.contains('/'));
         assert!(!s.is_empty());
