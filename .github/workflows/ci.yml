@@ -46,12 +46,8 @@ jobs:
         with:
           tool: cargo-deny,just,tombi,typos
 
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9  # master
-        with:
-          components: clippy, rustfmt
-          toolchain: stable
-          targets: wasm32-wasip2
+      - name: Install Rust toolchain
+        run: rustup toolchain install
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5  # v2.8.2
