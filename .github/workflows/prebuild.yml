@@ -50,11 +50,8 @@ jobs:
         with:
           tool: just
 
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9  # master
-        with:
-          toolchain: stable
-          targets: wasm32-wasip2
+      - name: Install Rust toolchain
+        run: rustup toolchain install
 
       - name: build "add one" example (debug)
         run: just guests::rust::build-add-one-debug
