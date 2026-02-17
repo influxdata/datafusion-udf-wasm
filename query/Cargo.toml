@@ -16,7 +16,7 @@ tokio.workspace = true
 [dev-dependencies]
 datafusion = { workspace = true, features = ["sql"] }
 datafusion-udf-wasm-bundle = { workspace = true, features = ["python"] }
-datafusion-udf-wasm-host = { workspace = true }
+datafusion-udf-wasm-host = { workspace = true, features = ["compiler"] }
 insta.workspace = true
 
 [lints]
