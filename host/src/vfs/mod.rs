@@ -731,6 +731,10 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         open_flags: OpenFlags,
         flags: DescriptorFlags,
     ) -> FsResult<Resource<Descriptor>> {
+        if path.is_empty() {
+            return Err(FsError::trap(ErrorCode::Invalid));
+        }
+
         let base_desc = self.get_descriptor(self_)?;
         let base_node = Arc::clone(&base_desc.node);
         let base_flags = base_desc.flags;
