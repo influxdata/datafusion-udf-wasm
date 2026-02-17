@@ -42,16 +42,12 @@ jobs:
           echo "LD_LIBRARY_PATH=${path_bin}/../lib" >> "$GITHUB_ENV"
 
       - name: Install `cargo-deny` & `just` & `tombi` & 'typos'
-        uses: taiki-e/install-action@1e67dedb5e3c590e1c9d9272ace46ef689da250d  # v2
+        uses: taiki-e/install-action@f8d25fb8a2df08dcd3cead89780d572767b8655f  # v2
         with:
           tool: cargo-deny,just,tombi,typos
 
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9  # master
-        with:
-          components: clippy, rustfmt
-          toolchain: stable
-          targets: wasm32-wasip2
+      - name: Install Rust toolchain
+        run: rustup toolchain install
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5  # v2.8.2

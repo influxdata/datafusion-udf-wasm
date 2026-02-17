@@ -46,15 +46,12 @@ jobs:
           version-file: "python-tooling/pyproject.toml"
 
       - name: Install `just`
-        uses: taiki-e/install-action@1e67dedb5e3c590e1c9d9272ace46ef689da250d  # v2
+        uses: taiki-e/install-action@f8d25fb8a2df08dcd3cead89780d572767b8655f  # v2
         with:
           tool: just
 
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9  # master
-        with:
-          toolchain: stable
-          targets: wasm32-wasip2
+      - name: Install Rust toolchain
+        run: rustup toolchain install
 
       - name: build "add one" example (debug)
         run: just guests::rust::build-add-one-debug

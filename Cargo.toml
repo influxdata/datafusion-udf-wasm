@@ -36,7 +36,7 @@ http = { version = "1.4.0", default-features = false }
 hyper = { version = "1.8", default-features = false }
 insta = { version = "1.46.3", "default-features" = false }
 log = { version = "0.4.29", default-features = false }
-pyo3 = { version = "0.28.0", default-features = false, features = ["macros"] }
+pyo3 = { version = "0.28.1", default-features = false, features = ["macros"] }
 regex = { version = "1", default-features = false }
 sqlparser = { version = "0.59.0", default-features = false, features = [
   "std",
@@ -46,7 +46,7 @@ tar = { version = "0.4.44", default-features = false }
 target-lexicon = { version = "0.13", default-features = false }
 tempfile = { version = "3.25.0", default-features = false }
 tokio = { version = "1.49.0", default-features = false }
-uuid = { version = "1.20.0", default-features = false, features = ["v4"] }
+uuid = { version = "1.21.0", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
 wasmtime = { version = "41.0.3", default-features = false, features = [
   "async",
