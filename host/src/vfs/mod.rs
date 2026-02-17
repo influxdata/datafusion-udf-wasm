@@ -753,6 +753,11 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
             return Err(FsError::trap(ErrorCode::Invalid));
         }
 
+        if directory && flags.contains(DescriptorFlags::WRITE) {
+            // Per POSIX: "O_DIRECTORY: "If path resolves to a non-directory file, fail and set errno to [ENOTDIR]."
+            return Err(FsError::trap(ErrorCode::IsDirectory));
+        }
+
         // Try to resolve the path to an existing node
         let existing = self.get_node_from_start(&path, Arc::clone(&base_node));
 
