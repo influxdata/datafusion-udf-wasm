@@ -753,7 +753,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         let existing = self.get_node_from_start(&path, Arc::clone(&base_node));
 
         let node = match (existing, create, directory, exclusive, truncate) {
-            (Ok(node), true, _, false, _) => node, // Per POSIX: "If the file exists, O_CREAT has no effect except as noted under O_EXCL below.
+            (Ok(node), true, _, false, false) => node, // Per POSIX: "If the file exists, O_CREAT has no effect except as noted under O_EXCL below.
             (Ok(_), true, _, true, _) => {
                 // Per POSIX: "O_CREAT and O_EXCL are set, open() shall fail if the file exists"
                 return Err(FsError::trap(ErrorCode::Exist));
