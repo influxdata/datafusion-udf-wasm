@@ -1,15 +1,13 @@
 import argparse
 import json
 import re
-
 from enum import Enum
 from typing import Callable
 
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import StandardScaler
-
 import numpy as np
 import polars as pl
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
 
 
 class Metric(Enum):
@@ -42,11 +40,12 @@ def parse_data(file: str, metric: Metric) -> pl.DataFrame:
     """
     Parse data from JSON file into a DataFrame.
     """
-    fn_re = re.compile("bench_(?P<mode>[a-z]+)")
-    id_re = re.compile("batchsize_(?P<batchsize>[0-9]+)_batches_(?P<batches>[0-9]+)")
+    fn_re = re.compile("^bench_(?P<payload>[a-z]+)_(?P<mode>[a-z]+)$")
+    id_re = re.compile("^batchsize_(?P<batchsize>[0-9]+)_batches_(?P<batches>[0-9]+)$")
 
     valgrind_metric = metric.valgrind_name()
 
+    payload = []
     mode = []
     batchsize = []
     batches = []
@@ -58,6 +57,7 @@ def parse_data(file: str, metric: Metric) -> pl.DataFrame:
 
             fn_parsed = fn_re.match(data["function_name"])
             assert fn_parsed
+            payload.append(fn_parsed.group("payload"))
             mode.append(fn_parsed.group("mode"))
 
             id_parsed = id_re.match(data["id"])
@@ -73,7 +73,13 @@ def parse_data(file: str, metric: Metric) -> pl.DataFrame:
             )
 
     return pl.DataFrame(
-        {"mode": mode, "batchsize": batchsize, "batches": batches, "cost": cost}
+        {
+            "payload": payload,
+            "mode": mode,
+            "batchsize": batchsize,
+            "batches": batches,
+            "cost": cost,
+        }
     )
 
 
@@ -86,79 +92,99 @@ def regression(df: pl.DataFrame) -> pl.DataFrame:
     #    = c_row * totalrows + c_call * batches + c_cached
     df = df.with_columns((pl.col("batchsize") * pl.col("batches")).alias("totalrows"))
 
+    payload = []
     mode = []
     cost_row = []
     cost_call = []
     cost_cached = []
     score = []
 
-    for m in sorted(df["mode"].unique()):
-        df_sub = df.filter(pl.col("mode") == m)
-        X = df_sub.select("totalrows", "batches").to_numpy()
-        y = df_sub["cost"].to_numpy()
+    for p in sorted(df["payload"].unique()):
+        for m in sorted(df["mode"].unique()):
+            df_sub = df.filter((pl.col("payload") == p) & (pl.col("mode") == m))
+            if len(df_sub) == 0:
+                continue
 
-        # Add a "fake" parameter (a constant column of ones) so we can treat the
-        # intercept as just another coefficient. scikit-learn's LinearRegression
-        # only enforces the positive=True constraint on coefficients, not on the
-        # intercept, so we disable fit_intercept and instead learn this constant
-        # term as a regular coefficient, then later scale it back and interpret it
-        # as the intercept.
-        X = np.hstack([X, np.ones((X.shape[0], 1))])
+            X = df_sub.select("totalrows", "batches").to_numpy()
+            y = df_sub["cost"].to_numpy()
 
-        # input dimensions have different scales
-        scaler = StandardScaler(with_mean=False)
-        X = scaler.fit_transform(X)
+            # Add a "fake" parameter (a constant column of ones) so we can treat the
+            # intercept as just another coefficient. scikit-learn's LinearRegression
+            # only enforces the positive=True constraint on coefficients, not on the
+            # intercept, so we disable fit_intercept and instead learn this constant
+            # term as a regular coefficient, then later scale it back and interpret it
+            # as the intercept.
+            X = np.hstack([X, np.ones((X.shape[0], 1))])
 
-        reg = LinearRegression(positive=True, fit_intercept=False).fit(X, y)
-        assert reg.intercept_ == 0
+            # input dimensions have different scales
+            scaler = StandardScaler(with_mean=False)
+            X = scaler.fit_transform(X)
 
-        # map coefficients and intercept back through the scaler
-        coef = reg.coef_ / scaler.scale_
+            reg = LinearRegression(positive=True, fit_intercept=False).fit(X, y)
+            assert reg.intercept_ == 0
 
-        # disentangle our fake parameter/intercept
-        actual_coef = coef[:-1]
-        actual_intercept = coef[-1]
+            # map coefficients and intercept back through the scaler
+            coef = reg.coef_ / scaler.scale_
 
-        mode.append(m)
-        cost_row.append(int(actual_coef[0]))
-        cost_call.append(int(actual_coef[1]))
-        cost_cached.append(int(actual_intercept))
+            # disentangle our fake parameter/intercept
+            actual_coef = coef[:-1]
+            actual_intercept = coef[-1]
 
-        score.append(reg.score(X, y))
+            payload.append(p)
+            mode.append(m)
+            cost_row.append(int(actual_coef[0]))
+            cost_call.append(int(actual_coef[1]))
+            cost_cached.append(int(actual_intercept))
+
+            score.append(reg.score(X, y))
 
     return pl.DataFrame(
         {
+            "payload": payload,
             "mode": mode,
             "cost_row": cost_row,
             "cost_call": cost_call,
             "cost_cached": cost_cached,
             "score": score,
         }
-    ).sort("cost_row")
+    ).sort("payload", "cost_row")
 
 
 def calc_delta(df: pl.DataFrame, op: Callable[[int, int], int | float]) -> pl.DataFrame:
     """
     Calculate delta between the regression models of the different modes.
     """
+    payload = []
     baseline = []
     mode = []
     deltas = {col: [] for col in df.columns if col.startswith("cost_")}
 
+    payloads = df["payload"].unique(maintain_order=True)
     modes = df["mode"].unique(maintain_order=True)
-    for m2 in modes:
-        row2 = df.filter(pl.col("mode") == m2).row(0, named=True)
-        for m1 in modes:
-            row1 = df.filter(pl.col("mode") == m1).row(0, named=True)
-            if row1["cost_row"] >= row2["cost_row"]:
+    for p in payloads:
+        df_payload = df.filter(pl.col("payload") == p)
+
+        for m2 in modes:
+            df_sub2 = df_payload.filter(pl.col("mode") == m2)
+            if len(df_sub2) == 0:
                 continue
+            row2 = df_sub2.row(0, named=True)
 
-            baseline.append(m1)
-            mode.append(m2)
-            for col, array in deltas.items():
-                array.append(op(row1[col], row2[col]))
+            for m1 in modes:
+                df_sub1 = df_payload.filter(pl.col("mode") == m1)
+                if len(df_sub1) == 0:
+                    continue
+                row1 = df_sub1.row(0, named=True)
+                if row1["cost_row"] >= row2["cost_row"]:
+                    continue
 
-    out = {"mode": mode, "baseline": baseline}
+                payload.append(p)
+                baseline.append(m1)
+                mode.append(m2)
+                for col, array in deltas.items():
+                    array.append(op(row1[col], row2[col]))
+
+    out = {"payload": payload, "mode": mode, "baseline": baseline}
     out.update(deltas)
     return pl.DataFrame(out)
 
