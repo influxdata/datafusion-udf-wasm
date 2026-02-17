@@ -4,8 +4,8 @@ use arrow::{
     array::{Array, StringArray, StringBuilder},
     datatypes::{DataType, Field},
 };
-use datafusion_common::ScalarValue;
 use datafusion_common::config::ConfigOptions;
+use datafusion_common::{ScalarValue, cast::as_string_array};
 use datafusion_execution::memory_pool::UnboundedMemoryPool;
 use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl,
@@ -676,4 +676,89 @@ def perform_request(url: str) -> str:
         array.as_ref(),
         &StringArray::from_iter([Some("hello world!".to_owned()),]) as &dyn Array,
     );
+}
+
+/// This is the originally observed bug:
+/// When trying to run a normal GET request with `requests`, large responses got truncated.
+#[tokio::test]
+async fn test_large_response_requests() {
+    const CODE: &str = r#"
+import requests
+
+def perform_request(url: str) -> str:
+    return requests.get(url).text
+"#;
+
+    assert_large_response_works(CODE).await;
+}
+
+/// Tests `urllib3` in the same way that `requests` would call it
+#[tokio::test]
+async fn test_large_response_urllib3_reproducer() {
+    const CODE: &str = r#"
+import urllib3
+
+def perform_request(url: str) -> str:
+    resp = urllib3.request("GET", url, preload_content=False, decode_content=False)
+    data = b""
+    for part in resp.stream():
+        data += part
+    return data.decode("utf-8")
+"#;
+
+    assert_large_response_works(CODE).await;
+}
+
+/// Tests `urllib3` with a super simple calling convention.
+#[tokio::test]
+async fn test_large_response_urllib3_plain() {
+    const CODE: &str = r#"
+import urllib3
+
+def perform_request(url: str) -> str:
+    resp = urllib3.request("GET", url)
+    return resp.data.decode("utf-8")
+"#;
+
+    assert_large_response_works(CODE).await;
+}
+
+async fn assert_large_response_works(code: &'static str) {
+    const CONTENT_LEN: usize = 10_000;
+    let content = std::iter::repeat_n('x', CONTENT_LEN).collect::<String>();
+
+    let server = MockServer::start().await;
+    Mock::given(matchers::any())
+        .respond_with(ResponseTemplate::new(200).set_body_string(&content))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut permissions = AllowCertainHttpRequests::new();
+    permissions.allow(HttpRequestMatcher {
+        method: http::Method::GET,
+        host: server.address().ip().to_string().into(),
+        port: server.address().port(),
+    });
+    let udf = python_udf_with_permissions(code, permissions).await;
+
+    let array = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap()
+        .unwrap_array();
+
+    let out = as_string_array(&array)
+        .unwrap()
+        .iter()
+        .next()
+        .unwrap()
+        .unwrap();
+    assert_eq!(out.len(), CONTENT_LEN);
 }
