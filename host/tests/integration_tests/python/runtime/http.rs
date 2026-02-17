@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashSet, io::Write, sync::Arc, time::Duration};
 
 use arrow::{
     array::{Array, StringArray, StringBuilder},
@@ -14,9 +14,10 @@ use datafusion_udf_wasm_host::{
     AllowCertainHttpRequests, HttpRequestMatcher, HttpRequestValidator, WasmPermissions,
     WasmScalarUdf,
 };
+use http::header::{ACCEPT_ENCODING, CONTENT_ENCODING};
 use tokio::runtime::Handle;
 use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
-use wiremock::{Mock, MockServer, ResponseTemplate, matchers};
+use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers};
 
 use crate::integration_tests::{
     python::test_utils::{python_component, python_scalar_udf},
@@ -761,4 +762,151 @@ async fn assert_large_response_works(code: &'static str) {
         .unwrap()
         .unwrap();
     assert_eq!(out.len(), CONTENT_LEN);
+}
+
+#[tokio::test]
+async fn test_compression() {
+    const CODE: &str = r#"
+import requests
+
+def perform_request(url: str) -> str:
+    return requests.get(url).text
+"#;
+
+    const CONTENT: &str = "hello world!";
+
+    let mut paths = Vec::new();
+    let server = MockServer::start().await;
+    for compression in [None]
+        .into_iter()
+        .chain(Compression::all().iter().map(Some))
+    {
+        let path_suffix = compression.map(Compression::as_str).unwrap_or("none");
+        let path = format!("/{path_suffix}");
+        paths.push(path.clone());
+
+        Mock::given(matchers::path(path))
+            .respond_with(move |req: &Request| {
+                // poor man's header parsing
+                //
+                // See:
+                // - https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept-Encoding
+                // - https://developer.mozilla.org/en-US/docs/Glossary/Quality_values
+                let accepted = req
+                    .headers
+                    .get(ACCEPT_ENCODING)
+                    .into_iter()
+                    .flat_map(|v| v.to_str().unwrap().split(","))
+                    .filter_map(|v| {
+                        let v = v.trim();
+
+                        let compression = match v.split_once(";q=") {
+                            Some((compression, q)) => {
+                                let q: f32 = q.parse().unwrap();
+                                assert!((0.0..=1.0).contains(&q));
+                                if q == 0.0 {
+                                    return None;
+                                }
+                                compression
+                            }
+                            None => v,
+                        };
+                        let compression = Compression::try_from(compression).unwrap();
+                        Some(compression)
+                    })
+                    .collect::<HashSet<_>>();
+
+                let mut body_bytes = CONTENT.as_bytes().to_vec();
+                let mut content_encoding = None;
+                if let Some(compression) = compression
+                    && accepted.contains(compression)
+                {
+                    body_bytes = compression.encode(&body_bytes);
+                    content_encoding = Some(compression.as_str());
+                }
+
+                let mut resp = ResponseTemplate::new(200);
+                if let Some(content_encoding) = content_encoding {
+                    resp = resp.append_header(CONTENT_ENCODING, content_encoding);
+                }
+                resp.set_body_raw(body_bytes, "text/plain")
+            })
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+
+    let mut permissions = AllowCertainHttpRequests::new();
+    permissions.allow(HttpRequestMatcher {
+        method: http::Method::GET,
+        host: server.address().ip().to_string().into(),
+        port: server.address().port(),
+    });
+    let udf = python_udf_with_permissions(CODE, permissions).await;
+
+    let array = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter(
+                paths.iter().map(|p| Some(format!("{}{}", server.uri(), p))),
+            )))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: paths.len(),
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap()
+        .unwrap_array();
+
+    assert_eq!(
+        array.as_ref(),
+        &StringArray::from_iter(std::iter::repeat_n(Some(CONTENT.to_owned()), paths.len()))
+            as &dyn Array,
+    );
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Compression {
+    Deflate,
+    Gzip,
+}
+
+impl Compression {
+    fn all() -> &'static [Self] {
+        &[Self::Deflate, Self::Gzip]
+    }
+
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Deflate => "deflate",
+            Self::Gzip => "gzip",
+        }
+    }
+
+    fn encode(&self, data: &[u8]) -> Vec<u8> {
+        match self {
+            Self::Deflate => {
+                let mut enc = flate2::write::DeflateEncoder::new(Vec::new(), Default::default());
+                enc.write_all(data).unwrap();
+                enc.finish().unwrap()
+            }
+            Self::Gzip => {
+                let mut enc = flate2::write::GzEncoder::new(Vec::new(), Default::default());
+                enc.write_all(data).unwrap();
+                enc.finish().unwrap()
+            }
+        }
+    }
+}
+
+impl TryFrom<&str> for Compression {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "deflate" => Ok(Self::Deflate),
+            "gzip" => Ok(Self::Gzip),
+            other => Err(format!("unknown accept-encoding value: `{other}`")),
+        }
+    }
 }

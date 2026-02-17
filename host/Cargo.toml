@@ -39,6 +39,7 @@ datafusion-udf-wasm-bundle = { workspace = true, features = [
   "example",
   "python"
 ] }
+flate2.workspace = true
 gungraun.workspace = true
 insta.workspace = true
 regex.workspace = true

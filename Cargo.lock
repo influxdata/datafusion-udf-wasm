@@ -1443,6 +1443,7 @@ dependencies = [
  "datafusion-expr",
  "datafusion-udf-wasm-arrow2bytes",
  "datafusion-udf-wasm-bundle",
+ "flate2",
  "gungraun",
  "http",
  "hyper",
