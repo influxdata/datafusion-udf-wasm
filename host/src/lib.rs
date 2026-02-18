@@ -23,6 +23,8 @@ pub use crate::component::CompilationFlags;
 #[cfg(test)]
 use datafusion_udf_wasm_bundle as _;
 #[cfg(test)]
+use flate2 as _;
+#[cfg(test)]
 use gungraun as _;
 #[cfg(test)]
 use regex as _;
