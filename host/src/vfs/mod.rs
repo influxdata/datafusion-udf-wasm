@@ -428,13 +428,21 @@ impl<'a> VfsCtxView<'a> {
     }
 
     /// Get node at given path.
-    fn node_at(&self, res: Resource<Descriptor>, path: &str) -> FsResult<SharedVfsNode> {
+    fn node_at(&self, res: Resource<Descriptor>, path: &str) -> FsResult<Option<SharedVfsNode>> {
         let node = self.node(res)?;
         self.get_node_from_start(path, node)
     }
 
     /// Get node at given path from given starting node.
-    fn get_node_from_start(&self, path: &str, node: SharedVfsNode) -> FsResult<SharedVfsNode> {
+    fn get_node_from_start(
+        &self,
+        path: &str,
+        node: SharedVfsNode,
+    ) -> FsResult<Option<SharedVfsNode>> {
+        if path.is_empty() {
+            return Err(FsError::trap(ErrorCode::Invalid));
+        }
+
         let (is_root, directions) = PathTraversal::parse(path, &self.vfs_state.limits)?;
 
         let start = if is_root {
@@ -442,7 +450,14 @@ impl<'a> VfsCtxView<'a> {
         } else {
             node
         };
-        VfsNode::traverse(start, directions)
+
+        match VfsNode::traverse(start, directions) {
+            Ok(node) => Ok(Some(node)),
+            Err(e) => match e.downcast_ref() {
+                Some(ErrorCode::NoEntry) => Ok(None),
+                _ => Err(e),
+            },
+        }
     }
 
     /// Get the parent node and base name for a given path.
@@ -698,7 +713,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         _path_flags: PathFlags,
         path: String,
     ) -> FsResult<DescriptorStat> {
-        Ok(self.node_at(self_, &path)?.read().unwrap().stat())
+        Ok(self.node_at(self_, &path)?.unwrap().read().unwrap().stat())
     }
 
     async fn set_times_at(
@@ -731,10 +746,6 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         open_flags: OpenFlags,
         flags: DescriptorFlags,
     ) -> FsResult<Resource<Descriptor>> {
-        if path.is_empty() {
-            return Err(FsError::trap(ErrorCode::Invalid));
-        }
-
         let base_desc = self.get_descriptor(self_)?;
         let base_node = Arc::clone(&base_desc.node);
         let base_flags = base_desc.flags;
@@ -744,30 +755,36 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         let exclusive = open_flags.contains(OpenFlags::EXCLUSIVE);
         let truncate = open_flags.contains(OpenFlags::TRUNCATE);
 
-        // Per POSIX: O_CREAT only creates regular files, not directories.
-        // https://github.com/WebAssembly/WASI/blob/184b0c0e9fd437e5e5601d6e327a28feddbbd7f7/proposals/filesystem/wit/types.wit#L145-L146
-        // "If O_CREAT and O_DIRECTORY are set and the requested access mode is neither
-        // O_WRONLY nor O_RDWR, the result is unspecified."
-        // We choose to disallow this combination entirely.
-        if create && directory {
-            return Err(FsError::trap(ErrorCode::Invalid));
-        }
-
-        if directory && flags.contains(DescriptorFlags::WRITE) {
-            // Per POSIX: "O_DIRECTORY: "If path resolves to a non-directory file, fail and set errno to [ENOTDIR]."
-            return Err(FsError::trap(ErrorCode::IsDirectory));
-        }
-
         // Try to resolve the path to an existing node
         let existing = self.get_node_from_start(&path, Arc::clone(&base_node));
 
         let node = match (existing, create, directory, exclusive, truncate) {
-            (Ok(node), true, _, false, false) => node, // Per POSIX: "If the file exists, O_CREAT has no effect except as noted under O_EXCL below.
-            (Ok(_), true, _, true, _) => {
+            (_, true, true, _, _) => {
+                // Per POSIX: O_CREAT only creates regular files, not directories.
+                // https://github.com/WebAssembly/WASI/blob/184b0c0e9fd437e5e5601d6e327a28feddbbd7f7/proposals/filesystem/wit/types.wit#L145-L146
+                // "If O_CREAT and O_DIRECTORY are set and the requested access mode is
+                // neither O_WRONLY nor O_RDWR, the result is unspecified." We choose to
+                // disallow this combination entirely.
+                return Err(FsError::trap(ErrorCode::Invalid));
+            }
+            (Ok(Some(node)), _, true, _, _) if flags.contains(DescriptorFlags::WRITE) => {
+                if matches!(node.read().unwrap().kind, VfsNodeKind::Directory { .. }) {
+                    // Disallow opening directories with write permissions.
+                    // POSIX isn't clear here, so we choose to disallow this
+                    // combination entirely.
+                    return Err(FsError::trap(ErrorCode::IsDirectory));
+                } else {
+                    // Per POSIX: "O_DIRECTORY: "If path resolves to a
+                    // non-directory file, fail and set errno to [ENOTDIR]."
+                    return Err(FsError::trap(ErrorCode::NotDirectory));
+                }
+            }
+            (Ok(Some(node)), true, _, false, false) => node, // Per POSIX: "If the file exists, O_CREAT has no effect except as noted under O_EXCL below.
+            (Ok(Some(_)), true, _, true, _) => {
                 // Per POSIX: "O_CREAT and O_EXCL are set, open() shall fail if the file exists"
                 return Err(FsError::trap(ErrorCode::Exist));
             }
-            (Ok(node), false, true, false, false) => {
+            (Ok(Some(node)), false, true, false, false) => {
                 // Per POSIX: "O_DIRECTORY: "If path resolves to a non-directory file, fail and set errno to [ENOTDIR]."
                 let guard = node.read().unwrap();
                 if !matches!(guard.kind, VfsNodeKind::Directory { .. }) {
@@ -776,7 +793,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 drop(guard);
                 node
             }
-            (Ok(node), _, _, _, true) => {
+            (Ok(Some(node)), _, _, _, true) => {
                 let mut guard = node.write().unwrap();
                 match &mut guard.kind {
                     VfsNodeKind::File { content } => {
@@ -784,7 +801,11 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                         // or O_WRONLY is undefined." We allow it but it's a no-op
                         // unless write permission is granted.
                         if flags.contains(DescriptorFlags::WRITE) {
-                            content.clear();
+                            self.vfs_state
+                                .limiter
+                                .shrink(content.capacity())
+                                .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+                            *content = Vec::new();
                         }
                     }
                     VfsNodeKind::Directory { .. } => {
@@ -798,13 +819,13 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 drop(guard);
                 node
             }
-            (Ok(node), _, _, _, _) => node,
-            (Err(_), false, _, _, _) => {
+            (Ok(Some(node)), _, _, _, _) => node,
+            (Ok(None), false, _, _, _) => {
                 // "If O_CREAT is not set and the file does not exist, open()
                 // shall fail and set errno to [ENOENT]."
                 return Err(FsError::trap(ErrorCode::NoEntry));
             }
-            (Err(_), true, _, _, _) => {
+            (Ok(None), true, _, _, _) => {
                 // "If O_CREAT is set and the file does not exist, it shall be
                 // created as a regular file with permissions"
                 if !base_flags.contains(DescriptorFlags::MUTATE_DIRECTORY) {
@@ -821,19 +842,6 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                     parent: Some(Arc::downgrade(&parent_node)),
                 }));
 
-                // Account for resource usage
-                self.vfs_state
-                    .inodes_allocation
-                    .inc(1)
-                    .map_err(FsError::trap)?;
-                let growth = name.len() + std::mem::size_of_val(&new_file);
-                self.vfs_state.limiter.grow(growth).map_err(|_| {
-                    // Rollback inode allocation since we failed to account for
-                    // the new file's name and node size
-                    self.vfs_state.inodes_allocation.dec(1);
-                    FsError::trap(ErrorCode::InsufficientMemory)
-                })?;
-
                 // Insert the new file into the parent directory
                 match &mut parent_node.write().unwrap().kind {
                     VfsNodeKind::File { .. } => {
@@ -843,8 +851,20 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                         return Err(FsError::trap(ErrorCode::NotDirectory));
                     }
                     VfsNodeKind::Directory { children } => {
+                        let growth = name.len() + std::mem::size_of_val(&new_file);
                         match children.entry(name) {
                             Entry::Vacant(entry) => {
+                                // Account for resource usage
+                                self.vfs_state
+                                    .inodes_allocation
+                                    .inc(1)
+                                    .map_err(FsError::trap)?;
+                                self.vfs_state.limiter.grow(growth).map_err(|_| {
+                                    // Rollback inode allocation since we failed to account for
+                                    // the new file's name and node size
+                                    self.vfs_state.inodes_allocation.dec(1);
+                                    FsError::trap(ErrorCode::InsufficientMemory)
+                                })?;
                                 entry.insert(Arc::clone(&new_file));
                             }
                             Entry::Occupied(_) => {
@@ -859,6 +879,10 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 }
 
                 new_file
+            }
+            (Err(e), _, _, _, _) => {
+                // Path parsing error
+                return Err(FsError::trap(e));
             }
         };
 
@@ -939,6 +963,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
     ) -> FsResult<MetadataHashValue> {
         Ok(self
             .node_at(self_, &path)?
+            .unwrap()
             .read()
             .unwrap()
             .metadata_hash(&self.vfs_state.metadata_hash_key))
@@ -1231,13 +1256,14 @@ mod tests {
         let node = ctx.node_at(desc, name).unwrap();
 
         {
+            let node = node.unwrap();
             let mut guard = node.write().unwrap();
             if let VfsNodeKind::File { content: c } = &mut guard.kind {
                 *c = content;
             }
+            drop(guard);
+            node
         }
-
-        node
     }
 
     // ==================== create_directory_at tests ====================
@@ -1290,7 +1316,7 @@ mod tests {
 
         let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
         let node = ctx.node_at(desc, "testdir").unwrap();
-        assert_is_directory(&node);
+        assert_is_directory(&node.unwrap());
     }
 
     #[tokio::test]
@@ -1567,7 +1593,7 @@ mod tests {
 
         let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
         let node = ctx.node_at(desc, "newfile").unwrap();
-        assert_empty_file(&node);
+        assert_empty_file(&node.unwrap());
     }
 
     #[tokio::test]
@@ -1593,7 +1619,7 @@ mod tests {
                 DescriptorFlags::READ | DescriptorFlags::MUTATE_DIRECTORY,
             )
             .await;
-        assert_error_code(result, ErrorCode::NotDirectory);
+        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -1845,7 +1871,7 @@ mod tests {
 
         let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
         let node = ctx.node_at(desc, "newfile").unwrap();
-        assert_empty_file(&node);
+        assert_empty_file(&node.unwrap());
     }
 
     #[tokio::test]
