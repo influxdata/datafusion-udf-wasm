@@ -213,7 +213,7 @@ async fn test_thread() {
     stderr:
 
     thread '<unnamed>' (2) panicked at <FILE>:<LINE>:<ROW>:
-    failed to spawn thread: Error { kind: Unsupported, message: "operation not supported on this platform" }
+    failed to spawn thread: Os { code: 58, kind: Unsupported, message: "Not supported" }
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
     caused by
