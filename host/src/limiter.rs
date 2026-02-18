@@ -89,6 +89,18 @@ impl Limiter {
         })
     }
 
+    /// Shrink memory usage.
+    pub(crate) fn shrink(&self, bytes: usize) -> Result<usize, GrowthError> {
+        let mut self_guard = self
+            .memory_reservation
+            .lock()
+            .expect("memory reservation lock poisoned");
+        self_guard.try_shrink(bytes).map_err(|e| {
+            log::debug!("failed to shrink memory: {e}");
+            GrowthError(e)
+        })
+    }
+
     /// Get current allocation size.
     pub(crate) fn size(&self) -> usize {
         self.memory_reservation
