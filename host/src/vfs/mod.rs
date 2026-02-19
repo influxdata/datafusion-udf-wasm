@@ -713,7 +713,12 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         _path_flags: PathFlags,
         path: String,
     ) -> FsResult<DescriptorStat> {
-        Ok(self.node_at(self_, &path)?.unwrap().read().unwrap().stat())
+        let node = match self.node_at(self_, &path)? {
+            Some(node) => node,
+            None => return Err(FsError::trap(ErrorCode::NoEntry)),
+        };
+
+        Ok(node.read().unwrap().stat())
     }
 
     async fn set_times_at(
