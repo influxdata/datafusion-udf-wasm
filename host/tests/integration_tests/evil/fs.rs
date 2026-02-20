@@ -91,114 +91,114 @@ async fn test_copy() {
     +-------------+-------------+-------------------------------------------------+
     | from        | to          | output                                          |
     +-------------+-------------+-------------------------------------------------+
-    |             |             | ERR: Read-only file system (os error 69)        |
-    |             | .           | ERR: Read-only file system (os error 69)        |
-    |             | ..          | ERR: Read-only file system (os error 69)        |
-    |             | /           | ERR: Read-only file system (os error 69)        |
-    |             | /bin        | ERR: Read-only file system (os error 69)        |
-    |             | /boot       | ERR: Read-only file system (os error 69)        |
-    |             | /dev        | ERR: Read-only file system (os error 69)        |
-    |             | /etc        | ERR: Read-only file system (os error 69)        |
-    |             | /etc/group  | ERR: Read-only file system (os error 69)        |
-    |             | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    |             | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    |             | /home       | ERR: Read-only file system (os error 69)        |
-    |             | /lib        | ERR: Read-only file system (os error 69)        |
-    |             | /lib64      | ERR: Read-only file system (os error 69)        |
-    |             | /opt        | ERR: Read-only file system (os error 69)        |
-    |             | /proc       | ERR: Read-only file system (os error 69)        |
-    |             | /proc/self  | ERR: Read-only file system (os error 69)        |
-    |             | /root       | ERR: Read-only file system (os error 69)        |
-    |             | /run        | ERR: Read-only file system (os error 69)        |
-    |             | /sbin       | ERR: Read-only file system (os error 69)        |
-    |             | /srv        | ERR: Read-only file system (os error 69)        |
-    |             | /sys        | ERR: Read-only file system (os error 69)        |
-    |             | /tmp        | ERR: Read-only file system (os error 69)        |
-    |             | /usr        | ERR: Read-only file system (os error 69)        |
-    |             | /var        | ERR: Read-only file system (os error 69)        |
+    |             |             | ERR: Is a directory (os error 31)               |
+    |             | .           | ERR: Is a directory (os error 31)               |
+    |             | ..          | ERR: Is a directory (os error 31)               |
+    |             | /           | ERR: Is a directory (os error 31)               |
+    |             | /bin        | ERR: Bad file descriptor (os error 8)           |
+    |             | /boot       | ERR: Bad file descriptor (os error 8)           |
+    |             | /dev        | ERR: Bad file descriptor (os error 8)           |
+    |             | /etc        | ERR: Bad file descriptor (os error 8)           |
+    |             | /etc/group  | ERR: No such file or directory (os error 44)    |
+    |             | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    |             | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    |             | /home       | ERR: Bad file descriptor (os error 8)           |
+    |             | /lib        | ERR: Bad file descriptor (os error 8)           |
+    |             | /lib64      | ERR: Bad file descriptor (os error 8)           |
+    |             | /opt        | ERR: Bad file descriptor (os error 8)           |
+    |             | /proc       | ERR: Bad file descriptor (os error 8)           |
+    |             | /proc/self  | ERR: No such file or directory (os error 44)    |
+    |             | /root       | ERR: Bad file descriptor (os error 8)           |
+    |             | /run        | ERR: Bad file descriptor (os error 8)           |
+    |             | /sbin       | ERR: Bad file descriptor (os error 8)           |
+    |             | /srv        | ERR: Bad file descriptor (os error 8)           |
+    |             | /sys        | ERR: Bad file descriptor (os error 8)           |
+    |             | /tmp        | ERR: Bad file descriptor (os error 8)           |
+    |             | /usr        | ERR: Bad file descriptor (os error 8)           |
+    |             | /var        | ERR: Bad file descriptor (os error 8)           |
     |             | \0          | ERR: file name contained an unexpected NUL byte |
-    |             | /x/..       | ERR: Read-only file system (os error 69)        |
-    | .           |             | ERR: Read-only file system (os error 69)        |
-    | .           | .           | ERR: Read-only file system (os error 69)        |
-    | .           | ..          | ERR: Read-only file system (os error 69)        |
-    | .           | /           | ERR: Read-only file system (os error 69)        |
-    | .           | /bin        | ERR: Read-only file system (os error 69)        |
-    | .           | /boot       | ERR: Read-only file system (os error 69)        |
-    | .           | /dev        | ERR: Read-only file system (os error 69)        |
-    | .           | /etc        | ERR: Read-only file system (os error 69)        |
-    | .           | /etc/group  | ERR: Read-only file system (os error 69)        |
-    | .           | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    | .           | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    | .           | /home       | ERR: Read-only file system (os error 69)        |
-    | .           | /lib        | ERR: Read-only file system (os error 69)        |
-    | .           | /lib64      | ERR: Read-only file system (os error 69)        |
-    | .           | /opt        | ERR: Read-only file system (os error 69)        |
-    | .           | /proc       | ERR: Read-only file system (os error 69)        |
-    | .           | /proc/self  | ERR: Read-only file system (os error 69)        |
-    | .           | /root       | ERR: Read-only file system (os error 69)        |
-    | .           | /run        | ERR: Read-only file system (os error 69)        |
-    | .           | /sbin       | ERR: Read-only file system (os error 69)        |
-    | .           | /srv        | ERR: Read-only file system (os error 69)        |
-    | .           | /sys        | ERR: Read-only file system (os error 69)        |
-    | .           | /tmp        | ERR: Read-only file system (os error 69)        |
-    | .           | /usr        | ERR: Read-only file system (os error 69)        |
-    | .           | /var        | ERR: Read-only file system (os error 69)        |
+    |             | /x/..       | ERR: No such file or directory (os error 44)    |
+    | .           |             | ERR: Is a directory (os error 31)               |
+    | .           | .           | ERR: Is a directory (os error 31)               |
+    | .           | ..          | ERR: Is a directory (os error 31)               |
+    | .           | /           | ERR: Is a directory (os error 31)               |
+    | .           | /bin        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /boot       | ERR: Bad file descriptor (os error 8)           |
+    | .           | /dev        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /etc        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | .           | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | .           | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | .           | /home       | ERR: Bad file descriptor (os error 8)           |
+    | .           | /lib        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /lib64      | ERR: Bad file descriptor (os error 8)           |
+    | .           | /opt        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /proc       | ERR: Bad file descriptor (os error 8)           |
+    | .           | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | .           | /root       | ERR: Bad file descriptor (os error 8)           |
+    | .           | /run        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /sbin       | ERR: Bad file descriptor (os error 8)           |
+    | .           | /srv        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /sys        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /tmp        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /usr        | ERR: Bad file descriptor (os error 8)           |
+    | .           | /var        | ERR: Bad file descriptor (os error 8)           |
     | .           | \0          | ERR: file name contained an unexpected NUL byte |
-    | .           | /x/..       | ERR: Read-only file system (os error 69)        |
-    | ..          |             | ERR: Read-only file system (os error 69)        |
-    | ..          | .           | ERR: Read-only file system (os error 69)        |
-    | ..          | ..          | ERR: Read-only file system (os error 69)        |
-    | ..          | /           | ERR: Read-only file system (os error 69)        |
-    | ..          | /bin        | ERR: Read-only file system (os error 69)        |
-    | ..          | /boot       | ERR: Read-only file system (os error 69)        |
-    | ..          | /dev        | ERR: Read-only file system (os error 69)        |
-    | ..          | /etc        | ERR: Read-only file system (os error 69)        |
-    | ..          | /etc/group  | ERR: Read-only file system (os error 69)        |
-    | ..          | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    | ..          | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    | ..          | /home       | ERR: Read-only file system (os error 69)        |
-    | ..          | /lib        | ERR: Read-only file system (os error 69)        |
-    | ..          | /lib64      | ERR: Read-only file system (os error 69)        |
-    | ..          | /opt        | ERR: Read-only file system (os error 69)        |
-    | ..          | /proc       | ERR: Read-only file system (os error 69)        |
-    | ..          | /proc/self  | ERR: Read-only file system (os error 69)        |
-    | ..          | /root       | ERR: Read-only file system (os error 69)        |
-    | ..          | /run        | ERR: Read-only file system (os error 69)        |
-    | ..          | /sbin       | ERR: Read-only file system (os error 69)        |
-    | ..          | /srv        | ERR: Read-only file system (os error 69)        |
-    | ..          | /sys        | ERR: Read-only file system (os error 69)        |
-    | ..          | /tmp        | ERR: Read-only file system (os error 69)        |
-    | ..          | /usr        | ERR: Read-only file system (os error 69)        |
-    | ..          | /var        | ERR: Read-only file system (os error 69)        |
+    | .           | /x/..       | ERR: No such file or directory (os error 44)    |
+    | ..          |             | ERR: Is a directory (os error 31)               |
+    | ..          | .           | ERR: Is a directory (os error 31)               |
+    | ..          | ..          | ERR: Is a directory (os error 31)               |
+    | ..          | /           | ERR: Is a directory (os error 31)               |
+    | ..          | /bin        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /boot       | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /dev        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /etc        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | ..          | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | ..          | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | ..          | /home       | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /lib        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /lib64      | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /opt        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /proc       | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | ..          | /root       | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /run        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /sbin       | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /srv        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /sys        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /tmp        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /usr        | ERR: Bad file descriptor (os error 8)           |
+    | ..          | /var        | ERR: Bad file descriptor (os error 8)           |
     | ..          | \0          | ERR: file name contained an unexpected NUL byte |
-    | ..          | /x/..       | ERR: Read-only file system (os error 69)        |
-    | /           |             | ERR: Read-only file system (os error 69)        |
-    | /           | .           | ERR: Read-only file system (os error 69)        |
-    | /           | ..          | ERR: Read-only file system (os error 69)        |
-    | /           | /           | ERR: Read-only file system (os error 69)        |
-    | /           | /bin        | ERR: Read-only file system (os error 69)        |
-    | /           | /boot       | ERR: Read-only file system (os error 69)        |
-    | /           | /dev        | ERR: Read-only file system (os error 69)        |
-    | /           | /etc        | ERR: Read-only file system (os error 69)        |
-    | /           | /etc/group  | ERR: Read-only file system (os error 69)        |
-    | /           | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    | /           | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    | /           | /home       | ERR: Read-only file system (os error 69)        |
-    | /           | /lib        | ERR: Read-only file system (os error 69)        |
-    | /           | /lib64      | ERR: Read-only file system (os error 69)        |
-    | /           | /opt        | ERR: Read-only file system (os error 69)        |
-    | /           | /proc       | ERR: Read-only file system (os error 69)        |
-    | /           | /proc/self  | ERR: Read-only file system (os error 69)        |
-    | /           | /root       | ERR: Read-only file system (os error 69)        |
-    | /           | /run        | ERR: Read-only file system (os error 69)        |
-    | /           | /sbin       | ERR: Read-only file system (os error 69)        |
-    | /           | /srv        | ERR: Read-only file system (os error 69)        |
-    | /           | /sys        | ERR: Read-only file system (os error 69)        |
-    | /           | /tmp        | ERR: Read-only file system (os error 69)        |
-    | /           | /usr        | ERR: Read-only file system (os error 69)        |
-    | /           | /var        | ERR: Read-only file system (os error 69)        |
+    | ..          | /x/..       | ERR: No such file or directory (os error 44)    |
+    | /           |             | ERR: Is a directory (os error 31)               |
+    | /           | .           | ERR: Is a directory (os error 31)               |
+    | /           | ..          | ERR: Is a directory (os error 31)               |
+    | /           | /           | ERR: Is a directory (os error 31)               |
+    | /           | /bin        | ERR: Bad file descriptor (os error 8)           |
+    | /           | /boot       | ERR: Bad file descriptor (os error 8)           |
+    | /           | /dev        | ERR: Bad file descriptor (os error 8)           |
+    | /           | /etc        | ERR: Bad file descriptor (os error 8)           |
+    | /           | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | /           | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | /           | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | /           | /home       | ERR: Bad file descriptor (os error 8)           |
+    | /           | /lib        | ERR: Bad file descriptor (os error 8)           |
+    | /           | /lib64      | ERR: Bad file descriptor (os error 8)           |
+    | /           | /opt        | ERR: Bad file descriptor (os error 8)           |
+    | /           | /proc       | ERR: Bad file descriptor (os error 8)           |
+    | /           | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | /           | /root       | ERR: Bad file descriptor (os error 8)           |
+    | /           | /run        | ERR: Bad file descriptor (os error 8)           |
+    | /           | /sbin       | ERR: Bad file descriptor (os error 8)           |
+    | /           | /srv        | ERR: Bad file descriptor (os error 8)           |
+    | /           | /sys        | ERR: Bad file descriptor (os error 8)           |
+    | /           | /tmp        | ERR: Bad file descriptor (os error 8)           |
+    | /           | /usr        | ERR: Bad file descriptor (os error 8)           |
+    | /           | /var        | ERR: Bad file descriptor (os error 8)           |
     | /           | \0          | ERR: file name contained an unexpected NUL byte |
-    | /           | /x/..       | ERR: Read-only file system (os error 69)        |
+    | /           | /x/..       | ERR: No such file or directory (os error 44)    |
     | /bin        |             | ERR: No such file or directory (os error 44)    |
     | /bin        | .           | ERR: No such file or directory (os error 44)    |
     | /bin        | ..          | ERR: No such file or directory (os error 44)    |
@@ -833,10 +833,10 @@ async fn test_create_dir() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | ERR: Invalid argument (os error 28)             |
-    | .           | ERR: Invalid argument (os error 28)             |
-    | ..          | ERR: Invalid argument (os error 28)             |
-    | /           | ERR: Invalid argument (os error 28)             |
+    |             | OK: created                                     |
+    | .           | OK: created                                     |
+    | ..          | OK: created                                     |
+    | /           | OK: created                                     |
     | /bin        | OK: created                                     |
     | /boot       | OK: created                                     |
     | /dev        | OK: created                                     |
@@ -859,7 +859,7 @@ async fn test_create_dir() {
     | /usr        | OK: created                                     |
     | /var        | OK: created                                     |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Invalid argument (os error 28)             |
+    | /x/..       | ERR: No such file or directory (os error 44)    |
     +-------------+-------------------------------------------------+
     ",
     );
@@ -1695,33 +1695,33 @@ async fn test_open_append() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | ERR: Read-only file system (os error 69)        |
-    | .           | ERR: Read-only file system (os error 69)        |
-    | ..          | ERR: Read-only file system (os error 69)        |
-    | /           | ERR: Read-only file system (os error 69)        |
-    | /bin        | ERR: Read-only file system (os error 69)        |
-    | /boot       | ERR: Read-only file system (os error 69)        |
-    | /dev        | ERR: Read-only file system (os error 69)        |
-    | /etc        | ERR: Read-only file system (os error 69)        |
-    | /etc/group  | ERR: Read-only file system (os error 69)        |
-    | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    | /home       | ERR: Read-only file system (os error 69)        |
-    | /lib        | ERR: Read-only file system (os error 69)        |
-    | /lib64      | ERR: Read-only file system (os error 69)        |
-    | /opt        | ERR: Read-only file system (os error 69)        |
-    | /proc       | ERR: Read-only file system (os error 69)        |
-    | /proc/self  | ERR: Read-only file system (os error 69)        |
-    | /root       | ERR: Read-only file system (os error 69)        |
-    | /run        | ERR: Read-only file system (os error 69)        |
-    | /sbin       | ERR: Read-only file system (os error 69)        |
-    | /srv        | ERR: Read-only file system (os error 69)        |
-    | /sys        | ERR: Read-only file system (os error 69)        |
-    | /tmp        | ERR: Read-only file system (os error 69)        |
-    | /usr        | ERR: Read-only file system (os error 69)        |
-    | /var        | ERR: Read-only file system (os error 69)        |
+    |             | OK: opened                                      |
+    | .           | OK: opened                                      |
+    | ..          | OK: opened                                      |
+    | /           | OK: opened                                      |
+    | /bin        | ERR: No such file or directory (os error 44)    |
+    | /boot       | ERR: No such file or directory (os error 44)    |
+    | /dev        | ERR: No such file or directory (os error 44)    |
+    | /etc        | ERR: No such file or directory (os error 44)    |
+    | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | /home       | ERR: No such file or directory (os error 44)    |
+    | /lib        | ERR: No such file or directory (os error 44)    |
+    | /lib64      | ERR: No such file or directory (os error 44)    |
+    | /opt        | ERR: No such file or directory (os error 44)    |
+    | /proc       | ERR: No such file or directory (os error 44)    |
+    | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | /root       | ERR: No such file or directory (os error 44)    |
+    | /run        | ERR: No such file or directory (os error 44)    |
+    | /sbin       | ERR: No such file or directory (os error 44)    |
+    | /srv        | ERR: No such file or directory (os error 44)    |
+    | /sys        | ERR: No such file or directory (os error 44)    |
+    | /tmp        | ERR: No such file or directory (os error 44)    |
+    | /usr        | ERR: No such file or directory (os error 44)    |
+    | /var        | ERR: No such file or directory (os error 44)    |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Read-only file system (os error 69)        |
+    | /x/..       | ERR: No such file or directory (os error 44)    |
     +-------------+-------------------------------------------------+
     ",
     );
@@ -1735,33 +1735,33 @@ async fn test_open_create() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | ERR: Read-only file system (os error 69)        |
-    | .           | ERR: Read-only file system (os error 69)        |
-    | ..          | ERR: Read-only file system (os error 69)        |
-    | /           | ERR: Read-only file system (os error 69)        |
-    | /bin        | ERR: Read-only file system (os error 69)        |
-    | /boot       | ERR: Read-only file system (os error 69)        |
-    | /dev        | ERR: Read-only file system (os error 69)        |
-    | /etc        | ERR: Read-only file system (os error 69)        |
-    | /etc/group  | ERR: Read-only file system (os error 69)        |
-    | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    | /home       | ERR: Read-only file system (os error 69)        |
-    | /lib        | ERR: Read-only file system (os error 69)        |
-    | /lib64      | ERR: Read-only file system (os error 69)        |
-    | /opt        | ERR: Read-only file system (os error 69)        |
-    | /proc       | ERR: Read-only file system (os error 69)        |
-    | /proc/self  | ERR: Read-only file system (os error 69)        |
-    | /root       | ERR: Read-only file system (os error 69)        |
-    | /run        | ERR: Read-only file system (os error 69)        |
-    | /sbin       | ERR: Read-only file system (os error 69)        |
-    | /srv        | ERR: Read-only file system (os error 69)        |
-    | /sys        | ERR: Read-only file system (os error 69)        |
-    | /tmp        | ERR: Read-only file system (os error 69)        |
-    | /usr        | ERR: Read-only file system (os error 69)        |
-    | /var        | ERR: Read-only file system (os error 69)        |
+    |             | OK: opened                                      |
+    | .           | OK: opened                                      |
+    | ..          | OK: opened                                      |
+    | /           | OK: opened                                      |
+    | /bin        | ERR: No such file or directory (os error 44)    |
+    | /boot       | ERR: No such file or directory (os error 44)    |
+    | /dev        | ERR: No such file or directory (os error 44)    |
+    | /etc        | ERR: No such file or directory (os error 44)    |
+    | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | /home       | ERR: No such file or directory (os error 44)    |
+    | /lib        | ERR: No such file or directory (os error 44)    |
+    | /lib64      | ERR: No such file or directory (os error 44)    |
+    | /opt        | ERR: No such file or directory (os error 44)    |
+    | /proc       | ERR: No such file or directory (os error 44)    |
+    | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | /root       | ERR: No such file or directory (os error 44)    |
+    | /run        | ERR: No such file or directory (os error 44)    |
+    | /sbin       | ERR: No such file or directory (os error 44)    |
+    | /srv        | ERR: No such file or directory (os error 44)    |
+    | /sys        | ERR: No such file or directory (os error 44)    |
+    | /tmp        | ERR: No such file or directory (os error 44)    |
+    | /usr        | ERR: No such file or directory (os error 44)    |
+    | /var        | ERR: No such file or directory (os error 44)    |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Read-only file system (os error 69)        |
+    | /x/..       | ERR: No such file or directory (os error 44)    |
     +-------------+-------------------------------------------------+
     ",
     );
@@ -1775,33 +1775,33 @@ async fn test_open_create_new() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | ERR: Read-only file system (os error 69)        |
-    | .           | ERR: Read-only file system (os error 69)        |
-    | ..          | ERR: Read-only file system (os error 69)        |
-    | /           | ERR: Read-only file system (os error 69)        |
-    | /bin        | ERR: Read-only file system (os error 69)        |
-    | /boot       | ERR: Read-only file system (os error 69)        |
-    | /dev        | ERR: Read-only file system (os error 69)        |
-    | /etc        | ERR: Read-only file system (os error 69)        |
-    | /etc/group  | ERR: Read-only file system (os error 69)        |
-    | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    | /home       | ERR: Read-only file system (os error 69)        |
-    | /lib        | ERR: Read-only file system (os error 69)        |
-    | /lib64      | ERR: Read-only file system (os error 69)        |
-    | /opt        | ERR: Read-only file system (os error 69)        |
-    | /proc       | ERR: Read-only file system (os error 69)        |
-    | /proc/self  | ERR: Read-only file system (os error 69)        |
-    | /root       | ERR: Read-only file system (os error 69)        |
-    | /run        | ERR: Read-only file system (os error 69)        |
-    | /sbin       | ERR: Read-only file system (os error 69)        |
-    | /srv        | ERR: Read-only file system (os error 69)        |
-    | /sys        | ERR: Read-only file system (os error 69)        |
-    | /tmp        | ERR: Read-only file system (os error 69)        |
-    | /usr        | ERR: Read-only file system (os error 69)        |
-    | /var        | ERR: Read-only file system (os error 69)        |
+    |             | ERR: File exists (os error 20)                  |
+    | .           | ERR: File exists (os error 20)                  |
+    | ..          | ERR: File exists (os error 20)                  |
+    | /           | ERR: File exists (os error 20)                  |
+    | /bin        | OK: opened                                      |
+    | /boot       | OK: opened                                      |
+    | /dev        | OK: opened                                      |
+    | /etc        | OK: opened                                      |
+    | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | /home       | OK: opened                                      |
+    | /lib        | OK: opened                                      |
+    | /lib64      | OK: opened                                      |
+    | /opt        | OK: opened                                      |
+    | /proc       | OK: opened                                      |
+    | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | /root       | OK: opened                                      |
+    | /run        | OK: opened                                      |
+    | /sbin       | OK: opened                                      |
+    | /srv        | OK: opened                                      |
+    | /sys        | OK: opened                                      |
+    | /tmp        | OK: opened                                      |
+    | /usr        | OK: opened                                      |
+    | /var        | OK: opened                                      |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Read-only file system (os error 69)        |
+    | /x/..       | ERR: No such file or directory (os error 44)    |
     +-------------+-------------------------------------------------+
     ",
     );
@@ -1855,33 +1855,33 @@ async fn test_open_truncate() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | ERR: Read-only file system (os error 69)        |
-    | .           | ERR: Read-only file system (os error 69)        |
-    | ..          | ERR: Read-only file system (os error 69)        |
-    | /           | ERR: Read-only file system (os error 69)        |
-    | /bin        | ERR: Read-only file system (os error 69)        |
-    | /boot       | ERR: Read-only file system (os error 69)        |
-    | /dev        | ERR: Read-only file system (os error 69)        |
-    | /etc        | ERR: Read-only file system (os error 69)        |
-    | /etc/group  | ERR: Read-only file system (os error 69)        |
-    | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    | /home       | ERR: Read-only file system (os error 69)        |
-    | /lib        | ERR: Read-only file system (os error 69)        |
-    | /lib64      | ERR: Read-only file system (os error 69)        |
-    | /opt        | ERR: Read-only file system (os error 69)        |
-    | /proc       | ERR: Read-only file system (os error 69)        |
-    | /proc/self  | ERR: Read-only file system (os error 69)        |
-    | /root       | ERR: Read-only file system (os error 69)        |
-    | /run        | ERR: Read-only file system (os error 69)        |
-    | /sbin       | ERR: Read-only file system (os error 69)        |
-    | /srv        | ERR: Read-only file system (os error 69)        |
-    | /sys        | ERR: Read-only file system (os error 69)        |
-    | /tmp        | ERR: Read-only file system (os error 69)        |
-    | /usr        | ERR: Read-only file system (os error 69)        |
-    | /var        | ERR: Read-only file system (os error 69)        |
+    |             | ERR: Is a directory (os error 31)               |
+    | .           | ERR: Is a directory (os error 31)               |
+    | ..          | ERR: Is a directory (os error 31)               |
+    | /           | ERR: Is a directory (os error 31)               |
+    | /bin        | ERR: No such file or directory (os error 44)    |
+    | /boot       | ERR: No such file or directory (os error 44)    |
+    | /dev        | ERR: No such file or directory (os error 44)    |
+    | /etc        | ERR: No such file or directory (os error 44)    |
+    | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | /home       | ERR: No such file or directory (os error 44)    |
+    | /lib        | ERR: No such file or directory (os error 44)    |
+    | /lib64      | ERR: No such file or directory (os error 44)    |
+    | /opt        | ERR: No such file or directory (os error 44)    |
+    | /proc       | ERR: No such file or directory (os error 44)    |
+    | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | /root       | ERR: No such file or directory (os error 44)    |
+    | /run        | ERR: No such file or directory (os error 44)    |
+    | /sbin       | ERR: No such file or directory (os error 44)    |
+    | /srv        | ERR: No such file or directory (os error 44)    |
+    | /sys        | ERR: No such file or directory (os error 44)    |
+    | /tmp        | ERR: No such file or directory (os error 44)    |
+    | /usr        | ERR: No such file or directory (os error 44)    |
+    | /var        | ERR: No such file or directory (os error 44)    |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Read-only file system (os error 69)        |
+    | /x/..       | ERR: No such file or directory (os error 44)    |
     +-------------+-------------------------------------------------+
     ",
     );
@@ -1895,33 +1895,33 @@ async fn test_open_write() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | ERR: Read-only file system (os error 69)        |
-    | .           | ERR: Read-only file system (os error 69)        |
-    | ..          | ERR: Read-only file system (os error 69)        |
-    | /           | ERR: Read-only file system (os error 69)        |
-    | /bin        | ERR: Read-only file system (os error 69)        |
-    | /boot       | ERR: Read-only file system (os error 69)        |
-    | /dev        | ERR: Read-only file system (os error 69)        |
-    | /etc        | ERR: Read-only file system (os error 69)        |
-    | /etc/group  | ERR: Read-only file system (os error 69)        |
-    | /etc/passwd | ERR: Read-only file system (os error 69)        |
-    | /etc/shadow | ERR: Read-only file system (os error 69)        |
-    | /home       | ERR: Read-only file system (os error 69)        |
-    | /lib        | ERR: Read-only file system (os error 69)        |
-    | /lib64      | ERR: Read-only file system (os error 69)        |
-    | /opt        | ERR: Read-only file system (os error 69)        |
-    | /proc       | ERR: Read-only file system (os error 69)        |
-    | /proc/self  | ERR: Read-only file system (os error 69)        |
-    | /root       | ERR: Read-only file system (os error 69)        |
-    | /run        | ERR: Read-only file system (os error 69)        |
-    | /sbin       | ERR: Read-only file system (os error 69)        |
-    | /srv        | ERR: Read-only file system (os error 69)        |
-    | /sys        | ERR: Read-only file system (os error 69)        |
-    | /tmp        | ERR: Read-only file system (os error 69)        |
-    | /usr        | ERR: Read-only file system (os error 69)        |
-    | /var        | ERR: Read-only file system (os error 69)        |
+    |             | OK: opened                                      |
+    | .           | OK: opened                                      |
+    | ..          | OK: opened                                      |
+    | /           | OK: opened                                      |
+    | /bin        | ERR: No such file or directory (os error 44)    |
+    | /boot       | ERR: No such file or directory (os error 44)    |
+    | /dev        | ERR: No such file or directory (os error 44)    |
+    | /etc        | ERR: No such file or directory (os error 44)    |
+    | /etc/group  | ERR: No such file or directory (os error 44)    |
+    | /etc/passwd | ERR: No such file or directory (os error 44)    |
+    | /etc/shadow | ERR: No such file or directory (os error 44)    |
+    | /home       | ERR: No such file or directory (os error 44)    |
+    | /lib        | ERR: No such file or directory (os error 44)    |
+    | /lib64      | ERR: No such file or directory (os error 44)    |
+    | /opt        | ERR: No such file or directory (os error 44)    |
+    | /proc       | ERR: No such file or directory (os error 44)    |
+    | /proc/self  | ERR: No such file or directory (os error 44)    |
+    | /root       | ERR: No such file or directory (os error 44)    |
+    | /run        | ERR: No such file or directory (os error 44)    |
+    | /sbin       | ERR: No such file or directory (os error 44)    |
+    | /srv        | ERR: No such file or directory (os error 44)    |
+    | /sys        | ERR: No such file or directory (os error 44)    |
+    | /tmp        | ERR: No such file or directory (os error 44)    |
+    | /usr        | ERR: No such file or directory (os error 44)    |
+    | /var        | ERR: No such file or directory (os error 44)    |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Read-only file system (os error 69)        |
+    | /x/..       | ERR: No such file or directory (os error 44)    |
     +-------------+-------------------------------------------------+
     ",
     );

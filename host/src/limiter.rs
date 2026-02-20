@@ -78,13 +78,25 @@ impl Limiter {
     }
 
     /// Grow memory usage.
-    pub(crate) fn grow(&mut self, bytes: usize) -> Result<(), GrowthError> {
+    pub(crate) fn grow(&self, bytes: usize) -> Result<(), GrowthError> {
         let mut self_guard = self
             .memory_reservation
             .lock()
             .expect("memory reservation lock poisoned");
         self_guard.try_grow(bytes).map_err(|e| {
             log::debug!("failed to grow memory: {e}");
+            GrowthError(e)
+        })
+    }
+
+    /// Shrink memory usage.
+    pub(crate) fn shrink(&self, bytes: usize) -> Result<usize, GrowthError> {
+        let mut self_guard = self
+            .memory_reservation
+            .lock()
+            .expect("memory reservation lock poisoned");
+        self_guard.try_shrink(bytes).map_err(|e| {
+            log::debug!("failed to shrink memory: {e}");
             GrowthError(e)
         })
     }
