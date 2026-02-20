@@ -16,7 +16,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-anyhow = { version = "1.0.101", default-features = false }
+anyhow = { version = "1.0.102", default-features = false }
 arrow = { version = "57.1.0", default-features = false, features = ["ipc"] }
 chrono = { version = "0.4.43", default-features = false }
 datafusion = { version = "52.0.0", default-features = false }
