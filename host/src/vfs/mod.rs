@@ -761,7 +761,9 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         let truncate = open_flags.contains(OpenFlags::TRUNCATE);
 
         // Try to resolve the path to an existing node
-        let existing = self.get_node_from_start(&path, Arc::clone(&base_node));
+        let existing = self
+            .get_node_from_start(&path, Arc::clone(&base_node))
+            .map_err(FsError::trap)?;
 
         let node = match (existing, create, directory, exclusive, truncate) {
             (_, true, true, _, _) => {
@@ -772,7 +774,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 // disallow this combination entirely.
                 return Err(FsError::trap(ErrorCode::Invalid));
             }
-            (Ok(Some(node)), _, true, _, _) if flags.contains(DescriptorFlags::WRITE) => {
+            (Some(node), _, true, _, _) if flags.contains(DescriptorFlags::WRITE) => {
                 if matches!(node.read().unwrap().kind, VfsNodeKind::Directory { .. }) {
                     // Disallow opening directories with write permissions.
                     // POSIX isn't clear here, so we choose to disallow this
@@ -784,12 +786,12 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                     return Err(FsError::trap(ErrorCode::NotDirectory));
                 }
             }
-            (Ok(Some(node)), true, _, false, false) => node, // Per POSIX: "If the file exists, O_CREAT has no effect except as noted under O_EXCL below.
-            (Ok(Some(_)), true, _, true, _) => {
+            (Some(node), true, _, false, false) => node, // Per POSIX: "If the file exists, O_CREAT has no effect except as noted under O_EXCL below.
+            (Some(_), true, _, true, _) => {
                 // Per POSIX: "O_CREAT and O_EXCL are set, open() shall fail if the file exists"
                 return Err(FsError::trap(ErrorCode::Exist));
             }
-            (Ok(Some(node)), false, true, false, false) => {
+            (Some(node), false, true, false, false) => {
                 // Per POSIX: "O_DIRECTORY: "If path resolves to a non-directory file, fail and set errno to [ENOTDIR]."
                 let guard = node.read().unwrap();
                 if !matches!(guard.kind, VfsNodeKind::Directory { .. }) {
@@ -798,7 +800,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 drop(guard);
                 node
             }
-            (Ok(Some(node)), _, _, _, true) => {
+            (Some(node), _, _, _, true) => {
                 let mut guard = node.write().unwrap();
                 match &mut guard.kind {
                     VfsNodeKind::File { content } => {
@@ -824,13 +826,13 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 drop(guard);
                 node
             }
-            (Ok(Some(node)), _, _, _, _) => node,
-            (Ok(None), false, _, _, _) => {
+            (Some(node), _, _, _, _) => node,
+            (None, false, _, _, _) => {
                 // "If O_CREAT is not set and the file does not exist, open()
                 // shall fail and set errno to [ENOENT]."
                 return Err(FsError::trap(ErrorCode::NoEntry));
             }
-            (Ok(None), true, _, _, _) => {
+            (None, true, _, _, _) => {
                 // "If O_CREAT is set and the file does not exist, it shall be
                 // created as a regular file with permissions"
                 if !base_flags.contains(DescriptorFlags::MUTATE_DIRECTORY) {
@@ -884,10 +886,6 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
                 }
 
                 new_file
-            }
-            (Err(e), _, _, _, _) => {
-                // Path parsing error
-                return Err(FsError::trap(e));
             }
         };
 
