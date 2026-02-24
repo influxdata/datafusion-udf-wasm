@@ -46,7 +46,7 @@ jobs:
           version-file: "python-tooling/pyproject.toml"
 
       - name: Install `just`
-        uses: taiki-e/install-action@f8d25fb8a2df08dcd3cead89780d572767b8655f  # v2
+        uses: taiki-e/install-action@cfdb446e391c69574ebc316dfb7d7849ec12b940  # v2
         with:
           tool: just
 
