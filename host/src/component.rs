@@ -30,7 +30,6 @@ where
     F: CompilationFlagsInterface,
 {
     let mut config = wasmtime::Config::new();
-    config.async_support(true);
     config.epoch_interruption(true);
     config.memory_init_cow(true);
     // Disable backtraces for now since debug info parsing doesn't seem to work and hence error

@@ -2,10 +2,10 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
 use wasmtime::{
-    Engine, Store,
+    Engine, Result, Store,
     component::{Component, HasData, Linker},
+    error::Context,
 };
 use wasmtime_wasi::{ResourceTable, WasiView};
 
