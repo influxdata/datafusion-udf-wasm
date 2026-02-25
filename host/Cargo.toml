@@ -14,7 +14,6 @@ name = "udf_overhead"
 required-features = ["all-arch"]
 
 [dependencies]
-anyhow.workspace = true
 arrow.workspace = true
 datafusion-common.workspace = true
 datafusion-execution.workspace = true

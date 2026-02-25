@@ -16,7 +16,6 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-anyhow = { version = "1.0.102", default-features = false }
 arrow = { version = "57.1.0", default-features = false, features = ["ipc"] }
 chrono = { version = "0.4.44", default-features = false }
 datafusion = { version = "52.0.0", default-features = false }
@@ -56,7 +55,7 @@ wasmtime-wasi = { version = "42.0.0", default-features = false }
 wasmtime-wasi-http = { version = "42.0.0", default-features = false, features = [
   "default-send-request"
 ] }
-wasmtime-wasi-io = { version = "41.0.0", default-features = false }
+wasmtime-wasi-io = { version = "42.0.0", default-features = false }
 wit-bindgen = { version = "0.53", default-features = false, features = [
   "macros"
 ] }
