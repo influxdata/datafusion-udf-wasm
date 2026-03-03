@@ -27,7 +27,7 @@ jobs:
         uses: ./.github/actions/free-disk-space
 
       - name: Install `uv`
-        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b  # v7
+        uses: astral-sh/setup-uv@5a095e7a2014a4212f075830d4f7277575a9d098  # v7
         with:
           version-file: "python-tooling/pyproject.toml"
 
@@ -42,7 +42,7 @@ jobs:
           echo "LD_LIBRARY_PATH=${path_bin}/../lib" >> "$GITHUB_ENV"
 
       - name: Install `cargo-deny` & `just` & `tombi` & 'typos'
-        uses: taiki-e/install-action@cfdb446e391c69574ebc316dfb7d7849ec12b940  # v2
+        uses: taiki-e/install-action@d6e286fa45544157a02d45a43742857ebbc25d12  # v2
         with:
           tool: cargo-deny,just,tombi,typos
 
@@ -83,7 +83,7 @@ jobs:
           fi
 
       - name: upload docs
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f  # v6.0.0
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f  # v7.0.0
         with:
           name: docs
           path: target/doc
