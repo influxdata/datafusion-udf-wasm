@@ -1029,8 +1029,21 @@ impl<'a> filesystem::preopens::Host for VfsCtxView<'a> {
                 | DescriptorFlags::WRITE,
         };
 
-        let res = self.table.push(desc)?;
-        Ok(vec![(res.cast(), "/".to_string())])
+        // Root directory is always at index 0, so we can check if it already
+        // exists before pushing a new descriptor
+        let res: Resource<VfsDescriptor> = Resource::new_own(0);
+
+        match self.table.get(&res) {
+            Ok(_) => {
+                // If we found the descriptor, return it
+                Ok(vec![(res.cast(), "/".to_string())])
+            }
+            Err(_) => {
+                // If we didn't find the descriptor, create a new one
+                let res = self.table.push(desc)?;
+                Ok(vec![(res.cast(), "/".to_string())])
+            }
+        }
     }
 }
 
