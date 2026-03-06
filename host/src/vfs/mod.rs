@@ -1031,7 +1031,7 @@ impl<'a> filesystem::preopens::Host for VfsCtxView<'a> {
 
         // Root directory is always at index 0, so we can check if it already
         // exists before pushing a new descriptor
-        let res: Resource<VfsDescriptor> = Resource::new_own(0);
+        let res: Resource<VfsDescriptor> = Resource::new_own(1);
 
         match self.table.get(&res) {
             Ok(_) => {
