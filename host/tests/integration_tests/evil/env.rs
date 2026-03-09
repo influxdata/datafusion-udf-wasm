@@ -5,7 +5,10 @@ use datafusion_common::{DataFusionError, ScalarValue, config::ConfigOptions};
 use datafusion_expr::{ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl};
 use datafusion_udf_wasm_host::WasmScalarUdf;
 
-use crate::integration_tests::{evil::test_utils::try_scalar_udfs, test_utils::ColumnarValueExt};
+use crate::integration_tests::{
+    evil::test_utils::{normalize_panic_location, try_scalar_udfs},
+    test_utils::ColumnarValueExt,
+};
 
 #[tokio::test]
 async fn test_args() {
@@ -40,13 +43,13 @@ async fn test_process_id() {
     let err = try_call(&udf).await.unwrap_err();
 
     insta::assert_snapshot!(
-        err,
+        normalize_panic_location(err),
         @r"
     call ScalarUdf::invoke_with_args
 
     stderr:
 
-    thread '<unnamed>' (1) panicked at library/std/src/sys/pal/wasip2/../wasip1/os.rs:131:5:
+    thread '<unnamed>' (1) panicked at <FILE>:<LINE>:<ROW>:
     unsupported
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 

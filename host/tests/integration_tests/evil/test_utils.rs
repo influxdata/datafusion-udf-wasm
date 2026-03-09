@@ -5,6 +5,7 @@ use datafusion_execution::memory_pool::GreedyMemoryPool;
 use datafusion_udf_wasm_host::{
     CompilationFlags, WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf,
 };
+use regex::Regex;
 use tokio::{runtime::Runtime, sync::OnceCell};
 
 /// Static memory limit.
@@ -74,4 +75,18 @@ pub(crate) async fn try_scalar_udfs_with_permissions(
         "".to_owned(),
     )
     .await
+}
+
+/// Normalize line & column numbers in panic message, so that changing the code in the respective file does not change
+/// the expected outcome. This makes it easier to add new test cases or update the code without needing to update all
+/// results.
+pub(crate) fn normalize_panic_location(e: impl ToString) -> String {
+    let e = e.to_string();
+
+    static REGEX: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"(?<m>panicked at) [^:]+:[0-9]+:[0-9]+:"#).unwrap());
+
+    REGEX
+        .replace_all(&e, r#"$m <FILE>:<LINE>:<ROW>:"#)
+        .to_string()
 }
