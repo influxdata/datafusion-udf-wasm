@@ -7,7 +7,7 @@ use datafusion_udf_wasm_host::WasmScalarUdf;
 use regex::Regex;
 use wasmtime::Trap;
 
-use crate::integration_tests::evil::test_utils::try_scalar_udfs;
+use crate::integration_tests::evil::test_utils::{normalize_panic_location, try_scalar_udfs};
 
 #[tokio::test]
 async fn test_abort() {
@@ -296,18 +296,4 @@ async fn try_call_no_params(udf: &WasmScalarUdf) -> Result<(), DataFusionError> 
 
 async fn err_call_no_params(udf: &WasmScalarUdf) -> DataFusionError {
     try_call_no_params(udf).await.unwrap_err()
-}
-
-/// Normalize line & column numbers in panic message, so that changing the code in the respective file does not change
-/// the expected outcome. This makes it easier to add new test cases or update the code without needing to update all
-/// results.
-fn normalize_panic_location(e: impl ToString) -> String {
-    let e = e.to_string();
-
-    static REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new(r#"(?<m>panicked at) [^:]+:[0-9]+:[0-9]+:"#).unwrap());
-
-    REGEX
-        .replace_all(&e, r#"$m <FILE>:<LINE>:<ROW>:"#)
-        .to_string()
 }
