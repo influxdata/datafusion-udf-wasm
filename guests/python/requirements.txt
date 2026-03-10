@@ -1,13 +1,7 @@
-certifi==2025.10.5 --hash=sha256:0f212c2744a9bb6de0c56639a6f68afe01ecd92d91f14ae897c4fe7bbeeef0de
-charset_normalizer==3.4.4 --hash=sha256:7a32c560861a02ff789ad905a2fe94e3f840803362c84fecf1851cb4cf3dc37f
+certifi==2026.2.25 --hash=sha256:027692e4402ad994f1c42e52a4997a9763c646b73e4096e4d5d6db8af1d6f0fa
+charset-normalizer==3.4.5 --hash=sha256:9db5e3fcdcee89a78c04dffb3fe33c79f77bd741a624946db2591c81b2fc85b0
 idna==3.11 --hash=sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea
 requests==2.32.5 --hash=sha256:2462f94637a34fd532264295e186976db0f5d453d1cdd31473c85a6a161affb6
 
-# That's a combination of:
-#
-# - https://github.com/urllib3/urllib3/pull/3593 (which now includes https://github.com/golemcloud/urllib3/pull/2)
-# - https://github.com/golemcloud/urllib3/pull/3
-# - https://github.com/golemcloud/urllib3/pull/4
-#
-# as a wheel.
-urllib3 @ https://github.com/crepererum/urllib3/releases/download/2.5.104/urllib3-2.5.104-py3-none-any.whl --hash=sha256:2cb325a696c1c6e6827a4d5f009eff0cbf08a39f135d16ca9c3d03e811c6f4f7
+# See https://github.com/influxdata/urllib3/pull/1 .
+urllib3 @ https://github.com/influxdata/urllib3/releases/download/2.6.103/urllib3-2.6.103-py3-none-any.whl --hash=sha256:bd06baffa5df72a88f8b0edaeb13cf55b1880bcbcd67c62b391f3ec124add2c3

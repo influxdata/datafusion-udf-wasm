@@ -1,4 +1,9 @@
-use std::{collections::HashSet, io::Write, sync::Arc, time::Duration};
+use std::{
+    collections::HashSet,
+    io::Write,
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 
 use arrow::{
     array::{Array, StringArray, StringBuilder},
@@ -15,6 +20,7 @@ use datafusion_udf_wasm_host::{
     WasmScalarUdf,
 };
 use http::header::{ACCEPT_ENCODING, CONTENT_ENCODING};
+use regex::Regex;
 use tokio::runtime::Handle;
 use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers};
@@ -101,7 +107,7 @@ def perform_request(url: str) -> str:
         .replace(&format!("port={}", server.address().port()), "port=???");
 
     insta::assert_snapshot!(
-        err,
+        normalize_exception_location(err),
         @r#"
     cannot call function
     caused by
@@ -110,8 +116,8 @@ def perform_request(url: str) -> str:
     The above exception was the direct cause of the following exception:
 
     Traceback (most recent call last):
-      File "<string>", line 5, in perform_request
-      File "/lib/python3.14/site-packages/urllib3/__init__.py", line 193, in request
+      File "<FILE>", line <LINE>, in perform_request
+      File "<FILE>", line <LINE>, in request
         return _DEFAULT_POOL.request(
                ~~~~~~~~~~~~~~~~~~~~~^
             method,
@@ -121,7 +127,7 @@ def perform_request(url: str) -> str:
             ^^^^^^^^^^
         )
         ^
-      File "/lib/python3.14/site-packages/urllib3/_request_methods.py", line 135, in request
+      File "<FILE>", line <LINE>, in request
         return self.request_encode_url(
                ~~~~~~~~~~~~~~~~~~~~~~~^
             method,
@@ -131,12 +137,12 @@ def perform_request(url: str) -> str:
             ^^^^^^^^^^^^^
         )
         ^
-      File "/lib/python3.14/site-packages/urllib3/_request_methods.py", line 182, in request_encode_url
+      File "<FILE>", line <LINE>, in request_encode_url
         return self.urlopen(method, url, **extra_kw)
                ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
-      File "/lib/python3.14/site-packages/urllib3/poolmanager.py", line 457, in urlopen
+      File "<FILE>", line <LINE>, in urlopen
         response = conn.urlopen(method, u.request_uri, **kw)
-      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+      File "<FILE>", line <LINE>, in urlopen
         return self.urlopen(
                ~~~~~~~~~~~~^
             method,
@@ -146,7 +152,7 @@ def perform_request(url: str) -> str:
             ^^^^^^^^^^^^^^
         )
         ^
-      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+      File "<FILE>", line <LINE>, in urlopen
         return self.urlopen(
                ~~~~~~~~~~~~^
             method,
@@ -156,7 +162,7 @@ def perform_request(url: str) -> str:
             ^^^^^^^^^^^^^^
         )
         ^
-      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 871, in urlopen
+      File "<FILE>", line <LINE>, in urlopen
         return self.urlopen(
                ~~~~~~~~~~~~^
             method,
@@ -166,11 +172,11 @@ def perform_request(url: str) -> str:
             ^^^^^^^^^^^^^^
         )
         ^
-      File "/lib/python3.14/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+      File "<FILE>", line <LINE>, in urlopen
         retries = retries.increment(
             method, url, error=new_e, _pool=self, _stacktrace=sys.exc_info()[2]
         )
-      File "/lib/python3.14/site-packages/urllib3/util/retry.py", line 519, in increment
+      File "<FILE>", line <LINE>, in increment
         raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     urllib3.exceptions.MaxRetryError: HTTPConnectionPool(host='127.0.0.1', port=???): Max retries exceeded with url: / (Caused by ProtocolError('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpRequestDenied')))
@@ -909,4 +915,19 @@ impl TryFrom<&str> for Compression {
             other => Err(format!("unknown accept-encoding value: `{other}`")),
         }
     }
+}
+
+/// Normalize line & column numbers in exception message, so that changing the code in the respective file does not change
+/// the expected outcome. This makes it easier to add new test cases or update the code without needing to update all
+/// results.
+fn normalize_exception_location(e: impl ToString) -> String {
+    let e = e.to_string();
+
+    static REGEX: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r#"File "[^"]+", line [0-9]+, in (?<m>[a-zA-Z0-9_]+)"#).unwrap()
+    });
+
+    REGEX
+        .replace_all(&e, r#"File "<FILE>", line <LINE>, in $m"#)
+        .to_string()
 }
