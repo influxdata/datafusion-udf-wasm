@@ -1739,27 +1739,27 @@ async fn test_open_create() {
     | .           | OK: opened                                      |
     | ..          | OK: opened                                      |
     | /           | OK: opened                                      |
-    | /bin        | ERR: No such file or directory (os error 44)    |
-    | /boot       | ERR: No such file or directory (os error 44)    |
-    | /dev        | ERR: No such file or directory (os error 44)    |
-    | /etc        | ERR: No such file or directory (os error 44)    |
+    | /bin        | OK: opened                                      |
+    | /boot       | OK: opened                                      |
+    | /dev        | OK: opened                                      |
+    | /etc        | OK: opened                                      |
     | /etc/group  | ERR: No such file or directory (os error 44)    |
     | /etc/passwd | ERR: No such file or directory (os error 44)    |
     | /etc/shadow | ERR: No such file or directory (os error 44)    |
-    | /home       | ERR: No such file or directory (os error 44)    |
-    | /lib        | ERR: No such file or directory (os error 44)    |
-    | /lib64      | ERR: No such file or directory (os error 44)    |
-    | /opt        | ERR: No such file or directory (os error 44)    |
-    | /proc       | ERR: No such file or directory (os error 44)    |
+    | /home       | OK: opened                                      |
+    | /lib        | OK: opened                                      |
+    | /lib64      | OK: opened                                      |
+    | /opt        | OK: opened                                      |
+    | /proc       | OK: opened                                      |
     | /proc/self  | ERR: No such file or directory (os error 44)    |
-    | /root       | ERR: No such file or directory (os error 44)    |
-    | /run        | ERR: No such file or directory (os error 44)    |
-    | /sbin       | ERR: No such file or directory (os error 44)    |
-    | /srv        | ERR: No such file or directory (os error 44)    |
-    | /sys        | ERR: No such file or directory (os error 44)    |
-    | /tmp        | ERR: No such file or directory (os error 44)    |
-    | /usr        | ERR: No such file or directory (os error 44)    |
-    | /var        | ERR: No such file or directory (os error 44)    |
+    | /root       | OK: opened                                      |
+    | /run        | OK: opened                                      |
+    | /sbin       | OK: opened                                      |
+    | /srv        | OK: opened                                      |
+    | /sys        | OK: opened                                      |
+    | /tmp        | OK: opened                                      |
+    | /usr        | OK: opened                                      |
+    | /var        | OK: opened                                      |
     | \0          | ERR: file name contained an unexpected NUL byte |
     | /x/..       | ERR: No such file or directory (os error 44)    |
     +-------------+-------------------------------------------------+

@@ -964,9 +964,12 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         _path_flags: PathFlags,
         path: String,
     ) -> FsResult<MetadataHashValue> {
-        Ok(self
-            .node_at(self_, &path)?
-            .unwrap()
+        let node = match self.node_at(self_, &path)? {
+            Some(node) => node,
+            None => return Err(FsError::trap(ErrorCode::NoEntry)),
+        };
+
+        Ok(node
             .read()
             .unwrap()
             .metadata_hash(&self.vfs_state.metadata_hash_key))
