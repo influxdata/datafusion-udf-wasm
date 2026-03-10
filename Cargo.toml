@@ -16,9 +16,8 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-anyhow = { version = "1.0.101", default-features = false }
 arrow = { version = "57.1.0", default-features = false, features = ["ipc"] }
-chrono = { version = "0.4.43", default-features = false }
+chrono = { version = "0.4.44", default-features = false }
 datafusion = { version = "52.0.0", default-features = false }
 datafusion-common = { version = "52.0.0", default-features = false }
 datafusion-execution = { version = "52.0.0", default-features = false }
@@ -31,12 +30,13 @@ datafusion-udf-wasm-guest = { path = "guests/rust", version = "0.1.0", default-f
 datafusion-udf-wasm-host = { path = "host", version = "0.1.0", default-features = false }
 datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0", default-features = false }
 datafusion-udf-wasm-query = { path = "query", version = "0.1.0", default-features = false }
+flate2 = "1.1.9"
 gungraun = "0.17.2"
 http = { version = "1.4.0", default-features = false }
 hyper = { version = "1.8", default-features = false }
 insta = { version = "1.46.3", "default-features" = false }
 log = { version = "0.4.29", default-features = false }
-pyo3 = { version = "0.28.1", default-features = false, features = ["macros"] }
+pyo3 = { version = "0.28.2", default-features = false, features = ["macros"] }
 regex = { version = "1", default-features = false }
 sqlparser = { version = "0.59.0", default-features = false, features = [
   "std",
@@ -45,17 +45,17 @@ sqlparser = { version = "0.59.0", default-features = false, features = [
 tar = { version = "0.4.44", default-features = false }
 target-lexicon = { version = "0.13", default-features = false }
 tempfile = { version = "3.25.0", default-features = false }
-tokio = { version = "1.49.0", default-features = false }
-uuid = { version = "1.21.0", default-features = false, features = ["v4"] }
+tokio = { version = "1.50.0", default-features = false }
+uuid = { version = "1.22.0", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
-wasmtime = { version = "41.0.3", default-features = false, features = [
+wasmtime = { version = "42.0.1", default-features = false, features = [
   "async",
 ] }
-wasmtime-wasi = { version = "41.0.3", default-features = false }
-wasmtime-wasi-http = { version = "41.0.3", default-features = false, features = [
+wasmtime-wasi = { version = "42.0.1", default-features = false }
+wasmtime-wasi-http = { version = "42.0.1", default-features = false, features = [
   "default-send-request"
 ] }
-wasmtime-wasi-io = { version = "41.0.0", default-features = false }
+wasmtime-wasi-io = { version = "42.0.0", default-features = false }
 wit-bindgen = { version = "0.53", default-features = false, features = [
   "macros"
 ] }

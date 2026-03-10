@@ -2,10 +2,9 @@
 
 use std::sync::{Arc, Mutex};
 
-use anyhow::Context;
 use datafusion_common::DataFusionError;
 use datafusion_execution::memory_pool::{MemoryConsumer, MemoryPool, MemoryReservation};
-use wasmtime::ResourceLimiter;
+use wasmtime::{ResourceLimiter, error::Context};
 
 use crate::error::LimitExceeded;
 
@@ -110,9 +109,9 @@ impl Limiter {
     }
 
     /// Inner implementation of [`ResourceLimiter::table_growing`]
-    fn table_growing_inner(&mut self, current: usize, desired: usize) -> anyhow::Result<()> {
+    fn table_growing_inner(&mut self, current: usize, desired: usize) -> wasmtime::Result<()> {
         if desired > self.limits.n_elements_per_table {
-            return Err(anyhow::Error::new(LimitExceeded {
+            return Err(wasmtime::Error::new(LimitExceeded {
                 name: "table elements",
                 limit: self.limits.n_elements_per_table as u64,
                 current: current as u64,
@@ -144,7 +143,7 @@ impl ResourceLimiter for Limiter {
         desired: usize,
         // NOTE: we don't care if the memory is bound or unbounded
         _maximum: Option<usize>,
-    ) -> anyhow::Result<bool> {
+    ) -> wasmtime::Result<bool> {
         let growth = desired
             .checked_sub(current)
             .expect("wasmtime accounting correct");
@@ -165,7 +164,7 @@ impl ResourceLimiter for Limiter {
         desired: usize,
         // NOTE: we don't care if the table is bound or unbounded
         _maximum: Option<usize>,
-    ) -> anyhow::Result<bool> {
+    ) -> wasmtime::Result<bool> {
         match self.table_growing_inner(current, desired) {
             Ok(()) => Ok(true),
             Err(e) => {
@@ -176,14 +175,14 @@ impl ResourceLimiter for Limiter {
         }
     }
 
-    fn memory_grow_failed(&mut self, error: anyhow::Error) -> anyhow::Result<()> {
+    fn memory_grow_failed(&mut self, error: wasmtime::Error) -> wasmtime::Result<()> {
         log::debug!("memory growth failed: {error}");
 
         // reject allocation but do NOT trap
         Ok(())
     }
 
-    fn table_grow_failed(&mut self, error: anyhow::Error) -> anyhow::Result<()> {
+    fn table_grow_failed(&mut self, error: wasmtime::Error) -> wasmtime::Result<()> {
         log::debug!("table growth failed: {error}");
 
         // reject allocation but do NOT trap
@@ -209,7 +208,7 @@ impl ResourceLimiter for Limiter {
 #[derive(Debug)]
 pub(crate) struct GrowthError(DataFusionError);
 
-impl From<GrowthError> for anyhow::Error {
+impl From<GrowthError> for wasmtime::Error {
     fn from(e: GrowthError) -> Self {
         Self::new(e.0)
     }

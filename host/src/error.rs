@@ -34,13 +34,7 @@ impl WasmToDataFusionErrorExt for wasmtime::Error {
                 "Resource (e.g. `Field` or `ConfigOptions`) was already de-allocated. You may need to increase resource cache limits in `WasmPermissions`.".into()
             }
             _ => {
-                // `anyhow` gives as a choice:
-                // - keep the backtrace but don't allow error downcasting
-                // - remove the backtrace and gain the ability to downcast error types
-                //
-                // Since users may want to turn error types into status codes (e.g. for gRPC / Flight), we should probably use
-                // the latter option.
-                self.reallocate_into_boxed_dyn_error_without_backtrace()
+                self.into_boxed_dyn_error()
             }
         };
 
