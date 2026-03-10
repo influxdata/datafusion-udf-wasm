@@ -52,17 +52,6 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5  # v2.8.2
 
-      # Swatinem/rust-cache does NOT cache docs, see
-      # https://github.com/Swatinem/rust-cache/issues/208
-      - name: Rustdoc Cache
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306  # v4
-        with:
-          path: target/doc
-          key: v0-${{ runner.os }}-rustdoc-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            v0-${{ runner.os }}-rustdoc-${{ hashFiles('**/Cargo.lock') }}
-            v0-${{ runner.os }}-rustdoc-
-
       - name: just check
         run: just check
         env:

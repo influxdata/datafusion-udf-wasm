@@ -67,7 +67,7 @@ check-rust-test $RUST_BACKTRACE="1":
 # build Rust docs
 check-rust-doc $JUSTCHECK="1":
     @echo ::group::check-rust-doc
-    cargo doc --document-private-items --all-features --workspace
+    cargo doc --document-private-items --no-deps --all-features --workspace
     @echo ::endgroup::
 
 # dry-run Rust benchmarks
