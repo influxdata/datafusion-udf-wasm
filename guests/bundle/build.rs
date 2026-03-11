@@ -217,15 +217,6 @@ impl Feature {
 
         let cwd = package_locations.get(*package).unwrap();
 
-        // The build script itself is running under cargo. The guest build script also uses cargo, but with a different
-        // target architecture (= WASM). If we would use the same target directory, the nested cargo wouldn't be able
-        // to get the directory lock and the whole build process just deadlocks. We can however provide a sub-directory
-        // within target (we derive that from `OUT_DIR`).
-        //
-        // We are picking ONE target dir for all guests/features though, since many of them share dependencies like
-        // `datafusion` and we don't want to recompile them for every guest.
-        let target_dir = out_dir.join("target");
-
         for just_cmd in *just_cmds {
             let JustCmd {
                 artifact_type,
@@ -238,6 +229,8 @@ impl Feature {
                 std::fs::write(&out_file, b"").unwrap();
                 out_file
             } else {
+                let target_dir = sub_cargo_target_dir(out_dir);
+
                 let mut just_cmd = "build-".to_owned();
                 match artifact_type {
                     ArtifactType::Lib => {}
@@ -279,6 +272,49 @@ impl Feature {
             }
         }
     }
+}
+
+/// The build script itself is running under cargo. The guest build script also uses cargo, but with a different
+/// target architecture (= WASM). If we would use the same target directory, the nested cargo wouldn't be able
+/// to get the directory lock and the whole build process just deadlocks. We can however provide a sub-directory
+/// within target (we derive that from `OUT_DIR`).
+//
+/// We are picking ONE target dir for all guests/features though, since many of them share dependencies like
+/// `datafusion` and we don't want to recompile them for every guest.
+///
+/// We also pick a directory that is NOT specific to the current build hash of `bundle` (e.g. `OUT_DIR`) so that
+/// the built dependencies can easily be reused.
+fn sub_cargo_target_dir(out_dir: &Path) -> PathBuf {
+    let target_dir = match std::env::var("CARGO_TARGET_DIR") {
+        Ok(target_dir) => PathBuf::from(target_dir),
+        Err(_) => {
+            // find the upper-most cargo target dir
+            let mut next = Some(out_dir);
+            std::iter::from_fn(|| {
+                let current = next?;
+                next = current.parent();
+                Some(current)
+            })
+            .filter(|dir| is_target_dir(dir))
+            // iterator is "inside-out", i.e. `foo/bar/baz`, `foo/bar`, `foo`; so the last element will be the
+            // upper-most
+            .last()
+            .expect("`OUT_DIR` should be inside a cargo cache dir")
+            .to_owned()
+        }
+    };
+    target_dir.join("bundle")
+}
+
+/// Check if given path looks like a cargo target dir.
+fn is_target_dir(target_dir_path: &Path) -> bool {
+    const INDICACTORS: &[&str] = &[".rustc_info.json", "CACHEDIR.TAG"];
+    for name in INDICACTORS {
+        if target_dir_path.join(name).exists() {
+            return true;
+        }
+    }
+    false
 }
 
 /// Build a target with `just`.
