@@ -606,11 +606,68 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     async fn write(
         &mut self,
-        _self_: Resource<Descriptor>,
-        _buffer: Vec<u8>,
-        _offset: Filesize,
+        self_: Resource<Descriptor>,
+        buffer: Vec<u8>,
+        offset: Filesize,
     ) -> FsResult<Filesize> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        // Check if the descriptor has write permission
+        let desc = self.get_descriptor(self_)?;
+        if !desc.flags.contains(DescriptorFlags::WRITE) {
+            return Err(FsError::trap(ErrorCode::NotPermitted));
+        }
+
+        let node = Arc::clone(&desc.node);
+
+        // Per POSIX: "if nbyte is zero and the file is a regular file, the write() function
+        // may detect and return errors as described below. In the absence of errors, or if
+        // error detection is not performed, the write() function shall return zero and have
+        // no other results."
+        if buffer.is_empty() {
+            // Validate that this is a file, not a directory
+            let guard = node.read().unwrap();
+            return match &guard.kind {
+                VfsNodeKind::File { .. } => Ok(0),
+                VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
+            };
+        }
+
+        let mut guard = node.write().unwrap();
+        match &mut guard.kind {
+            VfsNodeKind::File { content } => {
+                let offset = offset as usize;
+                let nbyte = buffer.len();
+
+                // Calculate new file size after write
+                let new_end = offset.saturating_add(nbyte);
+                let old_len = content.len();
+
+                // Per POSIX: "On a regular file, if the position of the last byte written
+                // is greater than or equal to the length of the file, the length of the
+                // file shall be set to this position plus one."
+                if new_end > old_len {
+                    let growth = new_end - old_len;
+
+                    // Check memory limits before growing
+                    self.vfs_state
+                        .limiter
+                        .grow(growth)
+                        .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+
+                    // Extend the file with zeros up to offset if necessary
+                    content.resize(new_end, 0);
+                }
+
+                // Per POSIX: "The write() function shall attempt to write nbyte bytes from
+                // the buffer pointed to by buf to the file associated with the open file
+                // descriptor"
+                // "the actual writing of data shall proceed from the position in the file
+                // indicated by the file offset"
+                content[offset..offset + nbyte].copy_from_slice(&buffer);
+
+                Ok(nbyte as Filesize)
+            }
+            VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
+        }
     }
 
     async fn read_directory(
