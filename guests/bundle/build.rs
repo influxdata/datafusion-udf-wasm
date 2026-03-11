@@ -216,7 +216,15 @@ impl Feature {
         }
 
         let cwd = package_locations.get(*package).unwrap();
-        let target_dir = out_dir.join(name);
+
+        // The build script itself is running under cargo. The guest build script also uses cargo, but with a different
+        // target architecture (= WASM). If we would use the same target directory, the nested cargo wouldn't be able
+        // to get the directory lock and the whole build process just deadlocks. We can however provide a sub-directory
+        // within target (we derive that from `OUT_DIR`).
+        //
+        // We are picking ONE target dir for all guests/features though, since many of them share dependencies like
+        // `datafusion` and we don't want to recompile them for every guest.
+        let target_dir = out_dir.join("target");
 
         for just_cmd in *just_cmds {
             let JustCmd {
