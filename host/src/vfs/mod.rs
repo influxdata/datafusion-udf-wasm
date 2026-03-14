@@ -528,7 +528,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         _self_: Resource<Descriptor>,
         _offset: Filesize,
     ) -> FsResult<Resource<OutputStream>> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        Err(FsError::trap(ErrorCode::Unsupported))
     }
 
     fn append_via_stream(
@@ -2280,7 +2280,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_write_insufficient_memory_fails() {
-        let (mut table, mut vfs_state) = VfsTestParams::default().with_memory_pool_bytes(10).build();
+        let (mut table, mut vfs_state) =
+            VfsTestParams::default().with_memory_pool_bytes(10).build();
         let mut ctx = VfsCtxView {
             table: &mut table,
             vfs_state: &mut vfs_state,
