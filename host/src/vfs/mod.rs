@@ -528,7 +528,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         _self_: Resource<Descriptor>,
         _offset: Filesize,
     ) -> FsResult<Resource<OutputStream>> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        Err(FsError::trap(ErrorCode::Unsupported))
     }
 
     fn append_via_stream(
@@ -606,11 +606,69 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     async fn write(
         &mut self,
-        _self_: Resource<Descriptor>,
-        _buffer: Vec<u8>,
-        _offset: Filesize,
+        self_: Resource<Descriptor>,
+        buffer: Vec<u8>,
+        offset: Filesize,
     ) -> FsResult<Filesize> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        // Check if the descriptor has write permission
+        let desc = self.get_descriptor(self_)?;
+        if !desc.flags.contains(DescriptorFlags::WRITE) {
+            return Err(FsError::trap(ErrorCode::NotPermitted));
+        }
+
+        let node = Arc::clone(&desc.node);
+
+        // Per POSIX: "if nbyte is zero and the file is a regular file, the write() function
+        // may detect and return errors as described below. In the absence of errors, or if
+        // error detection is not performed, the write() function shall return zero and have
+        // no other results." We return an error here, as writing an empty buffer does *not*
+        // make much sense.
+        if buffer.is_empty() {
+            // Validate that this is a file, not a directory
+            let guard = node.read().unwrap();
+            return match &guard.kind {
+                VfsNodeKind::File { .. } => Err(FsError::trap(ErrorCode::Invalid)),
+                VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
+            };
+        }
+
+        let mut guard = node.write().unwrap();
+        match &mut guard.kind {
+            VfsNodeKind::File { content } => {
+                let offset = offset as usize;
+                let nbyte = buffer.len();
+
+                // Calculate new file size after write
+                let new_end = offset.saturating_add(nbyte);
+                let old_len = content.len();
+
+                // Per POSIX: "On a regular file, if the position of the last byte written
+                // is greater than or equal to the length of the file, the length of the
+                // file shall be set to this position plus one."
+                if new_end > old_len {
+                    let growth = new_end - old_len;
+
+                    // Check memory limits before growing
+                    self.vfs_state
+                        .limiter
+                        .grow(growth)
+                        .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+
+                    // Extend the file with zeros up to offset if necessary
+                    content.resize(new_end, 0);
+                }
+
+                // Per POSIX: "The write() function shall attempt to write nbyte bytes from
+                // the buffer pointed to by buf to the file associated with the open file
+                // descriptor"
+                // "the actual writing of data shall proceed from the position in the file
+                // indicated by the file offset"
+                content[offset..offset + nbyte].copy_from_slice(&buffer);
+
+                Ok(nbyte as Filesize)
+            }
+            VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
+        }
     }
 
     async fn read_directory(
@@ -1955,5 +2013,415 @@ mod tests {
             )
             .await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_write_without_permission_fails() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        // Open file with READ only (no WRITE permission)
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ,
+            )
+            .await
+            .unwrap();
+
+        let result = ctx.write(file_desc, vec![1, 2, 3], 0).await;
+        assert_error_code(result, ErrorCode::NotPermitted);
+    }
+
+    #[tokio::test]
+    async fn test_write_empty_buffer_to_file_fails() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let result = ctx.write(file_desc, vec![], 0).await;
+        assert_error_code(result, ErrorCode::Invalid);
+    }
+
+    #[tokio::test]
+    async fn test_write_to_empty_file_success() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let data = vec![1, 2, 3, 4, 5];
+        let result = ctx.write(file_desc, data.clone(), 0).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), data.len() as Filesize);
+
+        // Verify content
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &data);
+    }
+
+    #[tokio::test]
+    async fn test_write_returns_bytes_written() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let data = vec![0u8; 100];
+        let result = ctx.write(file_desc, data, 0).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_write_at_offset_extends_file() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3];
+        let file_node = create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Write at offset 3 (end of file)
+        let new_data = vec![4, 5, 6];
+        let result = ctx.write(file_desc, new_data, 3).await;
+        assert!(result.is_ok());
+
+        // Verify content is [1, 2, 3, 4, 5, 6]
+        assert_file_content(&file_node, &[1, 2, 3, 4, 5, 6]);
+    }
+
+    #[tokio::test]
+    async fn test_write_beyond_file_length_fills_with_zeros() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3];
+        let file_node = create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Write at offset 5 (beyond current file length of 3)
+        let new_data = vec![7, 8, 9];
+        let result = ctx.write(file_desc, new_data, 5).await;
+        assert!(result.is_ok());
+
+        // Verify content is [1, 2, 3, 0, 0, 7, 8, 9]
+        assert_file_content(&file_node, &[1, 2, 3, 0, 0, 7, 8, 9]);
+    }
+
+    #[tokio::test]
+    async fn test_write_overwrites_existing_content() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3, 4, 5];
+        let file_node = create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Overwrite bytes at offset 1
+        let new_data = vec![10, 11];
+        let result = ctx.write(file_desc, new_data, 1).await;
+        assert!(result.is_ok());
+
+        // Verify content is [1, 10, 11, 4, 5]
+        assert_file_content(&file_node, &[1, 10, 11, 4, 5]);
+    }
+
+    #[tokio::test]
+    async fn test_write_at_offset_zero_overwrites_beginning() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3, 4, 5];
+        let file_node = create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Overwrite bytes at offset 0
+        let new_data = vec![10, 11, 12];
+        let result = ctx.write(file_desc, new_data, 0).await;
+        assert!(result.is_ok());
+
+        // Verify content is [10, 11, 12, 4, 5]
+        assert_file_content(&file_node, &[10, 11, 12, 4, 5]);
+    }
+
+    #[tokio::test]
+    async fn test_write_insufficient_memory_fails() {
+        let (mut table, mut vfs_state) =
+            VfsTestParams::default().with_memory_pool_bytes(10).build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // Create file first (this uses some memory)
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "f".to_string(), // Short name to minimize memory usage
+                OpenFlags::CREATE,
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Try to write more data than memory allows
+        let large_data = vec![0u8; 1000];
+        let result = ctx.write(file_desc, large_data, 0).await;
+        assert_error_code(result, ErrorCode::InsufficientMemory);
+    }
+
+    #[tokio::test]
+    async fn test_write_partial_overwrite_and_extend() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3];
+        let file_node = create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Write at offset 2, overwriting last byte and extending
+        let new_data = vec![10, 11, 12];
+        let result = ctx.write(file_desc, new_data, 2).await;
+        assert!(result.is_ok());
+
+        // Verify content is [1, 2, 10, 11, 12]
+        assert_file_content(&file_node, &[1, 2, 10, 11, 12]);
+    }
+
+    #[tokio::test]
+    async fn test_write_multiple_writes_to_same_file() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // First write
+        let result1 = ctx
+            .write(Resource::new_borrow(file_desc.rep()), vec![1, 2, 3], 0)
+            .await;
+        assert!(result1.is_ok());
+
+        // Second write at end
+        let result2 = ctx
+            .write(Resource::new_borrow(file_desc.rep()), vec![4, 5], 3)
+            .await;
+        assert!(result2.is_ok());
+
+        // Third write overwriting middle
+        let result3 = ctx.write(file_desc, vec![10], 2).await;
+        assert!(result3.is_ok());
+
+        // Verify content is [1, 2, 10, 4, 5]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &[1, 2, 10, 4, 5]);
+    }
+
+    #[tokio::test]
+    async fn test_write_single_byte() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let result = ctx.write(file_desc, vec![42], 0).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &[42]);
     }
 }
