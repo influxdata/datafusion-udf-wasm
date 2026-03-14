@@ -187,43 +187,69 @@ if __name__ == '__main__':
 #[tokio::test]
 async fn test_write() {
     const CODE: &str = r#"
-def write(path: str) -> str:
+def write(path: str, content: str) -> str:
     try:
-        open(path, "x")
-        return "OK"
+        with open(path, "w") as fp:
+            fp.write(content)
+        with open(path, "r") as fp:
+            data = fp.read()
+        if data == content:
+            return "OK"
+        else:
+            return f"MISMATCH: expected {repr(content)}, got {repr(data)}"
     except Exception as e:
-        return f"{e}"
-
-    raise Exception("unreachable")
+        return f"ERR: {e}"
 "#;
 
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     struct TestCase {
         path: &'static str,
-        err: &'static str,
+        content: &'static str,
+        expected: &'static str,
     }
     const CASES: &[TestCase] = &[
         TestCase {
             path: "/",
-            err: "[Errno 20] File exists: '/'",
+            content: "test",
+            expected: "ERR: [Errno 31] Is a directory: '/'",
         },
         TestCase {
             path: "/lib",
-            err: "[Errno 20] File exists: '/lib'",
+            content: "test",
+            expected: "ERR: [Errno 31] Is a directory: '/lib'",
         },
         TestCase {
             path: "/test",
-            err: "OK",
+            content: "hello world",
+            expected: "ERR: [Errno 58] Not supported",
+        },
+        TestCase {
+            path: "/test",
+            content: "",
+            expected: "OK",
+        },
+        TestCase {
+            path: "/nested/file",
+            content: "data",
+            expected: "ERR: [Errno 44] No such file or directory: '/nested/file'",
         },
     ];
 
     let array = udf
         .invoke_async_with_args(ScalarFunctionArgs {
-            args: vec![ColumnarValue::Array(Arc::new(StringArray::from_iter(
-                CASES.iter().map(|c| Some(c.path)),
-            )))],
-            arg_fields: vec![Arc::new(Field::new("path", DataType::Utf8, true))],
+            args: vec![
+                ColumnarValue::Array(Arc::new(StringArray::from_iter(
+                    CASES.iter().map(|c| Some(c.path)),
+                ))),
+                ColumnarValue::Array(Arc::new(StringArray::from_iter(
+                    CASES.iter().map(|c| Some(c.content)),
+                ))),
+            ],
+            arg_fields: vec![
+                Arc::new(Field::new("path", DataType::Utf8, true)),
+                Arc::new(Field::new("content", DataType::Utf8, true)),
+            ],
             number_rows: CASES.len(),
             return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
             config_options: Arc::new(ConfigOptions::default()),
@@ -234,7 +260,7 @@ def write(path: str) -> str:
 
     assert_eq!(
         array.as_ref(),
-        &StringArray::from_iter(CASES.iter().map(|c| Some(c.err.to_string()))) as &dyn Array,
+        &StringArray::from_iter(CASES.iter().map(|c| Some(c.expected.to_string()))) as &dyn Array,
     );
 }
 
