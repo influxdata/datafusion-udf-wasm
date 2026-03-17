@@ -24,7 +24,8 @@ use wasmtime_wasi::{
     ResourceTable,
     filesystem::Descriptor,
     p2::{
-        FsError, FsResult, InputStream as WasiInputStream,
+        FsError, FsResult, InputStream as WasiInputStream, OutputStream as WasiOutputStream,
+        Pollable, StreamError, StreamResult,
         bindings::filesystem::{
             self,
             types::{
@@ -36,6 +37,7 @@ use wasmtime_wasi::{
         pipe::MemoryInputPipe,
     },
 };
+use wasmtime_wasi_io::bytes;
 
 use crate::{
     error::LimitExceeded,
@@ -399,6 +401,83 @@ struct VfsDirectoryStream {
     entries: std::iter::Fuse<std::vec::IntoIter<DirectoryEntry>>,
 }
 
+/// Output stream for writing to a VFS file.
+struct VfsOutputStream {
+    /// The file node to write to.
+    node: SharedVfsNode,
+    /// Current write offset in the file.
+    offset: Arc<AtomicU64>,
+    /// Resource limiter for memory accounting.
+    limiter: Limiter,
+}
+
+impl std::fmt::Debug for VfsOutputStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VfsOutputStream")
+            .field("offset", &self.offset.load(Ordering::SeqCst))
+            .finish_non_exhaustive()
+    }
+}
+
+impl Pollable for VfsOutputStream {
+    fn ready<'life0, 'async_trait>(
+        &'life0 mut self,
+    ) -> ::core::pin::Pin<
+        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
+    >
+    where
+        'life0: 'async_trait,
+        Self: 'async_trait,
+    {
+        Box::pin(async move {
+            // Wait until the stream is ready for writing. For an in-memory
+            // stream, this is always the case, so we can just return
+            // immediately.
+        })
+    }
+}
+
+impl WasiOutputStream for VfsOutputStream {
+    fn write(&mut self, buf: bytes::Bytes) -> StreamResult<()> {
+        if buf.is_empty() {
+            return Ok(());
+        }
+
+        let mut guard = self.node.write().unwrap();
+        match &mut guard.kind {
+            VfsNodeKind::File { content } => {
+                let offset = self.offset.load(Ordering::SeqCst) as usize;
+                let nbyte = buf.len();
+                let new_end = offset.saturating_add(nbyte);
+                let old_len = content.len();
+
+                if new_end > old_len {
+                    let growth = new_end - old_len;
+                    self.limiter
+                        .grow(growth)
+                        .map_err(|_| StreamError::Trap(ErrorCode::InsufficientMemory.into()))?;
+                    content.resize(new_end, 0);
+                }
+
+                content[offset..offset + nbyte].copy_from_slice(&buf);
+                self.offset.fetch_add(nbyte as u64, Ordering::SeqCst);
+                Ok(())
+            }
+            VfsNodeKind::Directory { .. } => Err(StreamError::Trap(ErrorCode::IsDirectory.into())),
+        }
+    }
+
+    fn flush(&mut self) -> StreamResult<()> {
+        // No-op for in-memory filesystem
+        Ok(())
+    }
+
+    fn check_write(&mut self) -> StreamResult<usize> {
+        // Allow writes up to 64KB at a time
+        Ok(64 * 1024)
+    }
+}
+
 /// Provide file system access to given state.
 pub(crate) trait VfsView {
     /// Provide vfs access.
@@ -525,17 +604,66 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     fn write_via_stream(
         &mut self,
-        _self_: Resource<Descriptor>,
-        _offset: Filesize,
+        self_: Resource<Descriptor>,
+        offset: Filesize,
     ) -> FsResult<Resource<OutputStream>> {
-        Err(FsError::trap(ErrorCode::Unsupported))
+        let desc = self.get_descriptor(self_)?;
+        if !desc.flags.contains(DescriptorFlags::WRITE) {
+            return Err(FsError::trap(ErrorCode::NotPermitted));
+        }
+
+        let node = Arc::clone(&desc.node);
+        let limiter = self.vfs_state.limiter.clone();
+
+        match &node.read().unwrap().kind {
+            VfsNodeKind::File { .. } => {
+                let stream = VfsOutputStream {
+                    node: Arc::clone(&node),
+                    offset: Arc::new(AtomicU64::new(offset)),
+                    limiter,
+                };
+                let stream: Box<dyn WasiOutputStream> = Box::new(stream);
+                let res = self
+                    .table
+                    .push(stream)
+                    .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+                Ok(res)
+            }
+            VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
+        }
     }
 
     fn append_via_stream(
         &mut self,
-        _self_: Resource<Descriptor>,
+        self_: Resource<Descriptor>,
     ) -> FsResult<Resource<OutputStream>> {
-        Err(FsError::trap(ErrorCode::ReadOnly))
+        let desc = self.get_descriptor(self_)?;
+        if !desc.flags.contains(DescriptorFlags::WRITE) {
+            return Err(FsError::trap(ErrorCode::NotPermitted));
+        }
+
+        let node = Arc::clone(&desc.node);
+        let limiter = self.vfs_state.limiter.clone();
+
+        let offset = {
+            let guard = node.read().unwrap();
+            match &guard.kind {
+                VfsNodeKind::File { content, .. } => content.len() as u64,
+                VfsNodeKind::Directory { .. } => return Err(FsError::trap(ErrorCode::IsDirectory)),
+            }
+        };
+
+        let stream = VfsOutputStream {
+            node,
+            offset: Arc::new(AtomicU64::new(offset)),
+            limiter,
+        };
+        let stream: Box<dyn WasiOutputStream> = Box::new(stream);
+        let res = self
+            .table
+            .push(stream)
+            .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+        Ok(res)
     }
 
     async fn advise(
@@ -2423,5 +2551,572 @@ mod tests {
         let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
         let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
         assert_file_content(&node, &[42]);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_without_write_permission_fails() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        // Open file with READ only (no WRITE permission)
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ,
+            )
+            .await
+            .unwrap();
+
+        let result = ctx.write_via_stream(file_desc, 0);
+        assert_error_code(result, ErrorCode::NotPermitted);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_to_file_succeeds() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let result = ctx.write_via_stream(file_desc, 0);
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_writes_content() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let stream_res = ctx.write_via_stream(file_desc, 0).unwrap();
+
+        // Get the stream and write to it
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+        let data = bytes::Bytes::from_static(&[1, 2, 3, 4, 5]);
+        let write_result = stream.write(data);
+        assert!(write_result.is_ok());
+
+        // Verify content
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &[1, 2, 3, 4, 5]);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_at_offset() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3, 4, 5];
+        create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Create stream at offset 2
+        let stream_res = ctx.write_via_stream(file_desc, 2).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+        let data = bytes::Bytes::from_static(&[10, 11]);
+        let write_result = stream.write(data);
+        assert!(write_result.is_ok());
+
+        // Verify content is [1, 2, 10, 11, 5]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &[1, 2, 10, 11, 5]);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_extends_file() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3];
+        create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Create stream at offset 3 (end of file)
+        let stream_res = ctx.write_via_stream(file_desc, 3).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+        let data = bytes::Bytes::from_static(&[4, 5, 6]);
+        let write_result = stream.write(data);
+        assert!(write_result.is_ok());
+
+        // Verify content is [1, 2, 3, 4, 5, 6]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &[1, 2, 3, 4, 5, 6]);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_beyond_file_length_fills_with_zeros() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3];
+        create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Create stream at offset 5 (beyond current file length of 3)
+        let stream_res = ctx.write_via_stream(file_desc, 5).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+        let data = bytes::Bytes::from_static(&[7, 8, 9]);
+        let write_result = stream.write(data);
+        assert!(write_result.is_ok());
+
+        // Verify content is [1, 2, 3, 0, 0, 7, 8, 9]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &[1, 2, 3, 0, 0, 7, 8, 9]);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_empty_write_is_noop() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3];
+        create_file_with_content(&mut ctx, "testfile", initial_content.clone()).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let stream_res = ctx.write_via_stream(file_desc, 0).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+        // Write empty buffer
+        let data = bytes::Bytes::new();
+        let write_result = stream.write(data);
+        assert!(write_result.is_ok());
+
+        // Verify content unchanged
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &initial_content);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_multiple_writes_advance_offset() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let stream_res = ctx.write_via_stream(file_desc, 0).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+
+        // First write
+        let data1 = bytes::Bytes::from_static(&[1, 2, 3]);
+        let write_result1 = stream.write(data1);
+        assert!(write_result1.is_ok());
+
+        // Second write should continue from offset 3
+        let data2 = bytes::Bytes::from_static(&[4, 5]);
+        let write_result2 = stream.write(data2);
+        assert!(write_result2.is_ok());
+
+        // Third write should continue from offset 5
+        let data3 = bytes::Bytes::from_static(&[6]);
+        let write_result3 = stream.write(data3);
+        assert!(write_result3.is_ok());
+
+        // Verify content is [1, 2, 3, 4, 5, 6]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &[1, 2, 3, 4, 5, 6]);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_insufficient_memory_fails() {
+        let (mut table, mut vfs_state) =
+            VfsTestParams::default().with_memory_pool_bytes(50).build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        // Create file first (this uses some memory)
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "f".to_string(), // Short name to minimize memory usage
+                OpenFlags::CREATE,
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let stream_res = ctx.write_via_stream(file_desc, 0).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+
+        // Try to write more data than memory allows
+        let large_data = bytes::Bytes::from(vec![0u8; 1000]);
+        let result = stream.write(large_data);
+        assert!(result.is_err());
+        match result {
+            Err(StreamError::Trap(_)) => {} // Expected
+            other => panic!("Expected StreamError::Trap, got {:?}", other),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_flush_succeeds() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let stream_res = ctx.write_via_stream(file_desc, 0).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+
+        // Flush should succeed (no-op)
+        let flush_result = stream.flush();
+        assert!(flush_result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_check_write_returns_64kb() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let stream_res = ctx.write_via_stream(file_desc, 0).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+
+        // check_write should return 64KB
+        let check_result = stream.check_write();
+        assert!(check_result.is_ok());
+        assert_eq!(check_result.unwrap(), 64 * 1024);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_single_byte() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        create_test_file_via_open(&mut ctx, "testfile").await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        let stream_res = ctx.write_via_stream(file_desc, 0).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+        let data = bytes::Bytes::from_static(&[42]);
+        let write_result = stream.write(data);
+        assert!(write_result.is_ok());
+
+        // Verify content
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &[42]);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_overwrites_existing_content() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3, 4, 5];
+        create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Write at beginning to overwrite first 3 bytes
+        let stream_res = ctx.write_via_stream(file_desc, 0).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+        let data = bytes::Bytes::from_static(&[10, 11, 12]);
+        let write_result = stream.write(data);
+        assert!(write_result.is_ok());
+
+        // Verify content is [10, 11, 12, 4, 5]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &[10, 11, 12, 4, 5]);
+    }
+
+    #[tokio::test]
+    async fn test_write_via_stream_partial_overwrite_and_extend() {
+        let (mut table, mut vfs_state) = VfsTestParams::default().build();
+        let mut ctx = VfsCtxView {
+            table: &mut table,
+            vfs_state: &mut vfs_state,
+        };
+
+        let initial_content = vec![1, 2, 3];
+        create_file_with_content(&mut ctx, "testfile", initial_content).await;
+
+        let desc = create_test_descriptor(
+            &mut ctx,
+            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
+        );
+        let file_desc = ctx
+            .open_at(
+                desc,
+                PathFlags::empty(),
+                "testfile".to_string(),
+                OpenFlags::empty(),
+                DescriptorFlags::READ | DescriptorFlags::WRITE,
+            )
+            .await
+            .unwrap();
+
+        // Write at offset 2, overwriting last byte and extending
+        let stream_res = ctx.write_via_stream(file_desc, 2).unwrap();
+
+        let stream = ctx
+            .table
+            .get_mut::<Box<dyn WasiOutputStream>>(&stream_res)
+            .unwrap();
+        let data = bytes::Bytes::from_static(&[10, 11, 12]);
+        let write_result = stream.write(data);
+        assert!(write_result.is_ok());
+
+        // Verify content is [1, 2, 10, 11, 12]
+        let desc = create_test_descriptor(&mut ctx, DescriptorFlags::READ);
+        let node = ctx.node_at(desc, "testfile").unwrap().unwrap();
+        assert_file_content(&node, &[1, 2, 10, 11, 12]);
     }
 }
