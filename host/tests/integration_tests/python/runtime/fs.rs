@@ -222,7 +222,7 @@ def write(path: str, content: str) -> str:
         TestCase {
             path: "/test",
             content: "hello world",
-            expected: "ERR: [Errno 58] Not supported",
+            expected: "OK",
         },
         TestCase {
             path: "/test",
