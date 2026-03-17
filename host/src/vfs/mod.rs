@@ -2555,35 +2555,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_write_via_stream_to_file_succeeds() {
-        let (mut table, mut vfs_state) = VfsTestParams::default().build();
-        let mut ctx = VfsCtxView {
-            table: &mut table,
-            vfs_state: &mut vfs_state,
-        };
-
-        create_test_file_via_open(&mut ctx, "testfile").await;
-
-        let desc = create_test_descriptor(
-            &mut ctx,
-            DescriptorFlags::READ | DescriptorFlags::WRITE | DescriptorFlags::MUTATE_DIRECTORY,
-        );
-        let file_desc = ctx
-            .open_at(
-                desc,
-                PathFlags::empty(),
-                "testfile".to_string(),
-                OpenFlags::empty(),
-                DescriptorFlags::READ | DescriptorFlags::WRITE,
-            )
-            .await
-            .unwrap();
-
-        let result = ctx.write_via_stream(file_desc, 0);
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
     async fn test_write_via_stream_writes_content() {
         let (mut table, mut vfs_state) = VfsTestParams::default().build();
         let mut ctx = VfsCtxView {
