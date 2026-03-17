@@ -635,35 +635,9 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
 
     fn append_via_stream(
         &mut self,
-        self_: Resource<Descriptor>,
+        _self_: Resource<Descriptor>,
     ) -> FsResult<Resource<OutputStream>> {
-        let desc = self.get_descriptor(self_)?;
-        if !desc.flags.contains(DescriptorFlags::WRITE) {
-            return Err(FsError::trap(ErrorCode::NotPermitted));
-        }
-
-        let node = Arc::clone(&desc.node);
-        let limiter = self.vfs_state.limiter.clone();
-
-        let offset = {
-            let guard = node.read().unwrap();
-            match &guard.kind {
-                VfsNodeKind::File { content, .. } => content.len() as u64,
-                VfsNodeKind::Directory { .. } => return Err(FsError::trap(ErrorCode::IsDirectory)),
-            }
-        };
-
-        let stream = VfsOutputStream {
-            node,
-            offset: Arc::new(AtomicU64::new(offset)),
-            limiter,
-        };
-        let stream: Box<dyn WasiOutputStream> = Box::new(stream);
-        let res = self
-            .table
-            .push(stream)
-            .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
-        Ok(res)
+        Err(FsError::trap(ErrorCode::Unsupported))
     }
 
     async fn advise(
