@@ -443,27 +443,17 @@ impl WasiOutputStream for VfsOutputStream {
             return Ok(());
         }
 
-        let mut guard = self.node.write().unwrap();
-        match &mut guard.kind {
-            VfsNodeKind::File { content } => {
-                let offset = self.offset.load(Ordering::SeqCst) as usize;
-                let nbyte = buf.len();
-                let new_end = offset.saturating_add(nbyte);
-                let old_len = content.len();
-
-                if new_end > old_len {
-                    let growth = new_end - old_len;
-                    self.limiter
-                        .grow(growth)
-                        .map_err(|_| StreamError::Trap(ErrorCode::InsufficientMemory.into()))?;
-                    content.resize(new_end, 0);
-                }
-
-                content[offset..offset + nbyte].copy_from_slice(&buf);
-                self.offset.fetch_add(nbyte as u64, Ordering::SeqCst);
+        match perform_write(
+            &self.node,
+            self.offset.load(Ordering::SeqCst) as usize,
+            &buf,
+            &self.limiter,
+        ) {
+            Ok(nbyte) => {
+                self.offset.fetch_add(nbyte, Ordering::SeqCst);
                 Ok(())
             }
-            VfsNodeKind::Directory { .. } => Err(StreamError::Trap(ErrorCode::IsDirectory.into())),
+            Err(e) => Err(StreamError::Trap(e.into())),
         }
     }
 
@@ -734,43 +724,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
             };
         }
 
-        let mut guard = node.write().unwrap();
-        match &mut guard.kind {
-            VfsNodeKind::File { content } => {
-                let offset = offset as usize;
-                let nbyte = buffer.len();
-
-                // Calculate new file size after write
-                let new_end = offset.saturating_add(nbyte);
-                let old_len = content.len();
-
-                // Per POSIX: "On a regular file, if the position of the last byte written
-                // is greater than or equal to the length of the file, the length of the
-                // file shall be set to this position plus one."
-                if new_end > old_len {
-                    let growth = new_end - old_len;
-
-                    // Check memory limits before growing
-                    self.vfs_state
-                        .limiter
-                        .grow(growth)
-                        .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
-
-                    // Extend the file with zeros up to offset if necessary
-                    content.resize(new_end, 0);
-                }
-
-                // Per POSIX: "The write() function shall attempt to write nbyte bytes from
-                // the buffer pointed to by buf to the file associated with the open file
-                // descriptor"
-                // "the actual writing of data shall proceed from the position in the file
-                // indicated by the file offset"
-                content[offset..offset + nbyte].copy_from_slice(&buffer);
-
-                Ok(nbyte as Filesize)
-            }
-            VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
-        }
+        perform_write(&node, offset as usize, &buffer, &self.vfs_state.limiter)
     }
 
     async fn read_directory(
@@ -1193,6 +1147,35 @@ impl<'a> filesystem::preopens::Host for VfsCtxView<'a> {
         };
         let res = self.table.push(desc)?;
         Ok(vec![(res.cast(), "/".to_string())])
+    }
+}
+
+/// Helper function to perform write operation
+fn perform_write(
+    node: &SharedVfsNode,
+    offset: usize,
+    buffer: &[u8],
+    limiter: &Limiter,
+) -> FsResult<Filesize> {
+    let mut guard = node.write().unwrap();
+    match &mut guard.kind {
+        VfsNodeKind::File { content } => {
+            let nbyte = buffer.len();
+            let new_end = offset.saturating_add(nbyte);
+            let old_len = content.len();
+
+            if new_end > old_len {
+                let growth = new_end - old_len;
+                limiter
+                    .grow(growth)
+                    .map_err(|_| FsError::trap(ErrorCode::InsufficientMemory))?;
+                content.resize(new_end, 0);
+            }
+
+            content[offset..offset + nbyte].copy_from_slice(buffer);
+            Ok(nbyte as Filesize)
+        }
+        VfsNodeKind::Directory { .. } => Err(FsError::trap(ErrorCode::IsDirectory)),
     }
 }
 
