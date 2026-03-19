@@ -21,7 +21,7 @@ use rand::RngExt;
 use siphasher::sip128::{Hasher128, SipHasher24};
 use wasmtime::component::{HasData, Resource};
 use wasmtime_wasi::{
-    ResourceTable,
+    ResourceTable, async_trait,
     filesystem::Descriptor,
     p2::{
         FsError, FsResult, InputStream as WasiInputStream, OutputStream as WasiOutputStream,
@@ -406,7 +406,7 @@ struct VfsOutputStream {
     /// The file node to write to.
     node: SharedVfsNode,
     /// Current write offset in the file.
-    offset: Arc<AtomicU64>,
+    offset: u64,
     /// Resource limiter for memory accounting.
     limiter: Limiter,
 }
@@ -414,26 +414,17 @@ struct VfsOutputStream {
 impl std::fmt::Debug for VfsOutputStream {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VfsOutputStream")
-            .field("offset", &self.offset.load(Ordering::SeqCst))
+            .field("offset", &self.offset)
             .finish_non_exhaustive()
     }
 }
 
+#[async_trait]
 impl Pollable for VfsOutputStream {
-    fn ready<'life0, 'async_trait>(
-        &'life0 mut self,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = ()> + ::core::marker::Send + 'async_trait>,
-    >
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async move {
-            // Wait until the stream is ready for writing. For an in-memory
-            // stream, this is always the case, so we can just return
-            // immediately.
-        })
+    async fn ready(&mut self) {
+        // Wait until the stream is ready for writing. For an in-memory
+        // stream, this is always the case, so we can just return
+        // immediately.
     }
 }
 
@@ -443,14 +434,9 @@ impl WasiOutputStream for VfsOutputStream {
             return Ok(());
         }
 
-        match perform_write(
-            &self.node,
-            self.offset.load(Ordering::SeqCst) as usize,
-            &buf,
-            &self.limiter,
-        ) {
+        match perform_write(&self.node, self.offset as usize, &buf, &self.limiter) {
             Ok(nbyte) => {
-                self.offset.fetch_add(nbyte, Ordering::SeqCst);
+                self.offset += nbyte;
                 Ok(())
             }
             Err(e) => Err(StreamError::Trap(e.into())),
@@ -609,7 +595,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
             VfsNodeKind::File { .. } => {
                 let stream = VfsOutputStream {
                     node: Arc::clone(&node),
-                    offset: Arc::new(AtomicU64::new(offset)),
+                    offset,
                     limiter,
                 };
                 let stream: Box<dyn WasiOutputStream> = Box::new(stream);
