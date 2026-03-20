@@ -42,7 +42,7 @@ sqlparser = { version = "0.59.0", default-features = false, features = [
   "std",
   "visitor"
 ] }
-tar = { version = "0.4.44", default-features = false }
+tar = { version = "0.4.45", default-features = false }
 target-lexicon = { version = "0.13", default-features = false }
 tempfile = { version = "3.25.0", default-features = false }
 tokio = { version = "1.50.0", default-features = false }
