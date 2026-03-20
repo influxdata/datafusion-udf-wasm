@@ -1,12 +1,15 @@
 //! Inspection of Python code to extract [signature](crate::signature) information.
-use std::{collections::HashSet, ffi::CString};
+use std::{collections::HashSet, ffi::CString, fs};
 
 use datafusion_common::{DataFusionError, error::Result as DataFusionResult};
 use pyo3::{
     Borrowed, Bound, FromPyObject, PyAny, PyErr, PyResult, Python,
     exceptions::PyTypeError,
     intern,
-    types::{PyAnyMethods, PyDictMethods, PyModuleMethods, PyStringMethods, PyTypeMethods},
+    types::{
+        PyAnyMethods, PyDict, PyDictMethods, PyModule, PyModuleMethods, PyStringMethods,
+        PyTypeMethods,
+    },
 };
 
 use crate::{
@@ -190,17 +193,30 @@ impl<'a, 'py> FromPyObject<'a, 'py> for PythonFnSignature {
     }
 }
 
-/// Execute python code and retrieve the list of defined functions.
-pub(crate) fn inspect_python_code(code: &str) -> DataFusionResult<Vec<PythonFn>> {
+/// Load a Python module from the guest filesystem and retrieve the list of defined functions.
+pub(crate) fn inspect_python_code(
+    module_name: &str,
+    module_path: &str,
+) -> DataFusionResult<Vec<PythonFn>> {
     Python::attach(|py| {
-        inspect_python_code_inner(code, py)
+        inspect_python_code_inner(module_name, module_path, py)
             .map_err(|e| DataFusionError::Plan(py_err_to_string(e, py)))
     })
 }
 
 /// Inner implementation of [`inspect_python_code`] which is meant to wrapped into a Python execution context.
-fn inspect_python_code_inner(code: &str, py: Python<'_>) -> PyResult<Vec<PythonFn>> {
+fn inspect_python_code_inner(
+    module_name: &str,
+    module_path: &str,
+    py: Python<'_>,
+) -> PyResult<Vec<PythonFn>> {
+    let code =
+        fs::read_to_string(module_path).map_err(|e| PyErr::new::<PyTypeError, _>(e.to_string()))?;
     let code = CString::new(code).map_err(|e| PyErr::new::<PyTypeError, _>(e.to_string()))?;
+    let module_path =
+        CString::new(module_path).map_err(|e| PyErr::new::<PyTypeError, _>(e.to_string()))?;
+    let module_name =
+        CString::new(module_name).map_err(|e| PyErr::new::<PyTypeError, _>(e.to_string()))?;
 
     // https://docs.python.org/3/library/inspect.html
     let mod_inspect = py.import(intern!(py, "inspect"))?;
@@ -211,10 +227,21 @@ fn inspect_python_code_inner(code: &str, py: Python<'_>) -> PyResult<Vec<PythonF
     let mod_builtins = py.import(intern!(py, "builtins"))?;
     let ty_type = mod_builtins.getattr(intern!(py, "type"))?;
 
-    py.run(&code, None, None)?;
+    let mod_sys = py.import(intern!(py, "sys"))?;
+    let modules = mod_sys
+        .getattr(intern!(py, "modules"))?
+        .cast_into::<PyDict>()?;
+    let _ = modules.del_item(module_name.to_str().unwrap());
 
-    let mod_main = py.import(intern!(py, "__main__"))?;
-    let main_content = mod_main.dict();
+    let module = PyModule::from_code(
+        py,
+        code.as_c_str(),
+        module_path.as_c_str(),
+        module_name.as_c_str(),
+    )?;
+    modules.set_item(module_name.to_str().unwrap(), &module)?;
+
+    let main_content = module.dict();
 
     let mut fns = vec![];
     for (name, val) in main_content.iter() {
@@ -240,7 +267,7 @@ fn inspect_python_code_inner(code: &str, py: Python<'_>) -> PyResult<Vec<PythonF
         let Ok(val_module) = val_module.extract::<String>() else {
             continue;
         };
-        if val_module != "__main__" {
+        if val_module != module_name.to_str().unwrap() {
             continue;
         }
 

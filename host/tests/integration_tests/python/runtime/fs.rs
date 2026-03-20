@@ -39,7 +39,7 @@ def listdir(cwd: str | None, dir: str) -> str:
         TestCase {
             cwd: None,
             dir: "/",
-            results: &["lib"],
+            results: &["lib", "workspace"],
         },
         TestCase {
             cwd: None,
@@ -82,7 +82,7 @@ def listdir(cwd: str | None, dir: str) -> str:
         TestCase {
             cwd: Some("/lib"),
             dir: "..",
-            results: &["lib"],
+            results: &["lib", "workspace"],
         },
     ];
 
@@ -268,7 +268,8 @@ def write(path: str, content: str) -> str:
 async fn test_limit_inodes() {
     let component = python_component().await;
 
-    // since the VFS is immutable, we have to use the limit that is too small for the root FS
+    // The guest populates its root FS during `scalar_udfs`, so we use limits that are too small
+    // for that initialization step.
     let err = WasmScalarUdf::new(
         component,
         &WasmPermissions::new().with_vfs_limits(VfsLimits {
@@ -285,9 +286,11 @@ async fn test_limit_inodes() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    scalar_udfs
     caused by
-    IO error: inodes limit reached: limit<=42 current==42 requested+=1
+    Execution error: populate root FS from TAR
+    caused by
+    IO error: I/O error (os error 29)
     ");
 }
 
@@ -295,8 +298,9 @@ async fn test_limit_inodes() {
 async fn test_limit_bytes() {
     let component = python_component().await;
 
-    // Since the VFS is immutable, we have to use the limit that is too small for the root FS. At the same time, the
-    // memory pool must be large enough to hold the component code itself. So the memory limit should be
+    // Since the guest populates the root FS during `scalar_udfs`, we have to use a limit that is
+    // too small for that initialization step. At the same time, the memory pool must be large
+    // enough to hold the component code itself. So the memory limit should be
     // `code_size < limit < code_size + FS`. Instead of hard-coding this balance here, we try to automatically find it.
     const START: usize = 100_000_000; // 100MB
     const STEP: usize = 10_000_000; // 10MB
@@ -333,8 +337,8 @@ async fn test_limit_bytes() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    scalar_udfs
     caused by
-    IO error: Resources exhausted: Failed to allocate additional <SIZE> for WASM UDF resources with <SIZE> already allocated for this reservation - <SIZE> remain available for the total pool
+    Error during planning: cannot format exception: MemoryError:
     ");
 }

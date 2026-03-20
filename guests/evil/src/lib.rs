@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use datafusion_common::Result as DataFusionResult;
 use datafusion_expr::ScalarUDFImpl;
-use datafusion_udf_wasm_guest::export;
+use datafusion_udf_wasm_guest::{export, extract_tar_to_root, init_once};
 
 mod common;
 mod complex;
@@ -164,10 +164,18 @@ fn root() -> Option<Vec<u8>> {
 
 /// Returns our evil UDFs.
 fn udfs(source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
+    static INIT: std::sync::OnceLock<Result<(), String>> = std::sync::OnceLock::new();
+
+    init_once(&INIT, || {
+        if let Some(root) = root() {
+            extract_tar_to_root(&root).map_err(|e| e.context("populate root FS from TAR"))?;
+        }
+        Ok(())
+    })?;
+
     (Evil::get().udfs)(source)
 }
 
 export! {
-    root_fs_tar: root,
     scalar_udfs: udfs,
 }

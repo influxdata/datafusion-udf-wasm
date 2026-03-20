@@ -6,14 +6,15 @@
 use std::any::Any;
 use std::hash::Hash;
 use std::ops::{ControlFlow, Range};
-use std::sync::{Arc, Once};
+use std::sync::{Arc, Once, OnceLock};
+use std::{fs, path::Path};
 
 use arrow::datatypes::DataType;
 use datafusion_common::{
     DataFusionError, Result as DataFusionResult, exec_datafusion_err, exec_err,
 };
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
-use datafusion_udf_wasm_guest::export;
+use datafusion_udf_wasm_guest::{export, extract_tar_to_root, init_once};
 use pyo3::prelude::*;
 use uuid::Uuid;
 
@@ -33,6 +34,10 @@ mod signature;
 
 /// Supported Python version range.
 const PYTHON_VERSION_RANGE: Range<(u8, u8, u8)> = (3, 14, 0)..(3, 15, 0);
+const USER_WORKSPACE_ROOT: &str = "/workspace";
+const USER_SITE_PACKAGES: &str = "/workspace/site-packages";
+const USER_MODULE_NAME: &str = "datafusion_udf_user";
+const USER_MODULE_PATH: &str = "/workspace/datafusion_udf_user.py";
 
 /// A test UDF that demonstrate that we can call Python.
 #[derive(Debug)]
@@ -272,15 +277,27 @@ impl ScalarUDFImpl for PythonScalarUDF {
     }
 }
 
-/// Return root file system.
-///
-/// This will be [`Some`] if built for WASM, but [`None`] if build for non-WASM host (e.g. during `cargo check`).
-#[allow(clippy::allow_attributes, clippy::const_is_empty)]
-fn root() -> Option<Vec<u8>> {
-    // The build script will ALWAYS set this environment variable, but if we don't bundle the standard lib the file
-    // will simply be empty.
-    const ROOT_TAR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/python-lib.tar"));
-    (!ROOT_TAR.is_empty()).then(|| ROOT_TAR.to_vec())
+/// Populate the guest root filesystem with the bundled Python standard library.
+fn init_root_fs() -> DataFusionResult<()> {
+    static INIT: OnceLock<Result<(), String>> = OnceLock::new();
+
+    init_once(&INIT, || {
+        // The build script will ALWAYS set this environment variable, but if we don't bundle the
+        // standard lib the file will simply be empty.
+        const ROOT_TAR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/python-lib.tar"));
+
+        if ROOT_TAR.is_empty() {
+            return Ok(());
+        }
+
+        extract_tar_to_root(ROOT_TAR).map_err(|e| e.context("populate root FS from TAR"))
+    })
+}
+
+/// Materialize the current user project inside the guest workspace.
+fn prepare_workspace(source: &str) -> DataFusionResult<()> {
+    fs::create_dir_all(Path::new(USER_SITE_PACKAGES)).map_err(DataFusionError::IoError)?;
+    fs::write(USER_MODULE_PATH, source).map_err(DataFusionError::IoError)
 }
 
 /// Initialize Python interpreter.
@@ -317,6 +334,11 @@ fn init_python() {
         Python::initialize();
 
         Python::attach(|py| {
+            let mod_sys = py.import("sys").unwrap();
+            let sys_path = mod_sys.getattr("path").unwrap();
+            sys_path.call_method1("insert", (0, USER_SITE_PACKAGES)).unwrap();
+            sys_path.call_method1("insert", (0, USER_WORKSPACE_ROOT)).unwrap();
+
             let version_info = py.version_info();
             let version_tuple = (version_info.major, version_info.minor, version_info.patch);
             assert!(
@@ -329,9 +351,11 @@ fn init_python() {
 
 /// Generate UDFs from given Python string.
 pub fn udfs(source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
+    init_root_fs()?;
+    prepare_workspace(&source)?;
     init_python();
 
-    let udfs = inspect_python_code(&source)?;
+    let udfs = inspect_python_code(USER_MODULE_NAME, USER_MODULE_PATH)?;
     Ok(udfs
         .into_iter()
         .map(|f| Arc::new(PythonScalarUDF::new(f)) as _)
@@ -339,6 +363,5 @@ pub fn udfs(source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
 }
 
 export! {
-    root_fs_tar: root,
     scalar_udfs: udfs,
 }

@@ -100,13 +100,13 @@ impl Limiter {
         })
     }
 
-    /// Get current allocation size.
-    pub(crate) fn size(&self) -> usize {
-        self.memory_reservation
-            .lock()
-            .expect("memory reservation lock poisoned")
-            .size()
-    }
+    // Get current allocation size.
+    // pub(crate) fn size(&self) -> usize {
+    //     self.memory_reservation
+    //         .lock()
+    //         .expect("memory reservation lock poisoned")
+    //         .size()
+    // }
 
     /// Inner implementation of [`ResourceLimiter::table_growing`]
     fn table_growing_inner(&mut self, current: usize, desired: usize) -> wasmtime::Result<()> {

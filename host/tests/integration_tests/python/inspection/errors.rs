@@ -10,7 +10,7 @@ async fn test_invalid_syntax() {
         @r#"
     scalar_udfs
     caused by
-    Error during planning:   File "<string>", line 1
+    Error during planning:   File "/workspace/datafusion_udf_user.py", line 1
         )
         ^
     SyntaxError: unmatched ')'
@@ -258,7 +258,7 @@ def add_one(x: C) -> int:
         @r"
     scalar_udfs
     caused by
-    Error during planning: TypeError: unknown annotation type: `<class '__main__.C'>` of type `type`
+    Error during planning: TypeError: unknown annotation type: `<class 'datafusion_udf_user.C'>` of type `type`
 
     The above exception was the direct cause of the following exception:
 
@@ -283,7 +283,8 @@ raise Exception('foo')
     scalar_udfs
     caused by
     Error during planning: Traceback (most recent call last):
-      File "<string>", line 2, in <module>
+      File "/workspace/datafusion_udf_user.py", line 2, in <module>
+        raise Exception('foo')
     Exception: foo
     "#,
     );

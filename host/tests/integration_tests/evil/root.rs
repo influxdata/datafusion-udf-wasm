@@ -16,7 +16,9 @@ async fn test_invalid_entry() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    scalar_udfs
+    caused by
+    Execution error: populate root FS from TAR
     caused by
     IO error: numeric field was not a number:  when getting cksum for foo
     ");
@@ -31,7 +33,7 @@ async fn test_large_file() {
     insta::assert_snapshot!(
         err,
         @r"
-    call root_fs_tar() method
+    calling scalar_udfs() method failed
 
     stderr:
     memory allocation of 10485760 bytes failed
@@ -63,9 +65,11 @@ async fn test_many_files() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    scalar_udfs
     caused by
-    IO error: inodes limit reached: limit<=10000 current==10000 requested+=1
+    Execution error: populate root FS from TAR
+    caused by
+    IO error: I/O error (os error 29)
     ");
 }
 
@@ -76,7 +80,9 @@ async fn test_not_tar() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    scalar_udfs
+    caused by
+    Execution error: populate root FS from TAR
     caused by
     IO error: failed to read entire block
     ");
@@ -101,9 +107,9 @@ async fn test_tar_too_large() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    calling scalar_udfs() method failed
     caused by
-    IO error: Resources exhausted: Failed to allocate additional <SIZE> for WASM UDF resources with <SIZE> already allocated for this reservation - <SIZE> remain available for the total pool
+    External error: insufficient-memory (error 22)
     ");
 }
 
@@ -123,9 +129,11 @@ async fn test_path_long() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    scalar_udfs
     caused by
-    IO error: path limit reached: limit<=10 current==0 requested+=11
+    Execution error: populate root FS from TAR
+    caused by
+    IO error: I/O error (os error 29)
     ");
 }
 
@@ -144,9 +152,11 @@ async fn test_path_segment_long() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    scalar_udfs
     caused by
-    IO error: path segment limit reached: limit<=50 current==0 requested+=51
+    Execution error: populate root FS from TAR
+    caused by
+    IO error: I/O error (os error 29)
     ");
 }
 
@@ -157,7 +167,9 @@ async fn test_sparse() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    scalar_udfs
+    caused by
+    Execution error: populate root FS from TAR
     caused by
     IO error: Unsupported TAR content: GNUSparse @ huge
     ");
@@ -172,7 +184,9 @@ async fn test_unsupported_entry() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    scalar_udfs
+    caused by
+    Execution error: populate root FS from TAR
     caused by
     IO error: Unsupported TAR content: Symlink @ foo
     ");

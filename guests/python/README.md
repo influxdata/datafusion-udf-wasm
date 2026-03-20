@@ -69,6 +69,10 @@ In contrast to a normal Python installation there are a few notable public[^publ
 Some modules low level modules like [`os`](https://docs.python.org/3/library/os.html) may not offer all methods, types, and constants.
 
 ## Dependencies
+The Python guest now stages user code into a workspace on the guest filesystem and keeps a
+`site-packages` directory on that workspace in the import path. The intended direction is to use
+standard dependency installers against that filesystem layout.
+
 Currently we bundle the following libraries:
 
 - [`certifi`] (not really used though, see ["I/O > HTTP"](#http))
@@ -76,7 +80,8 @@ Currently we bundle the following libraries:
 - [`requests`]
 - [`urllib3`]
 
-It is currently NOT possible to install your own dependencies.
+It is currently NOT possible to install your own dependencies with `pip` in the guest runtime, but
+the runtime layout now reflects that intended workflow.
 
 ## Methods
 Currently we only support [Scalar UDF]s. One can write it using a simple Python function:

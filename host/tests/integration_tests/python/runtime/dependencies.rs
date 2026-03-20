@@ -81,3 +81,29 @@ def foo(x: int) -> int:
         &Int64Array::from_iter([Some(11), Some(22), Some(11)]) as &dyn Array,
     );
 }
+
+#[tokio::test]
+async fn module_file_comes_from_guest_workspace() {
+    const CODE: &str = r#"
+def foo() -> int:
+    with open(__file__, "r") as fp:
+        return 1 if "def foo" in fp.read() else 0
+"#;
+
+    let udf = python_scalar_udf(CODE).await.unwrap();
+    let array = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![],
+            arg_fields: vec![],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap()
+        .unwrap_array();
+    assert_eq!(
+        array.as_ref(),
+        &Int64Array::from_iter([Some(1)]) as &dyn Array,
+    );
+}

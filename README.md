@@ -63,7 +63,7 @@ Either during the query (stateless) or via an earlier API call (stateful), the c
 The user can use a simple [Python] function without having to worry about the mapping to/from [Apache Arrow]. We however require type annotations for the [Python] code.
 
 ### Dependencies
-The user cannot install new [Python] dependencies, but we shall provide a reasonable library by default (at least the [Python Standard Library], potentially a few selected other libraries).
+The long-term goal is for guest dependencies to be managed through normal guest-side project files and installers. For [Python], that means treating the guest filesystem as a workspace and eventually using standard tooling like `pip install ...`; for [Rust], dependencies should continue to be declared in the guest crate's `Cargo.toml`. Today we still provide a reasonable built-in Python runtime library by default (at least the [Python Standard Library], potentially a few selected other libraries).
 
 ### I/O
 Depending on the cluster configuration and user permissions, the user MAY perform network IO, e.g. to pull data from an external resource, to interact with hosted AI tools, to exfiltrate data as they see fit.

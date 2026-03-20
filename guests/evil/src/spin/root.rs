@@ -1,4 +1,4 @@
-//! Payload that spins while retrieving the root filesystem.
+//! Payload that spins while populating the root filesystem.
 use crate::spin::spin;
 
 /// Return root file system.

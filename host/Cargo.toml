@@ -24,7 +24,6 @@ hyper.workspace = true
 log.workspace = true
 rand = { version = "0.10" }
 siphasher = { version = "1", default-features = false }
-tar.workspace = true
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync"] }
 uuid.workspace = true
 wasmtime.workspace = true

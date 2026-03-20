@@ -342,24 +342,6 @@ impl WasmComponentInstance {
             .await
             .context("link WASM components", None)?;
 
-        // Populate VFS from tar archive
-        let root_data = bindings
-            .datafusion_udf_wasm_udf_types()
-            .call_root_fs_tar(&mut store)
-            .await
-            .context(
-                "call root_fs_tar() method",
-                Some(&store.data().stderr.contents()),
-            )?;
-        if let Some(root_data) = root_data {
-            let state = store.data_mut();
-
-            state
-                .vfs_state
-                .populate_from_tar(&root_data)
-                .map_err(|e| DataFusionError::IoError(e).context("populate root FS from TAR"))?;
-        }
-
         let store = Arc::new(Mutex::new(store));
 
         Ok(Self {

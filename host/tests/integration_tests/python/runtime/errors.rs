@@ -262,7 +262,8 @@ def foo(x: int) -> int:
     cannot call function
     caused by
     Execution error: Traceback (most recent call last):
-      File "<string>", line 3, in foo
+      File "/workspace/datafusion_udf_user.py", line 3, in foo
+        raise Exception('bar')
     Exception: bar
     "#,
     );
@@ -297,22 +298,31 @@ def foo(x: int) -> int:
     cannot call function
     caused by
     Execution error: Traceback (most recent call last):
-      File "<string>", line 4, in _inner1
-      File "<string>", line 9, in _inner2
-      File "<string>", line 12, in _inner3
+      File "/workspace/datafusion_udf_user.py", line 4, in _inner1
+        _inner2()
+        ~~~~~~~^^
+      File "/workspace/datafusion_udf_user.py", line 9, in _inner2
+        _inner3()
+        ~~~~~~~^^
+      File "/workspace/datafusion_udf_user.py", line 12, in _inner3
+        raise ValueError('bar')
     ValueError: bar
 
     The above exception was the direct cause of the following exception:
 
     Traceback (most recent call last):
-      File "<string>", line 17, in foo
-      File "<string>", line 6, in _inner1
+      File "/workspace/datafusion_udf_user.py", line 17, in foo
+        _inner1()
+        ~~~~~~~^^
+      File "/workspace/datafusion_udf_user.py", line 6, in _inner1
+        raise RuntimeError('foo') from e
     RuntimeError: foo
 
     The above exception was the direct cause of the following exception:
 
     Traceback (most recent call last):
-      File "<string>", line 19, in foo
+      File "/workspace/datafusion_udf_user.py", line 19, in foo
+        raise TypeError('baz') from e
     TypeError: baz
     "#,
     );
@@ -352,7 +362,9 @@ def foo(x: int) -> int:
     cannot call function
     caused by
     Execution error: Traceback (most recent call last):
-      File "<string>", line 3, in foo
+      File "/workspace/datafusion_udf_user.py", line 3, in foo
+        s = 'x' * 1_000_000_000
+            ~~~~^~~~~~~~~~~~~~~
     MemoryError
     "#,
     );
