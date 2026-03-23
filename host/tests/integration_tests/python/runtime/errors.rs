@@ -4,13 +4,12 @@ use arrow::{
     array::{Float64Array, Int64Array},
     datatypes::{DataType, Field},
 };
-use datafusion_common::DataFusionError;
 use datafusion_common::config::ConfigOptions;
 use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl,
 };
 
-use crate::integration_tests::python::test_utils::python_scalar_udf;
+use crate::integration_tests::{python::test_utils::python_scalar_udf, test_utils::FullError};
 
 #[tokio::test]
 async fn test_return_type_param_mismatch() {
@@ -358,17 +357,19 @@ def foo(x: int) -> int:
     );
 }
 
-async fn err(code: &str) -> DataFusionError {
+async fn err(code: &str) -> FullError {
     let udf = python_scalar_udf(code).await.unwrap();
-    udf.invoke_async_with_args(ScalarFunctionArgs {
-        args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
-            Some(1),
-        ])))],
-        arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
-        number_rows: 1,
-        return_field: Arc::new(Field::new("r", DataType::Int64, true)),
-        config_options: Arc::new(ConfigOptions::default()),
-    })
-    .await
-    .unwrap_err()
+    let err = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                Some(1),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("x", DataType::Int64, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap_err();
+    FullError::new(err)
 }

@@ -1,13 +1,16 @@
 use std::sync::{Arc, LazyLock};
 
 use arrow::datatypes::{DataType, Field};
-use datafusion_common::{DataFusionError, config::ConfigOptions};
+use datafusion_common::config::ConfigOptions;
 use datafusion_expr::{ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl};
 use datafusion_udf_wasm_host::WasmScalarUdf;
 use regex::Regex;
 use wasmtime::Trap;
 
-use crate::integration_tests::evil::test_utils::{normalize_panic_location, try_scalar_udfs};
+use crate::integration_tests::{
+    evil::test_utils::{normalize_panic_location, try_scalar_udfs},
+    test_utils::FullError,
+};
 
 #[tokio::test]
 async fn test_abort() {
@@ -139,7 +142,7 @@ async fn test_maxptr() {
         @r"
     call ScalarUdf::invoke_with_args
     caused by
-    External error: memory fault at wasm address 0xffffffff in linear memory of size <SIZE>
+    External error: memory fault at wasm address 0xffffffff in linear memory of size <SIZE>: wasm trap: out of bounds memory access
     ",
     );
 }
@@ -277,7 +280,7 @@ async fn udf(name: &'static str) -> WasmScalarUdf {
         .unwrap()
 }
 
-async fn try_call_no_params(udf: &WasmScalarUdf) -> Result<(), DataFusionError> {
+async fn try_call_no_params(udf: &WasmScalarUdf) -> Result<(), FullError> {
     static RETURN_FIELD: LazyLock<Arc<Field>> =
         LazyLock::new(|| Arc::new(Field::new("r", DataType::Null, true)));
     static CONFIG_OPTIONS: LazyLock<Arc<ConfigOptions>> =
@@ -292,8 +295,9 @@ async fn try_call_no_params(udf: &WasmScalarUdf) -> Result<(), DataFusionError> 
     })
     .await
     .map(|_| ())
+    .map_err(FullError::new)
 }
 
-async fn err_call_no_params(udf: &WasmScalarUdf) -> DataFusionError {
+async fn err_call_no_params(udf: &WasmScalarUdf) -> FullError {
     try_call_no_params(udf).await.unwrap_err()
 }

@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use arrow::datatypes::{DataType, Field};
-use datafusion_common::{DataFusionError, ScalarValue, config::ConfigOptions};
+use datafusion_common::{ScalarValue, config::ConfigOptions};
 use datafusion_expr::{ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl};
 use datafusion_udf_wasm_host::WasmScalarUdf;
 
 use crate::integration_tests::{
     evil::test_utils::{normalize_panic_location, try_scalar_udfs},
-    test_utils::ColumnarValueExt,
+    test_utils::{ColumnarValueExt, FullError},
 };
 
 #[tokio::test]
@@ -81,7 +81,7 @@ async fn udf(name: &'static str) -> WasmScalarUdf {
         .unwrap()
 }
 
-async fn try_call(udf: &WasmScalarUdf) -> Result<Option<String>, DataFusionError> {
+async fn try_call(udf: &WasmScalarUdf) -> Result<Option<String>, FullError> {
     let scalar = udf
         .invoke_async_with_args(ScalarFunctionArgs {
             args: vec![],
@@ -90,7 +90,8 @@ async fn try_call(udf: &WasmScalarUdf) -> Result<Option<String>, DataFusionError
             return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
             config_options: Arc::new(ConfigOptions::default()),
         })
-        .await?
+        .await
+        .map_err(FullError::new)?
         .unwrap_scalar();
     if let ScalarValue::Utf8(s) = scalar {
         Ok(s)

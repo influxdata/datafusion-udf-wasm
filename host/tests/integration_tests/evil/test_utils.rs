@@ -1,12 +1,13 @@
 use std::sync::{Arc, LazyLock};
 
-use datafusion_common::DataFusionError;
 use datafusion_execution::memory_pool::GreedyMemoryPool;
 use datafusion_udf_wasm_host::{
     CompilationFlags, WasmComponentPrecompiled, WasmPermissions, WasmScalarUdf,
 };
 use regex::Regex;
 use tokio::{runtime::Runtime, sync::OnceCell};
+
+use crate::integration_tests::test_utils::FullError;
 
 /// Static memory limit.
 ///
@@ -40,9 +41,7 @@ pub(crate) static IO_RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
 });
 
 /// Try to get scalar UDFs.
-pub(crate) async fn try_scalar_udfs(
-    evil: &'static str,
-) -> Result<Vec<WasmScalarUdf>, DataFusionError> {
+pub(crate) async fn try_scalar_udfs(evil: &'static str) -> Result<Vec<WasmScalarUdf>, FullError> {
     try_scalar_udfs_with_env(evil, &[]).await
 }
 
@@ -50,7 +49,7 @@ pub(crate) async fn try_scalar_udfs(
 pub(crate) async fn try_scalar_udfs_with_env(
     evil: &'static str,
     vars: &[(&str, &str)],
-) -> Result<Vec<WasmScalarUdf>, DataFusionError> {
+) -> Result<Vec<WasmScalarUdf>, FullError> {
     let mut permissions = WasmPermissions::new();
     for (k, v) in vars {
         permissions = permissions.with_env((*k).to_owned(), (*v).to_owned());
@@ -62,7 +61,7 @@ pub(crate) async fn try_scalar_udfs_with_env(
 pub(crate) async fn try_scalar_udfs_with_permissions(
     evil: &'static str,
     permissions: WasmPermissions,
-) -> Result<Vec<WasmScalarUdf>, DataFusionError> {
+) -> Result<Vec<WasmScalarUdf>, FullError> {
     let component = component().await;
 
     let permissions = permissions.with_env("EVIL".to_owned(), evil.to_owned());
@@ -75,6 +74,7 @@ pub(crate) async fn try_scalar_udfs_with_permissions(
         "".to_owned(),
     )
     .await
+    .map_err(FullError::new)
 }
 
 /// Normalize line & column numbers in panic message, so that changing the code in the respective file does not change

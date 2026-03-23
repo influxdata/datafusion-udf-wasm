@@ -1,11 +1,14 @@
 use std::sync::Arc;
 
 use arrow::datatypes::{DataType, Field};
-use datafusion_common::{DataFusionError, config::ConfigOptions};
+use datafusion_common::config::ConfigOptions;
 use datafusion_expr::{ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl};
 use datafusion_udf_wasm_host::{TrustedDataLimits, WasmPermissions};
 
-use crate::integration_tests::evil::test_utils::{try_scalar_udfs, try_scalar_udfs_with_env};
+use crate::integration_tests::{
+    evil::test_utils::{try_scalar_udfs, try_scalar_udfs_with_env},
+    test_utils::FullError,
+};
 
 #[tokio::test]
 async fn test_err_long_ctx() {
@@ -333,7 +336,7 @@ async fn test_udfs_many() {
 }
 
 /// Test UDF related to Error handling.
-async fn run_err_udf(name: &'static str, limit: usize) -> DataFusionError {
+async fn run_err_udf(name: &'static str, limit: usize) -> FullError {
     let udf = try_scalar_udfs_with_env("complex::error", &[("limit", &limit.to_string())])
         .await
         .unwrap()
@@ -341,19 +344,21 @@ async fn run_err_udf(name: &'static str, limit: usize) -> DataFusionError {
         .find(|udf| udf.name() == name)
         .unwrap();
 
-    udf.invoke_async_with_args(ScalarFunctionArgs {
-        args: vec![],
-        arg_fields: vec![],
-        number_rows: 1,
-        return_field: Arc::new(Field::new("r", DataType::Null, true)),
-        config_options: Arc::new(ConfigOptions::default()),
-    })
-    .await
-    .unwrap_err()
+    let err = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![],
+            arg_fields: vec![],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Null, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap_err();
+    FullError::new(err)
 }
 
 /// Test UDF related to return type information.
-async fn run_return_type_udf(name: &'static str) -> DataFusionError {
+async fn run_return_type_udf(name: &'static str) -> FullError {
     let TrustedDataLimits {
         max_identifier_length,
         max_aux_string_length,
@@ -376,11 +381,12 @@ async fn run_return_type_udf(name: &'static str) -> DataFusionError {
     .find(|udf| udf.name() == name)
     .unwrap();
 
-    udf.return_type(&[]).unwrap_err()
+    let err = udf.return_type(&[]).unwrap_err();
+    FullError::new(err)
 }
 
 /// Test UDF related to return values.
-async fn run_return_value_udf(name: &'static str) -> DataFusionError {
+async fn run_return_value_udf(name: &'static str) -> FullError {
     let TrustedDataLimits {
         max_identifier_length,
         max_aux_string_length,
@@ -403,13 +409,15 @@ async fn run_return_value_udf(name: &'static str) -> DataFusionError {
     .find(|udf| udf.name() == name)
     .unwrap();
 
-    udf.invoke_async_with_args(ScalarFunctionArgs {
-        args: vec![],
-        arg_fields: vec![],
-        number_rows: 1,
-        return_field: Arc::new(Field::new("r", DataType::Null, true)),
-        config_options: Arc::new(ConfigOptions::default()),
-    })
-    .await
-    .unwrap_err()
+    let err = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![],
+            arg_fields: vec![],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Null, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap_err();
+    FullError::new(err)
 }
