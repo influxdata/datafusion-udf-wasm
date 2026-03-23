@@ -25,7 +25,7 @@ gungraun.workspace = true
 flate2.workspace = true
 sha2 = "0.10.8"
 tar.workspace = true
-ureq = "3.2.0"
+ureq = "3.3.0"
 walkdir = "2.5.0"
 
 [lints]
