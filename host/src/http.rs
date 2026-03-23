@@ -4,14 +4,15 @@ use std::{borrow::Cow, collections::HashSet, fmt, sync::Arc};
 
 use http::HeaderName;
 pub use http::Method as HttpMethod;
-use wasmtime_wasi::ResourceTable;
+use tokio::runtime::Handle;
 use wasmtime_wasi_http::{
-    HttpResult, WasiHttpCtx, WasiHttpView,
-    bindings::http::types::ErrorCode as HttpErrorCode,
-    body::HyperOutgoingBody,
-    types::{
-        DEFAULT_FORBIDDEN_HEADERS, HostFutureIncomingResponse, OutgoingRequestConfig,
+    DEFAULT_FORBIDDEN_HEADERS,
+    p2::{
+        HttpResult, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
+        bindings::http::types::ErrorCode as HttpErrorCode,
+        body::HyperOutgoingBody,
         default_send_request_handler,
+        types::{HostFutureIncomingResponse, OutgoingRequestConfig},
     },
 };
 
@@ -125,14 +126,26 @@ impl fmt::Display for HttpRequestRejected {
 impl std::error::Error for HttpRequestRejected {}
 
 impl WasiHttpView for WasmStateImpl {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        &mut self.wasi_http_ctx
+    fn http(&mut self) -> WasiHttpCtxView<'_> {
+        WasiHttpCtxView {
+            ctx: &mut self.wasi_http_ctx,
+            table: &mut self.resource_table,
+            hooks: &mut self.wasi_http_hooks,
+        }
     }
+}
 
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.resource_table
-    }
+/// Implements [`WasiHttpHooks`].
+#[derive(Debug)]
+pub(crate) struct WasiHttpHooksImpl {
+    /// HTTP request validator.
+    pub(crate) http_validator: Arc<dyn HttpRequestValidator>,
 
+    /// Handle to tokio I/O runtime.
+    pub(crate) io_rt: Handle,
+}
+
+impl WasiHttpHooks for WasiHttpHooksImpl {
     fn send_request(
         &mut self,
         mut request: hyper::Request<HyperOutgoingBody>,
