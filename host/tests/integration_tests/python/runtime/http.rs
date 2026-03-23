@@ -22,7 +22,7 @@ use datafusion_udf_wasm_host::{
 use http::header::{ACCEPT_ENCODING, CONTENT_ENCODING};
 use regex::Regex;
 use tokio::runtime::Handle;
-use wasmtime_wasi_http::types::DEFAULT_FORBIDDEN_HEADERS;
+use wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS;
 use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers};
 
 use crate::integration_tests::{

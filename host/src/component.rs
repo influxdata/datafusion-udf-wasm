@@ -20,8 +20,8 @@ use wasmtime_wasi_http::WasiHttpCtx;
 
 use crate::{
     TrustedDataLimits, WasmPermissions, bindings, conversion::resource_cache::ResourceCache,
-    error::WasmToDataFusionResultExt, ignore_debug::IgnoreDebug, limiter::Limiter, linker::link,
-    state::WasmStateImpl, vfs::VfsState,
+    error::WasmToDataFusionResultExt, http::WasiHttpHooksImpl, ignore_debug::IgnoreDebug,
+    limiter::Limiter, linker::link, state::WasmStateImpl, vfs::VfsState,
 };
 
 /// Create WASM engine.
@@ -34,7 +34,7 @@ where
     config.memory_init_cow(true);
     // Disable backtraces for now since debug info parsing doesn't seem to work and hence error
     // messages are nondeterministic.
-    config.wasm_backtrace(false);
+    config.wasm_backtrace_max_frames(None);
 
     flags.apply(&mut config)?;
 
@@ -320,9 +320,11 @@ impl WasmComponentInstance {
             stderr,
             wasi_ctx: wasi_ctx_builder.build().into(),
             wasi_http_ctx: WasiHttpCtx::new(),
+            wasi_http_hooks: WasiHttpHooksImpl {
+                http_validator: Arc::clone(&permissions.http),
+                io_rt,
+            },
             resource_table: ResourceTable::new(),
-            http_validator: Arc::clone(&permissions.http),
-            io_rt,
         };
         let mut store = Store::new(&engine, state);
         store.epoch_deadline_callback(|_| {

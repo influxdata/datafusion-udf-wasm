@@ -53,7 +53,8 @@ wasmtime = { version = "43.0.0", default-features = false, features = [
 ] }
 wasmtime-wasi = { version = "43.0.0", default-features = false }
 wasmtime-wasi-http = { version = "43.0.0", default-features = false, features = [
-  "default-send-request"
+  "default-send-request",
+  "p2",
 ] }
 wasmtime-wasi-io = { version = "43.0.0", default-features = false }
 wit-bindgen = { version = "0.54", default-features = false, features = [

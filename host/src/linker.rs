@@ -23,7 +23,8 @@ pub(crate) async fn link(
 ) -> Result<Arc<Datafusion>> {
     let mut linker = Linker::new(engine);
     link_wasi_p2(&mut linker).context("link WASI p2")?;
-    wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker).context("link WASI p2 HTTP")?;
+    wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
+        .context("link WASI p2 HTTP")?;
 
     let bindings = Arc::new(
         Datafusion::instantiate_async(store, component, &linker)
