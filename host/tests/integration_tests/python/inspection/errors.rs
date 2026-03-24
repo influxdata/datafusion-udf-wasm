@@ -1,5 +1,4 @@
-use crate::integration_tests::python::test_utils::python_scalar_udfs;
-use datafusion_common::DataFusionError;
+use crate::integration_tests::{python::test_utils::python_scalar_udfs, test_utils::FullError};
 
 #[tokio::test]
 async fn test_invalid_syntax() {
@@ -289,6 +288,6 @@ raise Exception('foo')
     );
 }
 
-async fn err(code: &str) -> DataFusionError {
+async fn err(code: &str) -> FullError {
     python_scalar_udfs(code).await.unwrap_err()
 }

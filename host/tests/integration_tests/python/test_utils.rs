@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use datafusion_common::DataFusionError;
 use datafusion_execution::memory_pool::GreedyMemoryPool;
 use datafusion_udf_wasm_host::{CompilationFlags, WasmComponentPrecompiled, WasmScalarUdf};
 use tokio::{runtime::Handle, sync::OnceCell};
+
+use crate::integration_tests::test_utils::FullError;
 
 /// Memory limit in bytes.
 ///
@@ -28,7 +29,7 @@ pub(crate) async fn python_component() -> &'static WasmComponentPrecompiled {
 }
 
 /// Compiles the provided Python UDF code into a list of WasmScalarUdf instances.
-pub(crate) async fn python_scalar_udfs(code: &str) -> Result<Vec<WasmScalarUdf>, DataFusionError> {
+pub(crate) async fn python_scalar_udfs(code: &str) -> Result<Vec<WasmScalarUdf>, FullError> {
     let component = python_component().await;
 
     WasmScalarUdf::new(
@@ -39,10 +40,11 @@ pub(crate) async fn python_scalar_udfs(code: &str) -> Result<Vec<WasmScalarUdf>,
         code.to_owned(),
     )
     .await
+    .map_err(FullError::new)
 }
 
 /// Compiles the provided Python UDF code into a single WasmScalarUdf instance.
-pub(crate) async fn python_scalar_udf(code: &str) -> Result<WasmScalarUdf, DataFusionError> {
+pub(crate) async fn python_scalar_udf(code: &str) -> Result<WasmScalarUdf, FullError> {
     let udfs = python_scalar_udfs(code).await?;
     assert_eq!(udfs.len(), 1);
     Ok(udfs.into_iter().next().expect("just checked len"))
