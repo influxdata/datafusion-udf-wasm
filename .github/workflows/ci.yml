@@ -42,7 +42,7 @@ jobs:
           echo "LD_LIBRARY_PATH=${path_bin}/../lib" >> "$GITHUB_ENV"
 
       - name: Install `cargo-deny` & `just` & `tombi` & 'typos'
-        uses: taiki-e/install-action@de6bbd1333b8f331563d54a051e542c7dfef81c3  # v2
+        uses: taiki-e/install-action@0d865d5cc6d507df4765f1f866bfae8bab4e2a73  # v2
         with:
           tool: cargo-deny,just,tombi,typos
 
