@@ -30,6 +30,7 @@ mod error;
 mod inspect;
 mod python_modules;
 mod signature;
+mod wasi_symbols;
 
 /// Supported Python version range.
 const PYTHON_VERSION_RANGE: Range<(u8, u8, u8)> = (3, 14, 0)..(3, 15, 0);

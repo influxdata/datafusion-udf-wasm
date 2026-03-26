@@ -1,28 +1,53 @@
 PYTHON_VERSION_MAJOR := "3"
 PYTHON_VERSION_MINOR := "14"
 PYTHON_VERSION_MICRO := "2"
+PYTHON_BUILD_GENERATION := "2"
 
 WASI_SDK_VERSION_MAJOR := "24"
 WASI_SDK_VERSION_MINOR := "0"
+WASI_SDK_SYS := replace(arch(), "aarch64", "arm64") + "-" + os()
+WASI_SDK_NAME := "wasi-sdk-" + WASI_SDK_VERSION_MAJOR + "." + WASI_SDK_VERSION_MINOR + "-" + WASI_SDK_SYS
 
-SHA256_PYTHON_SDK := "de3e74bdde5793f20894c7de18e3e429cbbc82b86417f067d83c2f764432cce3"
-SHA256_PYTHON_SDK_BUILD := "a23ecdd0812161f03f0653f88d8825d0d73e2edeb67db6d4fdbf140866f6977c"
-SHA256_WASI_SDK_SYSROOT := "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99153a50888f08"
+SHA256_PYTHON_SDK := "2e487654ef14a28630e5cbf557acdd715cf10f5d8bb92c7230a08728c84ea903"
+SHA256_PYTHON_SDK_BUILD := "a8da1176f3fc1f1dd5536baf396aeba4a6ee19a035e56a91899cdb584d19d69d"
+SHA256_WASI_SDK := if WASI_SDK_SYS == "arm64-linux" {
+    "ae6c1417ea161e54bc54c0a168976af57a0c6e53078857886057a71a0d928646"
+} else if WASI_SDK_SYS == "arm64-macos" {
+    "aeae999396d5f5caa5ce419f52e83c35869d5fd21d40af80acba2c80f51b0b3a"
+} else if WASI_SDK_SYS == "x86_64-linux" {
+    "c6c38aab56e5de88adf6c1ebc9c3ae8da72f88ec2b656fb024eda8d4167a0bc5"
+} else if WASI_SDK_SYS == "x86_64-macos" {
+    "4bfc274ae8b68c771dd93e32ad4bd695336ca46b585beb3b1260e5602dbc11a2"
+} else {
+    error("unknown WASI SDK system: " + WASI_SDK_SYS)
+}
+SHA256_WASI_ADAPTER := "2ce45ed78b5a6b4a29d0b585b63c69e6cff7e149b6d3c0015f0a2bb1abae5461"
 
+PYTHON_VERSION_HALF := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR
 PYTHON_VERSION_FULL := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR + "." + PYTHON_VERSION_MICRO
 
 # Configurable URLs for Python SDK downloads (with defaults)
 PYTHON_SDK_BASE_URL := env_var_or_default("PYTHON_SDK_BASE_URL", "https://github.com/influxdata/cpython-wasi-build/releases/download")
-PYTHON_SDK_URL := env_var_or_default("PYTHON_SDK_URL", PYTHON_SDK_BASE_URL + "/v" + PYTHON_VERSION_FULL + "/python-" + PYTHON_VERSION_FULL + "-wasi_sdk-" + WASI_SDK_VERSION_MAJOR + ".zip")
-BUILD_PYTHON_SDK_URL := env_var_or_default("BUILD_PYTHON_SDK_URL", PYTHON_SDK_BASE_URL + "/v" + PYTHON_VERSION_FULL + "/_build-python-" + PYTHON_VERSION_FULL + "-wasi_sdk-" + WASI_SDK_VERSION_MAJOR + ".zip")
+PYTHON_SDK_TAG := env_var_or_default("PYTHON_SDK_TAG", "v" + PYTHON_VERSION_FULL + "-g" + PYTHON_BUILD_GENERATION)
+PYTHON_SDK_URL := env_var_or_default("PYTHON_SDK_URL", PYTHON_SDK_BASE_URL + "/" + PYTHON_SDK_TAG + "/python-" + PYTHON_VERSION_FULL + "-wasi_sdk-" + WASI_SDK_VERSION_MAJOR + ".zip")
+BUILD_PYTHON_SDK_URL := env_var_or_default("BUILD_PYTHON_SDK_URL", PYTHON_SDK_BASE_URL + "/" + PYTHON_SDK_TAG + "/_build-python-" + PYTHON_VERSION_FULL + "-wasi_sdk-" + WASI_SDK_VERSION_MAJOR + ".zip")
 
 DOWNLOADS_DIR := source_directory() / "downloads"
 
-export PYO3_CROSS_PYTHON_VERSION := PYTHON_VERSION_MAJOR + "." + PYTHON_VERSION_MINOR
-export PYO3_CROSS_LIB_DIR := DOWNLOADS_DIR / "python-sdk"
+WASI_SDK_DIR := DOWNLOADS_DIR / "wasi-sdk"
+export PYTHON_SDK_DIR := DOWNLOADS_DIR / "python-sdk"
+BUILD_PYTHON_SDK_DIR := DOWNLOADS_DIR / "build-python-sdk"
+
+WASI_SYSROOT := WASI_SDK_DIR / "share" / "wasi-sysroot"
+WASI_ADAPTER := DOWNLOADS_DIR / "wasi_snapshot_preview1.reactor.wasm"
+
+export PYO3_CONFIG_FILE := DOWNLOADS_DIR / "pyo3-config.txt"
 
 UV_PROJECT_DIR := source_directory() / ".." / ".." / "python-tooling"
-PYTHON_SITE_PACKAGES := PYO3_CROSS_LIB_DIR / "lib" / "python" + PYO3_CROSS_PYTHON_VERSION / "site-packages"
+PYTHON_SITE_PACKAGES := PYTHON_SDK_DIR / "lib" / "python" + PYTHON_VERSION_HALF / "site-packages"
+
+CARGO_TARGET_DIR := env_var_or_default("CARGO_TARGET_DIR", source_directory() / ".." / ".." / "target" )
+NIGHTLY_TOOLCHAIN_TOML := source_directory() / ".." / ".." / "rust-toolchain.nightly.toml"
 
 # download pre-built Python WASM SDK
 [private]
@@ -72,24 +97,16 @@ download-python-sdk:
     unzip -d python-sdk python-sdk.zip
     unzip -d build-python-sdk build-python-sdk.zip
 
-    # the python SDK puts the library under /lib, but the python executable wants it under /lib/python3.x
-    mv python-sdk/lib python-sdk/lib.tmp
-    mkdir python-sdk/lib
-    mv python-sdk/lib.tmp python-sdk/lib/python{{PYTHON_VERSION_MAJOR}}.{{PYTHON_VERSION_MINOR}}
+    # move shared lib
+    mv build-python-sdk/libpython{{PYTHON_VERSION_HALF}}.so python-sdk/
 
-    mv build-python-sdk/libpython{{PYTHON_VERSION_MAJOR}}.{{PYTHON_VERSION_MINOR}}.a python-sdk/
-    mv build-python-sdk/Modules/_decimal/libmpdec/libmpdec.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_HMAC.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_Hash_BLAKE2.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_Hash_MD5.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_Hash_SHA1.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_Hash_SHA2.a python-sdk/
-    mv build-python-sdk/Modules/_hacl/libHacl_Hash_SHA3.a python-sdk/
-    mv build-python-sdk/Modules/expat/libexpat.a python-sdk/
+    # clean up
+    rm python-sdk/python.wasm
 
     set +x
     echo ::endgroup::
 
+# install Python packages
 [private]
 python-site-packages: download-python-sdk
     #!/usr/bin/env bash
@@ -126,15 +143,219 @@ python-site-packages: download-python-sdk
     set +x
     echo ::endgroup::
 
+# download WASI SDK because we need some libraries during the static linking phase
 [private]
-build-lib profile: download-python-sdk python-site-packages
-    @echo ::group::guests::python::build-lib {{profile}}
-    cargo rustc --crate-type=cdylib --target=wasm32-wasip2 --profile={{replace(profile, "debug", "dev")}}
-    @echo ::endgroup::
+download-wasi-sdk:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo ::group::guests::python::download-wasi-sdk
+    set -x
+
+    mkdir -p downloads
+    pushd downloads >/dev/null
+
+    # skip if already downloaded
+    if [ -d wasi-sdk ]; then
+        echo "wasi sdk already present"
+        set +x
+        echo ::endgroup::
+        exit 0
+    fi
+
+    curl \
+        --fail \
+        --show-error \
+        --silent \
+        --proto '=https' \
+        --tlsv1.2 \
+        --location \
+        --output "wasi-sdk.tar.gz" \
+        --retry 5 \
+        "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{{WASI_SDK_VERSION_MAJOR}}/{{WASI_SDK_NAME}}.tar.gz"
+
+    echo "{{SHA256_WASI_SDK}} wasi-sdk.tar.gz" | sha256sum -c
+    tar xf wasi-sdk.tar.gz
+    mv {{WASI_SDK_NAME}} wasi-sdk
+
+    set +x
+    echo ::endgroup::
+
+# download WASI adapter
+[private]
+download-wasi-adapter:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo ::group::guests::python::download-wasi-adapter
+    set -x
+
+    mkdir -p downloads
+    pushd downloads >/dev/null
+
+    # skip if already downloaded
+    if [ -f {{WASI_ADAPTER}} ]; then
+        echo "wasi adapter already present"
+        set +x
+        echo ::endgroup::
+        exit 0
+    fi
+
+    curl \
+        --fail \
+        --show-error \
+        --silent \
+        --proto '=https' \
+        --tlsv1.2 \
+        --location \
+        --output "wasi_snapshot_preview1.reactor.wasm.candidate" \
+        --retry 5 \
+        "https://github.com/bytecodealliance/wasmtime/releases/download/v43.0.0/wasi_snapshot_preview1.reactor.wasm"
+
+    echo "{{SHA256_WASI_ADAPTER}} wasi_snapshot_preview1.reactor.wasm.candidate" | sha256sum -c
+    mv wasi_snapshot_preview1.reactor.wasm.candidate wasi_snapshot_preview1.reactor.wasm
+
+    set +x
+    echo ::endgroup::
+
+# write config file for PYO3
+[private]
+pyo3-config: download-python-sdk
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo ::group::guests::python::pyo3-config
+    set -x
+
+    if [ -f {{PYO3_CONFIG_FILE}} ]; then
+        set +x
+        echo ::endgroup::
+        exit 0
+    fi
+
+    cat > {{PYO3_CONFIG_FILE}} <<EOF
+    implementation=CPython
+    version=3.14
+    shared=true
+    abi3=false
+    lib_name=python3.14
+    pointer_width=32
+    build_flags=
+    suppress_build_script_link_lines=false
+    lib_dir={{PYTHON_SDK_DIR}}
+    EOF
+
+    set +x
+    echo ::endgroup::
+
+# fetch nightly rust toolchain
+#
+# This is a workaround for https://github.com/rust-lang/rustup/issues/3546
+[private]
+nightly-rust-toolchain:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo ::group::guests::python::rust-toolchain
+    set -x
+
+    tmp_dir="$(mktemp -d -t 'rust-toolchain-XXXXXX')"
+
+    cp "{{NIGHTLY_TOOLCHAIN_TOML}}" "$tmp_dir/rust-toolchain.toml"
+
+    pushd "$tmp_dir"
+    rustup install
+    popd
+
+    # clean up
+    rm -r "$tmp_dir"
+
+    set +x
+    echo ::endgroup::
+
+# build the WASM core component of our WASM payload
+#
+# This results in a static library.
+[private]
+build-lib profile: download-python-sdk python-site-packages pyo3-config nightly-rust-toolchain
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo ::group::guests::python::build-lib-{{profile}}
+    set -x
+
+    # get exact rust toolchain for next command
+    toolchain="$(cat "{{NIGHTLY_TOOLCHAIN_TOML}}" | grep "channel" | sed -E 's/channel = "([^"]+)"/\1/g')"
+
+    # - compile our stdlib because the default one doesn't support PIC.
+    # - use `default-visibility=hidden` to avoid a massive `export` section in our Rust "shared lib" that we are going to create later
+    RUSTFLAGS="--allow=unused-crate-dependencies -Crelocation-model=pic -Zdefault-visibility=hidden" cargo +"$toolchain" rustc \
+        -Zbuild-std=panic_abort,std \
+        --crate-type=staticlib \
+        --target=wasm32-wasip2 \
+        --profile={{replace(profile, "debug", "dev")}}
+
+    set +x
+    echo ::endgroup::
+
+# Link everything together into a WASM component.
+[private]
+link-lib profile: (build-lib profile) download-wasi-sdk download-wasi-adapter
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    echo ::group::guests::python::link-lib-{{profile}}
+    set -x
+
+    target={{CARGO_TARGET_DIR}}/wasm32-wasip2/{{profile}}
+    in=$target/libdatafusion_udf_wasm_python.a
+    out=$target/datafusion_udf_wasm_python.wasm
+
+    if [ ! $in -nt $out ]; then
+        echo "already done"
+        set +x
+        echo ::endgroup::
+        exit 0
+    fi
+
+    # convert Rust staticlib into dynamic lib
+    #
+    # If we ask Rust to produce a `cdynlib` directly, it won't give us a proper `@dynlink.0`-driven core module but a
+    # full-blown component.
+    {{WASI_SDK_DIR}}/bin/clang \
+        -shared \
+        -o $target/libdatafusion_udf_wasm_python.so \
+        -Wl,--whole-archive \
+        $in \
+        -Wl,--no-whole-archive \
+        -L{{PYTHON_SDK_DIR}} \
+        -lpython{{PYTHON_VERSION_HALF}}
+
+    # Link everything together.
+    wasm-tools component link \
+        --adapt={{WASI_ADAPTER}} \
+        --output=$target/datafusion_udf_wasm_python.full.wasm \
+        --use-built-in-libdl \
+        --validate=true \
+        $target/libdatafusion_udf_wasm_python.so \
+        {{PYTHON_SDK_DIR}}/libpython{{PYTHON_VERSION_HALF}}.so \
+        {{WASI_SYSROOT}}/lib/wasm32-wasip2/libc.so \
+        {{WASI_SYSROOT}}/lib/wasm32-wasip2/libwasi-emulated-getpid.so \
+        {{WASI_SYSROOT}}/lib/wasm32-wasip2/libwasi-emulated-process-clocks.so \
+        {{WASI_SYSROOT}}/lib/wasm32-wasip2/libwasi-emulated-signal.so
+
+    # Strip debug info
+    wasm-tools strip \
+        --delete='\.debug_.*' \
+        --output=$out \
+        $target/datafusion_udf_wasm_python.full.wasm
+
+    set +x
+    echo ::endgroup::
 
 # top-level entry point
 [private]
-do profile: (build-lib profile)
+do profile: (link-lib profile)
 
 # create dev/debug build
 build-debug: (do "debug")
