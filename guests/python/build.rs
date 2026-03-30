@@ -113,7 +113,7 @@ fn download_wasi_sdk() -> Result<Option<String>, Box<dyn std::error::Error>> {
         file.write_all(&buffer[..n])?;
     }
     let digest = hasher.finalize();
-    let hex_digest = format!("{:x}", digest);
+    let hex_digest = format!("{:x}", base16ct::HexDisplay(&digest));
     if hex_digest != SHA256_WASI_SDK_SYSROOT {
         std::fs::remove_file(&tar_gz_path)?;
         return Err(format!(

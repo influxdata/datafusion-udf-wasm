@@ -22,6 +22,7 @@ wasip2.workspace = true
 gungraun.workspace = true
 
 [build-dependencies]
+base16ct.workspace = true
 flate2.workspace = true
 sha2 = "0.11.0"
 tar.workspace = true

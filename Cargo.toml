@@ -17,6 +17,7 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 arrow = { version = "57.1.0", default-features = false, features = ["ipc"] }
+base16ct = "1"
 chrono = { version = "0.4.44", default-features = false }
 datafusion = { version = "52.0.0", default-features = false }
 datafusion-common = { version = "52.0.0", default-features = false }
