@@ -17,6 +17,7 @@ license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 arrow = { version = "57.1.0", default-features = false, features = ["ipc"] }
+base16ct = "1"
 chrono = { version = "0.4.44", default-features = false }
 datafusion = { version = "52.0.0", default-features = false }
 datafusion-common = { version = "52.0.0", default-features = false }
@@ -34,7 +35,7 @@ flate2 = "1.1.9"
 gungraun = "0.17.2"
 http = { version = "1.4.0", default-features = false }
 hyper = { version = "1.8", default-features = false }
-insta = { version = "1.46.3", "default-features" = false }
+insta = { version = "1.47.1", "default-features" = false }
 log = { version = "0.4.29", default-features = false }
 pyo3 = { version = "0.28.2", default-features = false, features = ["macros"] }
 regex = { version = "1", default-features = false }
@@ -46,7 +47,7 @@ tar = { version = "0.4.45", default-features = false }
 target-lexicon = { version = "0.13", default-features = false }
 tempfile = { version = "3.25.0", default-features = false }
 tokio = { version = "1.50.0", default-features = false }
-uuid = { version = "1.22.0", default-features = false, features = ["v4"] }
+uuid = { version = "1.23.0", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
 wasmtime = { version = "43.0.0", default-features = false, features = [
   "async",
