@@ -7,6 +7,8 @@ use datafusion_common::Result as DataFusionResult;
 use datafusion_expr::ScalarUDFImpl;
 use datafusion_udf_wasm_guest::export;
 
+use crate::root_fs::populate_root_fs_from_tar;
+
 mod common;
 mod complex;
 mod env;
@@ -14,6 +16,8 @@ mod fs;
 mod net;
 mod return_data;
 mod root;
+/// Root filesystem helpers for preparing evil guest payloads from TAR input.
+mod root_fs;
 mod runtime;
 mod spin;
 
@@ -157,17 +161,13 @@ impl Evil {
     }
 }
 
-/// Return root file system.
-fn root() -> Option<Vec<u8>> {
-    (Evil::get().root)()
-}
-
 /// Returns our evil UDFs.
 fn udfs(source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
+    let root = (Evil::get().root)();
+    populate_root_fs_from_tar(root.as_deref())?;
     (Evil::get().udfs)(source)
 }
 
 export! {
-    root_fs_tar: root,
     scalar_udfs: udfs,
 }
