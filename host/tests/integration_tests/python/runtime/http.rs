@@ -16,8 +16,7 @@ use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl,
 };
 use datafusion_udf_wasm_host::{
-    AllowCertainHttpRequests, HttpRequestMatcher, HttpRequestValidator, WasmPermissions,
-    WasmScalarUdf,
+    AllowCertainHttpRequests, HttpPort, HttpRequestValidator, WasmPermissions, WasmScalarUdf,
 };
 use http::header::{ACCEPT_ENCODING, CONTENT_ENCODING};
 use regex::Regex;
@@ -47,11 +46,10 @@ def perform_request(url: str) -> str:
         .await;
 
     let mut permissions = AllowCertainHttpRequests::new();
-    permissions.allow(HttpRequestMatcher {
-        method: http::Method::GET,
-        host: server.address().ip().to_string().into(),
-        port: server.address().port(),
-    });
+    permissions
+        .allow_host(server.address().ip().to_string())
+        .allow_port(HttpPort::new(server.address().port()).unwrap())
+        .allow_method(http::Method::GET);
     let udf = python_udf_with_permissions(CODE, permissions).await;
 
     let array = udf
@@ -368,7 +366,7 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
         if let Some(mock) = case.mock(&server, NUMBER_OF_IMPLEMENTATIONS) {
             mock.mount(&server).await;
         }
-        permissions.allow(case.matcher(&server));
+        case.allow(&server, &mut permissions);
 
         let TestCase {
             base,
@@ -481,12 +479,11 @@ impl Default for TestCase {
 }
 
 impl TestCase {
-    fn matcher(&self, server: &MockServer) -> HttpRequestMatcher {
-        HttpRequestMatcher {
-            method: self.method.try_into().unwrap(),
-            host: server.address().ip().to_string().into(),
-            port: server.address().port(),
-        }
+    fn allow(&self, server: &MockServer, permissions: &mut AllowCertainHttpRequests) {
+        permissions
+            .allow_host(server.address().ip().to_string())
+            .allow_port(HttpPort::new(server.address().port()).unwrap())
+            .allow_method(self.method.try_into().unwrap());
     }
 
     fn mock(&self, server: &MockServer, hits: usize) -> Option<Mock> {
@@ -646,11 +643,10 @@ def perform_request(url: str) -> str:
     // deliberately use a runtime what we are going to throw away later to prevent tricks like `Handle::current`
     let udf = rt_tmp.block_on(async {
         let mut permissions = AllowCertainHttpRequests::new();
-        permissions.allow(HttpRequestMatcher {
-            method: http::Method::GET,
-            host: server.address().ip().to_string().into(),
-            port: server.address().port(),
-        });
+        permissions
+            .allow_host(server.address().ip().to_string())
+            .allow_port(HttpPort::new(server.address().port()).unwrap())
+            .allow_method(http::Method::GET);
 
         let udfs = WasmScalarUdf::new(
             python_component().await,
@@ -742,11 +738,10 @@ async fn assert_large_response_works(code: &'static str) {
         .await;
 
     let mut permissions = AllowCertainHttpRequests::new();
-    permissions.allow(HttpRequestMatcher {
-        method: http::Method::GET,
-        host: server.address().ip().to_string().into(),
-        port: server.address().port(),
-    });
+    permissions
+        .allow_host(server.address().ip().to_string())
+        .allow_port(HttpPort::new(server.address().port()).unwrap())
+        .allow_method(http::Method::GET);
     let udf = python_udf_with_permissions(code, permissions).await;
 
     let array = udf
@@ -843,11 +838,10 @@ def perform_request(url: str) -> str:
     }
 
     let mut permissions = AllowCertainHttpRequests::new();
-    permissions.allow(HttpRequestMatcher {
-        method: http::Method::GET,
-        host: server.address().ip().to_string().into(),
-        port: server.address().port(),
-    });
+    permissions
+        .allow_host(server.address().ip().to_string())
+        .allow_port(HttpPort::new(server.address().port()).unwrap())
+        .allow_method(http::Method::GET);
     let udf = python_udf_with_permissions(CODE, permissions).await;
 
     let array = udf
