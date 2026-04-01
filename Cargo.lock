@@ -1451,7 +1451,6 @@ dependencies = [
  "datafusion-common",
  "datafusion-expr",
  "datafusion-udf-wasm-guest",
- "tar",
  "wasip2",
 ]
 
@@ -1485,7 +1484,6 @@ dependencies = [
  "rand 0.10.0",
  "regex",
  "siphasher",
- "tar",
  "target-lexicon",
  "tokio",
  "uuid",

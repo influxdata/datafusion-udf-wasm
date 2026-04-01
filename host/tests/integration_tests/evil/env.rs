@@ -49,7 +49,7 @@ async fn test_process_id() {
 
     stderr:
 
-    thread '<unnamed>' (1) panicked at <FILE>:<LINE>:<ROW>:
+    thread '<unnamed>' (<THREAD>) panicked at <FILE>:<LINE>:<ROW>:
     unsupported
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 

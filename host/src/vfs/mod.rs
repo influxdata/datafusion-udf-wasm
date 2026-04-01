@@ -2,15 +2,12 @@
 //!
 //! This provides a very crude, read-only in-mem virtual file system for the WASM guests.
 //!
-//! The data gets populated via a TAR container.
-//!
 //! While this implementation has rather limited functionality, it is sufficient to get a Python guest interpreter
 //! running.
 
 use std::{
     collections::{HashMap, hash_map::Entry},
     hash::Hash,
-    io::{Cursor, Read},
     sync::{
         Arc, RwLock, Weak,
         atomic::{AtomicU64, Ordering},
@@ -226,11 +223,6 @@ impl Allocation {
         }
     }
 
-    /// Get current allocation size.
-    fn get(&self) -> u64 {
-        self.n.load(Ordering::SeqCst)
-    }
-
     /// Increase allocation by given amount.
     fn inc(&self, n: u64) -> Result<(), LimitExceeded> {
         self.n
@@ -289,99 +281,6 @@ impl VfsState {
             inodes_allocation,
             limiter,
         }
-    }
-
-    /// Populate the VFS from a tar archive.
-    pub(crate) fn populate_from_tar(&mut self, tar_data: &[u8]) -> Result<(), std::io::Error> {
-        let size_pre = self.limiter.size();
-        let cursor = Cursor::new(tar_data);
-        let mut archive = tar::Archive::new(cursor);
-
-        for entry in archive.entries()? {
-            let mut entry = entry?;
-
-            let entry_type = entry.header().entry_type();
-            let kind = match entry_type {
-                tar::EntryType::Directory => VfsNodeKind::Directory {
-                    children: HashMap::new(),
-                },
-                tar::EntryType::Regular => {
-                    let expected_size = entry.size() as usize;
-                    self.limiter.grow(expected_size)?;
-                    let mut content = Vec::with_capacity(expected_size);
-                    entry.read_to_end(&mut content)?;
-                    assert_eq!(expected_size, content.len());
-                    VfsNodeKind::File { content }
-                }
-                other => {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Unsupported,
-                        format!(
-                            "Unsupported TAR content: {other:?} @ {}",
-                            entry
-                                .path()
-                                .map(|p| p.display().to_string())
-                                .unwrap_or_else(|_| "<n/a>".to_owned())
-                        ),
-                    ));
-                }
-            };
-
-            let path = entry.path()?;
-            let path_str = path.to_string_lossy();
-
-            // NOTE: we ignore "is_root" here because TAR files are unpacked at root level, hence CWD == root
-            let (_is_root, directions) = PathTraversal::parse(&path_str, &self.limits)?;
-            let mut directions = directions.collect::<Vec<_>>();
-
-            // Path traversal happens on the VFS tree, NOT on the parsed path, so the last part MUST be a valid segment.
-            // That also means that `/does_not_exist/../to_be_created` is NOT valid.
-            let name = match directions
-                .pop()
-                .expect("PathTraversal ensures that the path is not empty")?
-            {
-                PathTraversal::Down(segment) => segment,
-                other @ (PathTraversal::Stay | PathTraversal::Up) => {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidFilename,
-                        format!("TAR target MUST end in a valid filename, not {other}"),
-                    ));
-                }
-            };
-
-            let node = VfsNode::traverse(Arc::clone(&self.root), directions.into_iter())
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-
-            let child = Arc::new(RwLock::new(VfsNode {
-                kind,
-                parent: Some(Arc::downgrade(&node)),
-            }));
-
-            self.inodes_allocation.inc(1)?;
-            self.limiter.grow(name.len())?;
-            self.limiter.grow(std::mem::size_of_val(&child))?;
-
-            match &mut node.write().unwrap().kind {
-                VfsNodeKind::File { .. } => {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::NotADirectory,
-                        "not a directory",
-                    ));
-                }
-                VfsNodeKind::Directory { children } => {
-                    children.insert(name, child);
-                }
-            }
-        }
-
-        log::info!(
-            "unpacked WASM guest root filesystem from {} bytes TAR, consuming {} bytes and {} inodes",
-            tar_data.len(),
-            self.limiter.size() - size_pre,
-            self.inodes_allocation.get()
-        );
-
-        Ok(())
     }
 }
 

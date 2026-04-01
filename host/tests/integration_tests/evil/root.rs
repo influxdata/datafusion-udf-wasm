@@ -16,9 +16,16 @@ async fn test_invalid_entry() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    calling scalar_udfs() method failed
+
+    stderr:
+
+    thread '<unnamed>' (1) panicked at guests/evil/src/lib.rs:104:22:
+    unknown evil: root::invalid_entry
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
     caused by
-    IO error: numeric field was not a number:  when getting cksum for foo
+    External error: wasm trap: wasm `unreachable` instruction executed
     ");
 }
 
@@ -31,10 +38,12 @@ async fn test_large_file() {
     insta::assert_snapshot!(
         err,
         @r"
-    call root_fs_tar() method
+    calling scalar_udfs() method failed
 
     stderr:
-    memory allocation of 10485760 bytes failed
+
+    thread '<unnamed>' (1) panicked at guests/evil/src/lib.rs:104:22:
+    unknown evil: root::large_file
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
     caused by
@@ -63,9 +72,16 @@ async fn test_many_files() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    calling scalar_udfs() method failed
+
+    stderr:
+
+    thread '<unnamed>' (1) panicked at guests/evil/src/lib.rs:104:22:
+    unknown evil: root::many_files
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
     caused by
-    IO error: inodes limit reached: limit<=10000 current==10000 requested+=1
+    External error: wasm trap: wasm `unreachable` instruction executed
     ");
 }
 
@@ -76,9 +92,16 @@ async fn test_not_tar() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    calling scalar_udfs() method failed
+
+    stderr:
+
+    thread '<unnamed>' (1) panicked at guests/evil/src/lib.rs:104:22:
+    unknown evil: root::not_tar
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
     caused by
-    IO error: failed to read entire block
+    External error: wasm trap: wasm `unreachable` instruction executed
     ");
 }
 
@@ -101,9 +124,16 @@ async fn test_tar_too_large() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    calling scalar_udfs() method failed
+
+    stderr:
+
+    thread '<unnamed>' (1) panicked at guests/evil/src/lib.rs:104:22:
+    unknown evil: root::tar_too_large
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
     caused by
-    IO error: Resources exhausted: Failed to allocate additional <SIZE> for WASM UDF resources with <SIZE> already allocated for this reservation - <SIZE> remain available for the total pool
+    External error: wasm trap: wasm `unreachable` instruction executed
     ");
 }
 
@@ -123,9 +153,16 @@ async fn test_path_long() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    calling scalar_udfs() method failed
+
+    stderr:
+
+    thread '<unnamed>' (1) panicked at guests/evil/src/lib.rs:104:22:
+    unknown evil: root::path_long
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
     caused by
-    IO error: path limit reached: limit<=10 current==0 requested+=11
+    External error: wasm trap: wasm `unreachable` instruction executed
     ");
 }
 
@@ -144,9 +181,16 @@ async fn test_path_segment_long() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    calling scalar_udfs() method failed
+
+    stderr:
+
+    thread '<unnamed>' (1) panicked at guests/evil/src/lib.rs:104:22:
+    unknown evil: root::path_long
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
     caused by
-    IO error: path segment limit reached: limit<=50 current==0 requested+=51
+    External error: wasm trap: wasm `unreachable` instruction executed
     ");
 }
 
@@ -157,9 +201,16 @@ async fn test_sparse() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    calling scalar_udfs() method failed
+
+    stderr:
+
+    thread '<unnamed>' (1) panicked at guests/evil/src/lib.rs:104:22:
+    unknown evil: root::sparse
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
     caused by
-    IO error: Unsupported TAR content: GNUSparse @ huge
+    External error: wasm trap: wasm `unreachable` instruction executed
     ");
 }
 
@@ -172,8 +223,15 @@ async fn test_unsupported_entry() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    calling scalar_udfs() method failed
+
+    stderr:
+
+    thread '<unnamed>' (1) panicked at guests/evil/src/lib.rs:104:22:
+    unknown evil: root::unsupported_entry
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
     caused by
-    IO error: Unsupported TAR content: Symlink @ foo
+    External error: wasm trap: wasm `unreachable` instruction executed
     ");
 }

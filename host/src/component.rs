@@ -2,9 +2,7 @@
 use std::{ops::Deref, sync::Arc, time::Duration};
 
 use arrow::datatypes::Field;
-use datafusion_common::{
-    DataFusionError, config::ConfigOptions, error::Result as DataFusionResult,
-};
+use datafusion_common::{config::ConfigOptions, error::Result as DataFusionResult};
 use datafusion_execution::memory_pool::MemoryPool;
 use tokio::{
     runtime::Handle,
@@ -132,7 +130,7 @@ impl WasmComponentPrecompiled {
             Ok(Self { compiled_component })
         })
         .await
-        .map_err(|e| DataFusionError::External(Box::new(e)))?
+        .map_err(|e| datafusion_common::DataFusionError::External(Box::new(e)))?
     }
 
     /// Get raw, pre-compiled component data.
@@ -343,24 +341,6 @@ impl WasmComponentInstance {
         let bindings = link(&engine, &component, &mut store)
             .await
             .context("link WASM components", None)?;
-
-        // Populate VFS from tar archive
-        let root_data = bindings
-            .datafusion_udf_wasm_udf_types()
-            .call_root_fs_tar(&mut store)
-            .await
-            .context(
-                "call root_fs_tar() method",
-                Some(&store.data().stderr.contents()),
-            )?;
-        if let Some(root_data) = root_data {
-            let state = store.data_mut();
-
-            state
-                .vfs_state
-                .populate_from_tar(&root_data)
-                .map_err(|e| DataFusionError::IoError(e).context("populate root FS from TAR"))?;
-        }
 
         let store = Arc::new(Mutex::new(store));
 

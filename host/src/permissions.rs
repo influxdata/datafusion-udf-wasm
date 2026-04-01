@@ -75,7 +75,7 @@ impl Default for WasmPermissions {
             stderr_bytes: 1024, // 1KB
             resource_limits: StaticResourceLimits::default(),
             trusted_data_limits: TrustedDataLimits::default(),
-            max_udfs: 20,
+            max_udfs: 23,
             max_cached_fields: NonZeroUsize::new(1_000).expect("valid value"),
             max_cached_config_options: NonZeroUsize::new(1).expect("valid value"),
             envs: BTreeMap::default(),

@@ -5,6 +5,7 @@
 //! [`pyo3`]: https://pyo3.rs/
 use std::any::Any;
 use std::hash::Hash;
+use std::io::Error;
 use std::ops::{ControlFlow, Range};
 use std::sync::{Arc, Once};
 
@@ -29,6 +30,8 @@ mod conversion;
 mod error;
 mod inspect;
 mod python_modules;
+/// Root filesystem helpers for preparing the embedded Python runtime files.
+mod root_fs;
 mod signature;
 
 /// Supported Python version range.
@@ -283,6 +286,14 @@ fn root() -> Option<Vec<u8>> {
     (!ROOT_TAR.is_empty()).then(|| ROOT_TAR.to_vec())
 }
 
+/// Populate the guest root filesystem from the bundled Python standard library archive.
+fn prepare_root_fs() -> Result<(), Error> {
+    let root_fs_tar = root();
+    root_fs::populate_root_fs_from_tar(root_fs_tar.as_deref())
+        .map(|_| ())
+        .map_err(|e| DataFusionError::Execution(e.to_string()).into())
+}
+
 /// Initialize Python interpreter.
 ///
 /// This should always be called before performing any Python interaction. Calling the method more than once is fine
@@ -313,6 +324,8 @@ fn init_python() {
     static INIT: Once = Once::new();
 
     INIT.call_once(|| {
+        prepare_root_fs().expect("cannot prepare root filesystem for Python");
+
         python_modules::register();
         Python::initialize();
 
@@ -327,7 +340,7 @@ fn init_python() {
     });
 }
 
-/// Generate UDFs from given Python string.
+/// Return UDFs defined in the provided source code.
 pub fn udfs(source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
     init_python();
 
@@ -339,6 +352,5 @@ pub fn udfs(source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
 }
 
 export! {
-    root_fs_tar: root,
     scalar_udfs: udfs,
 }

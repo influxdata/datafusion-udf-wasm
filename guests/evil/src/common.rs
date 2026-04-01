@@ -6,13 +6,6 @@ use arrow::{array::StringArray, datatypes::DataType};
 use datafusion_common::{Result as DataFusionResult, cast::as_string_array};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 
-/// Return empty root file system.
-///
-/// This always returns [`None`] because the example does not need any files.
-pub(crate) fn root_empty() -> Option<Vec<u8>> {
-    None
-}
-
 /// Returns empty list of UDFs.
 ///
 /// The passed `source` is ignored.
