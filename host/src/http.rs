@@ -1,6 +1,12 @@
 //! Interfaces for HTTP interactions of the guest.
 
-use std::{borrow::Cow, collections::HashSet, fmt, sync::Arc};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    fmt,
+    num::NonZeroU16,
+    sync::Arc,
+};
 
 use http::HeaderName;
 pub use http::Method as HttpMethod;
@@ -17,6 +23,66 @@ use wasmtime_wasi_http::{
 };
 
 use crate::state::WasmStateImpl;
+
+/// An HTTP port.
+///
+/// Can be any [`u16`] value except for zero.
+#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct HttpPort(NonZeroU16);
+
+impl HttpPort {
+    /// Create new port from [`u16`].
+    ///
+    /// Returns [`None`] if port is zero.
+    pub const fn new(p: u16) -> Option<Self> {
+        // NOTE: `Option::map` isn't const-stable
+        match NonZeroU16::new(p) {
+            Some(p) => Some(Self(p)),
+            None => None,
+        }
+    }
+
+    /// Get [`u16`] representation of that port.
+    pub const fn get_u16(&self) -> u16 {
+        self.0.get()
+    }
+}
+
+impl std::fmt::Debug for HttpPort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.get().fmt(f)
+    }
+}
+
+impl std::fmt::Display for HttpPort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.get().fmt(f)
+    }
+}
+
+impl std::str::FromStr for HttpPort {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let p: NonZeroU16 = s.parse()?;
+        Ok(Self(p))
+    }
+}
+
+/// Default port for unencrypted HTTP traffic.
+const DEFAULT_PORT_PLAINTEXT_HTTP: HttpPort = HttpPort::new(80).expect("valid port");
+
+/// Default port for encrypted HTTPs traffic.
+const DEFAULT_PORT_ENCRYPTED_HTTP: HttpPort = HttpPort::new(443).expect("valid port");
+
+/// Get default port if no port was provided by the request.
+fn default_port(use_tls: bool) -> HttpPort {
+    if use_tls {
+        DEFAULT_PORT_ENCRYPTED_HTTP
+    } else {
+        DEFAULT_PORT_PLAINTEXT_HTTP
+    }
+}
 
 /// Validates if an outgoing HTTP interaction is allowed.
 ///
@@ -47,30 +113,41 @@ impl HttpRequestValidator for RejectAllHttpRequests {
     }
 }
 
-/// A request matcher.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct HttpRequestMatcher {
-    /// Method.
-    pub method: HttpMethod,
+/// Allow settings for a given endpoint.
+///
+/// An endpoint is defined by a host + port.
+#[derive(Debug, Clone, Default)]
+pub struct AllowHttpEndpoint {
+    /// Allowed methods.
+    methods: HashSet<HttpMethod>,
+}
 
-    /// Host.
-    ///
-    /// Requests without a host will be rejected.
-    pub host: Cow<'static, str>,
+impl AllowHttpEndpoint {
+    /// Allow given HTTP method.
+    pub fn allow_method(&mut self, method: HttpMethod) {
+        self.methods.insert(method);
+    }
+}
 
-    /// Port.
-    ///
-    /// For requests without an explicit port, this defaults to `80` for non-TLS requests and to `443` for TLS requests.
-    pub port: u16,
+/// Allow settings for a host.
+#[derive(Debug, Clone, Default)]
+pub struct AllowHttpHost {
+    /// Mapping from port to endpoint.
+    endpoints: HashMap<HttpPort, AllowHttpEndpoint>,
+}
+
+impl AllowHttpHost {
+    /// Allow given port at this host.
+    pub fn allow_port(&mut self, port: HttpPort) -> &mut AllowHttpEndpoint {
+        self.endpoints.entry(port).or_default()
+    }
 }
 
 /// Allow-list requests.
 #[derive(Debug, Clone, Default)]
 pub struct AllowCertainHttpRequests {
-    /// Set of all matchers.
-    ///
-    /// If ANY of them matches, the request will be allowed.
-    matchers: HashSet<HttpRequestMatcher>,
+    /// Set of allowed hosts.
+    hosts: HashMap<Cow<'static, str>, AllowHttpHost>,
 }
 
 impl AllowCertainHttpRequests {
@@ -79,9 +156,9 @@ impl AllowCertainHttpRequests {
         Self::default()
     }
 
-    /// Allow given request.
-    pub fn allow(&mut self, matcher: HttpRequestMatcher) {
-        self.matchers.insert(matcher);
+    /// Allow given host.
+    pub fn allow_host(&mut self, host: impl Into<Cow<'static, str>>) -> &mut AllowHttpHost {
+        self.hosts.entry(host.into()).or_default()
     }
 }
 
@@ -91,21 +168,24 @@ impl HttpRequestValidator for AllowCertainHttpRequests {
         request: &hyper::Request<HyperOutgoingBody>,
         use_tls: bool,
     ) -> Result<(), HttpRequestRejected> {
-        let matcher = HttpRequestMatcher {
-            method: request.method().clone(),
-            host: request
-                .uri()
-                .host()
-                .ok_or(HttpRequestRejected)?
-                .to_owned()
-                .into(),
-            port: request
-                .uri()
-                .port_u16()
-                .unwrap_or(if use_tls { 443 } else { 80 }),
-        };
+        let host = self
+            .hosts
+            .get(request.uri().host().ok_or(HttpRequestRejected)?)
+            .ok_or(HttpRequestRejected)?;
 
-        if self.matchers.contains(&matcher) {
+        let endpoint = host
+            .endpoints
+            .get(
+                &request
+                    .uri()
+                    .port_u16()
+                    .map(|p| HttpPort::new(p).ok_or(HttpRequestRejected))
+                    .transpose()?
+                    .unwrap_or_else(|| default_port(use_tls)),
+            )
+            .ok_or(HttpRequestRejected)?;
+
+        if endpoint.methods.contains(request.method()) {
             Ok(())
         } else {
             Err(HttpRequestRejected)
@@ -205,146 +285,198 @@ mod test {
 
     #[test]
     fn allow_certain() {
+        const HOST_1: &str = "foo.bar";
+        const HOST_2: &str = "my.universe";
+        const SPECIFIC_PORT: HttpPort = HttpPort::new(1337).expect("valid port");
+
         let request_no_port = hyper::Request::builder()
             .method(HttpMethod::GET)
-            .uri("http://foo.bar")
+            .uri(format!("http://{HOST_1}"))
             .body(Default::default())
             .unwrap();
 
         let request_with_port = hyper::Request::builder()
             .method(HttpMethod::GET)
-            .uri("http://my.universe:1337")
+            .uri(format!("http://{HOST_2}:{SPECIFIC_PORT}"))
             .body(Default::default())
             .unwrap();
 
+        #[derive(Debug, PartialEq, Eq)]
+        struct Results {
+            no_port_no_tls: Result<(), HttpRequestRejected>,
+            no_port_with_tls: Result<(), HttpRequestRejected>,
+            with_port_no_tls: Result<(), HttpRequestRejected>,
+            with_port_with_tls: Result<(), HttpRequestRejected>,
+        }
+
+        #[derive(Debug)]
         struct Case {
-            matchers: Vec<HttpRequestMatcher>,
-            result_no_port_no_tls: Result<(), HttpRequestRejected>,
-            result_no_port_with_tls: Result<(), HttpRequestRejected>,
-            result_with_port_no_tls: Result<(), HttpRequestRejected>,
-            result_with_port_with_tls: Result<(), HttpRequestRejected>,
+            policy: AllowCertainHttpRequests,
+            results: Results,
         }
 
         let cases = [
             Case {
-                matchers: vec![],
-                result_no_port_no_tls: Err(HttpRequestRejected),
-                result_no_port_with_tls: Err(HttpRequestRejected),
-                result_with_port_no_tls: Err(HttpRequestRejected),
-                result_with_port_with_tls: Err(HttpRequestRejected),
+                policy: AllowCertainHttpRequests::default(),
+                results: Results {
+                    no_port_no_tls: Err(HttpRequestRejected),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Err(HttpRequestRejected),
+                    with_port_with_tls: Err(HttpRequestRejected),
+                },
             },
             Case {
-                matchers: vec![HttpRequestMatcher {
-                    method: HttpMethod::GET,
-                    host: "foo.bar".into(),
-                    port: 80,
-                }],
-                result_no_port_no_tls: Ok(()),
-                result_no_port_with_tls: Err(HttpRequestRejected),
-                result_with_port_no_tls: Err(HttpRequestRejected),
-                result_with_port_with_tls: Err(HttpRequestRejected),
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
+                    policy.allow_host(HOST_1);
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Err(HttpRequestRejected),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Err(HttpRequestRejected),
+                    with_port_with_tls: Err(HttpRequestRejected),
+                },
             },
             Case {
-                matchers: vec![HttpRequestMatcher {
-                    method: HttpMethod::GET,
-                    host: "foo.bar".into(),
-                    port: 443,
-                }],
-                result_no_port_no_tls: Err(HttpRequestRejected),
-                result_no_port_with_tls: Ok(()),
-                result_with_port_no_tls: Err(HttpRequestRejected),
-                result_with_port_with_tls: Err(HttpRequestRejected),
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
+                    policy
+                        .allow_host(HOST_1)
+                        .allow_port(DEFAULT_PORT_PLAINTEXT_HTTP);
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Err(HttpRequestRejected),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Err(HttpRequestRejected),
+                    with_port_with_tls: Err(HttpRequestRejected),
+                },
             },
             Case {
-                matchers: vec![HttpRequestMatcher {
-                    method: HttpMethod::POST,
-                    host: "foo.bar".into(),
-                    port: 80,
-                }],
-                result_no_port_no_tls: Err(HttpRequestRejected),
-                result_no_port_with_tls: Err(HttpRequestRejected),
-                result_with_port_no_tls: Err(HttpRequestRejected),
-                result_with_port_with_tls: Err(HttpRequestRejected),
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
+                    policy
+                        .allow_host(HOST_1)
+                        .allow_port(DEFAULT_PORT_PLAINTEXT_HTTP)
+                        .allow_method(HttpMethod::GET);
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Ok(()),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Err(HttpRequestRejected),
+                    with_port_with_tls: Err(HttpRequestRejected),
+                },
             },
             Case {
-                matchers: vec![HttpRequestMatcher {
-                    method: HttpMethod::GET,
-                    host: "my.universe".into(),
-                    port: 80,
-                }],
-                result_no_port_no_tls: Err(HttpRequestRejected),
-                result_no_port_with_tls: Err(HttpRequestRejected),
-                result_with_port_no_tls: Err(HttpRequestRejected),
-                result_with_port_with_tls: Err(HttpRequestRejected),
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
+                    policy
+                        .allow_host(HOST_1)
+                        .allow_port(DEFAULT_PORT_ENCRYPTED_HTTP)
+                        .allow_method(HttpMethod::GET);
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Err(HttpRequestRejected),
+                    no_port_with_tls: Ok(()),
+                    with_port_no_tls: Err(HttpRequestRejected),
+                    with_port_with_tls: Err(HttpRequestRejected),
+                },
             },
             Case {
-                matchers: vec![HttpRequestMatcher {
-                    method: HttpMethod::GET,
-                    host: "my.universe".into(),
-                    port: 1337,
-                }],
-                result_no_port_no_tls: Err(HttpRequestRejected),
-                result_no_port_with_tls: Err(HttpRequestRejected),
-                result_with_port_no_tls: Ok(()),
-                result_with_port_with_tls: Ok(()),
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
+                    policy
+                        .allow_host(HOST_1)
+                        .allow_port(DEFAULT_PORT_PLAINTEXT_HTTP)
+                        .allow_method(HttpMethod::POST);
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Err(HttpRequestRejected),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Err(HttpRequestRejected),
+                    with_port_with_tls: Err(HttpRequestRejected),
+                },
             },
             Case {
-                matchers: vec![
-                    HttpRequestMatcher {
-                        method: HttpMethod::GET,
-                        host: "foo.bar".into(),
-                        port: 80,
-                    },
-                    HttpRequestMatcher {
-                        method: HttpMethod::POST,
-                        host: "foo.bar".into(),
-                        port: 80,
-                    },
-                    HttpRequestMatcher {
-                        method: HttpMethod::GET,
-                        host: "my.universe".into(),
-                        port: 1337,
-                    },
-                ],
-                result_no_port_no_tls: Ok(()),
-                result_no_port_with_tls: Err(HttpRequestRejected),
-                result_with_port_no_tls: Ok(()),
-                result_with_port_with_tls: Ok(()),
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
+                    policy
+                        .allow_host(HOST_2)
+                        .allow_port(DEFAULT_PORT_PLAINTEXT_HTTP)
+                        .allow_method(HttpMethod::GET);
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Err(HttpRequestRejected),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Err(HttpRequestRejected),
+                    with_port_with_tls: Err(HttpRequestRejected),
+                },
+            },
+            Case {
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
+                    policy
+                        .allow_host(HOST_2)
+                        .allow_port(SPECIFIC_PORT)
+                        .allow_method(HttpMethod::GET);
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Err(HttpRequestRejected),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Ok(()),
+                    with_port_with_tls: Ok(()),
+                },
+            },
+            Case {
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
+
+                    let endpoint_1 = policy
+                        .allow_host(HOST_1)
+                        .allow_port(DEFAULT_PORT_PLAINTEXT_HTTP);
+                    endpoint_1.allow_method(HttpMethod::GET);
+                    endpoint_1.allow_method(HttpMethod::POST);
+
+                    let endpoint_2 = policy.allow_host(HOST_2).allow_port(SPECIFIC_PORT);
+                    endpoint_2.allow_method(HttpMethod::GET);
+
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Ok(()),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Ok(()),
+                    with_port_with_tls: Ok(()),
+                },
             },
         ];
 
         for (i, case) in cases.into_iter().enumerate() {
-            println!("case: {}", i + 1);
+            println!("========================================");
+            println!("case #{}:", i + 1);
+            println!("{case:#?}");
 
             let Case {
-                matchers,
-                result_no_port_no_tls,
-                result_no_port_with_tls,
-                result_with_port_no_tls,
-                result_with_port_with_tls,
+                policy,
+                results: results_expected,
             } = case;
 
-            let mut policy = AllowCertainHttpRequests::default();
+            let results_actual = Results {
+                no_port_no_tls: policy.validate(&request_no_port, false),
+                no_port_with_tls: policy.validate(&request_no_port, true),
+                with_port_no_tls: policy.validate(&request_with_port, false),
+                with_port_with_tls: policy.validate(&request_with_port, true),
+            };
 
-            for matcher in matchers {
-                policy.allow(matcher);
-            }
-
-            assert_eq!(
-                policy.validate(&request_no_port, false),
-                result_no_port_no_tls,
-            );
-            assert_eq!(
-                policy.validate(&request_no_port, true),
-                result_no_port_with_tls,
-            );
-            assert_eq!(
-                policy.validate(&request_with_port, false),
-                result_with_port_no_tls,
-            );
-            assert_eq!(
-                policy.validate(&request_with_port, true),
-                result_with_port_with_tls,
+            assert!(
+                results_actual == results_expected,
+                "\nActual:\n{results_actual:#?}",
             );
         }
     }
