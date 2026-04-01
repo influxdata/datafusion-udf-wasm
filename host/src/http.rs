@@ -24,6 +24,38 @@ use wasmtime_wasi_http::{
 
 use crate::state::WasmStateImpl;
 
+/// HTTP connection mode.
+///
+/// Defaults to [`Encrypted`](Self::Encrypted).
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
+pub enum HttpConnectionMode {
+    /// Encrypted via TLS, i.e. HTTPs.
+    #[default]
+    Encrypted,
+
+    /// Unencrypted, i.e. plain HTTP.
+    PlainText,
+}
+
+impl HttpConnectionMode {
+    /// Default port for this connection mode.
+    pub const fn default_port(&self) -> HttpPort {
+        match self {
+            Self::Encrypted => HttpPort::new(443).expect("valid port"),
+            Self::PlainText => HttpPort::new(80).expect("valid port"),
+        }
+    }
+
+    /// Derive mode from boolean "use TLS?" flag.
+    fn from_use_tls(use_tls: bool) -> Self {
+        if use_tls {
+            Self::Encrypted
+        } else {
+            Self::PlainText
+        }
+    }
+}
+
 /// An HTTP port.
 ///
 /// Can be any [`u16`] value except for zero.
@@ -69,21 +101,6 @@ impl std::str::FromStr for HttpPort {
     }
 }
 
-/// Default port for unencrypted HTTP traffic.
-const DEFAULT_PORT_PLAINTEXT_HTTP: HttpPort = HttpPort::new(80).expect("valid port");
-
-/// Default port for encrypted HTTPs traffic.
-const DEFAULT_PORT_ENCRYPTED_HTTP: HttpPort = HttpPort::new(443).expect("valid port");
-
-/// Get default port if no port was provided by the request.
-fn default_port(use_tls: bool) -> HttpPort {
-    if use_tls {
-        DEFAULT_PORT_ENCRYPTED_HTTP
-    } else {
-        DEFAULT_PORT_PLAINTEXT_HTTP
-    }
-}
-
 /// Validates if an outgoing HTTP interaction is allowed.
 ///
 /// You can implement your own business logic here or use one of the pre-built implementations, e.g.
@@ -95,7 +112,7 @@ pub trait HttpRequestValidator: fmt::Debug + Send + Sync + 'static {
     fn validate(
         &self,
         request: &hyper::Request<HyperOutgoingBody>,
-        use_tls: bool,
+        mode: HttpConnectionMode,
     ) -> Result<(), HttpRequestRejected>;
 }
 
@@ -107,7 +124,7 @@ impl HttpRequestValidator for RejectAllHttpRequests {
     fn validate(
         &self,
         _request: &hyper::Request<HyperOutgoingBody>,
-        _use_tls: bool,
+        _mode: HttpConnectionMode,
     ) -> Result<(), HttpRequestRejected> {
         Err(HttpRequestRejected)
     }
@@ -118,12 +135,24 @@ impl HttpRequestValidator for RejectAllHttpRequests {
 /// An endpoint is defined by a host + port.
 #[derive(Debug, Clone, Default)]
 pub struct AllowHttpEndpoint {
+    /// Connection mode.
+    mode: HttpConnectionMode,
+
     /// Allowed methods.
     methods: HashSet<HttpMethod>,
 }
 
 impl AllowHttpEndpoint {
+    /// Allow given connection mode.
+    ///
+    /// Note that only one mode can be allowed. Calling this method multiple times will keep the last value.
+    pub fn allow_mode(&mut self, mode: HttpConnectionMode) {
+        self.mode = mode;
+    }
+
     /// Allow given HTTP method.
+    ///
+    /// Multiple methods can be allowed.
     pub fn allow_method(&mut self, method: HttpMethod) {
         self.methods.insert(method);
     }
@@ -166,7 +195,7 @@ impl HttpRequestValidator for AllowCertainHttpRequests {
     fn validate(
         &self,
         request: &hyper::Request<HyperOutgoingBody>,
-        use_tls: bool,
+        mode: HttpConnectionMode,
     ) -> Result<(), HttpRequestRejected> {
         let host = self
             .hosts
@@ -181,15 +210,19 @@ impl HttpRequestValidator for AllowCertainHttpRequests {
                     .port_u16()
                     .map(|p| HttpPort::new(p).ok_or(HttpRequestRejected))
                     .transpose()?
-                    .unwrap_or_else(|| default_port(use_tls)),
+                    .unwrap_or_else(|| mode.default_port()),
             )
             .ok_or(HttpRequestRejected)?;
 
-        if endpoint.methods.contains(request.method()) {
-            Ok(())
-        } else {
-            Err(HttpRequestRejected)
+        if endpoint.mode != mode {
+            return Err(HttpRequestRejected);
         }
+
+        if !endpoint.methods.contains(request.method()) {
+            return Err(HttpRequestRejected);
+        }
+
+        Ok(())
     }
 }
 
@@ -243,12 +276,13 @@ impl WasiHttpHooks for WasiHttpHooksImpl {
         let handle = wasmtime_wasi::runtime::spawn(async move {
             // yes, that's another layer of futures. The WASI interface is somewhat nested.
             let fut = async {
+                let mode = HttpConnectionMode::from_use_tls(config.use_tls);
                 validator
-                    .validate(&request, config.use_tls)
+                    .validate(&request, mode)
                     .map_err(|_| HttpErrorCode::HttpRequestDenied)?;
 
                 log::debug!(
-                    "UDF HTTP request: {} {}",
+                    "UDF HTTP request: {} {} ({mode:?})",
                     request.method().as_str(),
                     request.uri(),
                 );
@@ -280,7 +314,12 @@ mod test {
         let policy = RejectAllHttpRequests;
 
         let request = hyper::Request::builder().body(Default::default()).unwrap();
-        policy.validate(&request, false).unwrap_err();
+        policy
+            .validate(&request, HttpConnectionMode::Encrypted)
+            .unwrap_err();
+        policy
+            .validate(&request, HttpConnectionMode::PlainText)
+            .unwrap_err();
     }
 
     #[test]
@@ -298,6 +337,12 @@ mod test {
         let request_with_port = hyper::Request::builder()
             .method(HttpMethod::GET)
             .uri(format!("http://{HOST_2}:{SPECIFIC_PORT}"))
+            .body(Default::default())
+            .unwrap();
+
+        let request_zero_port = hyper::Request::builder()
+            .method(HttpMethod::GET)
+            .uri(format!("http://{HOST_1}:0"))
             .body(Default::default())
             .unwrap();
 
@@ -343,7 +388,7 @@ mod test {
                     let mut policy = AllowCertainHttpRequests::default();
                     policy
                         .allow_host(HOST_1)
-                        .allow_port(DEFAULT_PORT_PLAINTEXT_HTTP);
+                        .allow_port(HttpConnectionMode::PlainText.default_port());
                     policy
                 },
                 results: Results {
@@ -358,8 +403,27 @@ mod test {
                     let mut policy = AllowCertainHttpRequests::default();
                     policy
                         .allow_host(HOST_1)
-                        .allow_port(DEFAULT_PORT_PLAINTEXT_HTTP)
+                        .allow_port(HttpConnectionMode::PlainText.default_port())
                         .allow_method(HttpMethod::GET);
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Err(HttpRequestRejected),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Err(HttpRequestRejected),
+                    with_port_with_tls: Err(HttpRequestRejected),
+                },
+            },
+            Case {
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
+
+                    let endpoint = policy
+                        .allow_host(HOST_1)
+                        .allow_port(HttpConnectionMode::PlainText.default_port());
+                    endpoint.allow_mode(HttpConnectionMode::PlainText);
+                    endpoint.allow_method(HttpMethod::GET);
+
                     policy
                 },
                 results: Results {
@@ -374,7 +438,7 @@ mod test {
                     let mut policy = AllowCertainHttpRequests::default();
                     policy
                         .allow_host(HOST_1)
-                        .allow_port(DEFAULT_PORT_ENCRYPTED_HTTP)
+                        .allow_port(HttpConnectionMode::Encrypted.default_port())
                         .allow_method(HttpMethod::GET);
                     policy
                 },
@@ -388,9 +452,28 @@ mod test {
             Case {
                 policy: {
                     let mut policy = AllowCertainHttpRequests::default();
+
+                    let endpoint = policy
+                        .allow_host(HOST_1)
+                        .allow_port(HttpConnectionMode::Encrypted.default_port());
+                    endpoint.allow_mode(HttpConnectionMode::PlainText);
+                    endpoint.allow_method(HttpMethod::GET);
+
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Err(HttpRequestRejected),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Err(HttpRequestRejected),
+                    with_port_with_tls: Err(HttpRequestRejected),
+                },
+            },
+            Case {
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
                     policy
                         .allow_host(HOST_1)
-                        .allow_port(DEFAULT_PORT_PLAINTEXT_HTTP)
+                        .allow_port(HttpConnectionMode::PlainText.default_port())
                         .allow_method(HttpMethod::POST);
                     policy
                 },
@@ -406,7 +489,7 @@ mod test {
                     let mut policy = AllowCertainHttpRequests::default();
                     policy
                         .allow_host(HOST_2)
-                        .allow_port(DEFAULT_PORT_PLAINTEXT_HTTP)
+                        .allow_port(HttpConnectionMode::PlainText.default_port())
                         .allow_method(HttpMethod::GET);
                     policy
                 },
@@ -429,8 +512,25 @@ mod test {
                 results: Results {
                     no_port_no_tls: Err(HttpRequestRejected),
                     no_port_with_tls: Err(HttpRequestRejected),
-                    with_port_no_tls: Ok(()),
+                    with_port_no_tls: Err(HttpRequestRejected),
                     with_port_with_tls: Ok(()),
+                },
+            },
+            Case {
+                policy: {
+                    let mut policy = AllowCertainHttpRequests::default();
+
+                    let endpoint = policy.allow_host(HOST_2).allow_port(SPECIFIC_PORT);
+                    endpoint.allow_mode(HttpConnectionMode::PlainText);
+                    endpoint.allow_method(HttpMethod::GET);
+
+                    policy
+                },
+                results: Results {
+                    no_port_no_tls: Err(HttpRequestRejected),
+                    no_port_with_tls: Err(HttpRequestRejected),
+                    with_port_no_tls: Ok(()),
+                    with_port_with_tls: Err(HttpRequestRejected),
                 },
             },
             Case {
@@ -439,7 +539,8 @@ mod test {
 
                     let endpoint_1 = policy
                         .allow_host(HOST_1)
-                        .allow_port(DEFAULT_PORT_PLAINTEXT_HTTP);
+                        .allow_port(HttpConnectionMode::PlainText.default_port());
+                    endpoint_1.allow_mode(HttpConnectionMode::PlainText);
                     endpoint_1.allow_method(HttpMethod::GET);
                     endpoint_1.allow_method(HttpMethod::POST);
 
@@ -451,7 +552,7 @@ mod test {
                 results: Results {
                     no_port_no_tls: Ok(()),
                     no_port_with_tls: Err(HttpRequestRejected),
-                    with_port_no_tls: Ok(()),
+                    with_port_no_tls: Err(HttpRequestRejected),
                     with_port_with_tls: Ok(()),
                 },
             },
@@ -468,16 +569,26 @@ mod test {
             } = case;
 
             let results_actual = Results {
-                no_port_no_tls: policy.validate(&request_no_port, false),
-                no_port_with_tls: policy.validate(&request_no_port, true),
-                with_port_no_tls: policy.validate(&request_with_port, false),
-                with_port_with_tls: policy.validate(&request_with_port, true),
+                no_port_no_tls: policy.validate(&request_no_port, HttpConnectionMode::PlainText),
+                no_port_with_tls: policy.validate(&request_no_port, HttpConnectionMode::Encrypted),
+                with_port_no_tls: policy
+                    .validate(&request_with_port, HttpConnectionMode::PlainText),
+                with_port_with_tls: policy
+                    .validate(&request_with_port, HttpConnectionMode::Encrypted),
             };
 
             assert!(
                 results_actual == results_expected,
                 "\nActual:\n{results_actual:#?}",
             );
+
+            // zero port is never allowed
+            policy
+                .validate(&request_zero_port, HttpConnectionMode::PlainText)
+                .unwrap_err();
+            policy
+                .validate(&request_zero_port, HttpConnectionMode::Encrypted)
+                .unwrap_err();
         }
     }
 }

@@ -16,7 +16,8 @@ use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl,
 };
 use datafusion_udf_wasm_host::{
-    AllowCertainHttpRequests, HttpPort, HttpRequestValidator, WasmPermissions, WasmScalarUdf,
+    AllowCertainHttpRequests, HttpConnectionMode, HttpPort, HttpRequestValidator, WasmPermissions,
+    WasmScalarUdf,
 };
 use http::header::{ACCEPT_ENCODING, CONTENT_ENCODING};
 use regex::Regex;
@@ -46,10 +47,11 @@ def perform_request(url: str) -> str:
         .await;
 
     let mut permissions = AllowCertainHttpRequests::new();
-    permissions
+    let endpoint = permissions
         .allow_host(server.address().ip().to_string())
-        .allow_port(HttpPort::new(server.address().port()).unwrap())
-        .allow_method(http::Method::GET);
+        .allow_port(HttpPort::new(server.address().port()).unwrap());
+    endpoint.allow_mode(HttpConnectionMode::PlainText);
+    endpoint.allow_method(http::Method::GET);
     let udf = python_udf_with_permissions(CODE, permissions).await;
 
     let array = udf
@@ -480,10 +482,11 @@ impl Default for TestCase {
 
 impl TestCase {
     fn allow(&self, server: &MockServer, permissions: &mut AllowCertainHttpRequests) {
-        permissions
+        let endpoint = permissions
             .allow_host(server.address().ip().to_string())
-            .allow_port(HttpPort::new(server.address().port()).unwrap())
-            .allow_method(self.method.try_into().unwrap());
+            .allow_port(HttpPort::new(server.address().port()).unwrap());
+        endpoint.allow_mode(HttpConnectionMode::PlainText);
+        endpoint.allow_method(self.method.try_into().unwrap());
     }
 
     fn mock(&self, server: &MockServer, hits: usize) -> Option<Mock> {
@@ -643,10 +646,11 @@ def perform_request(url: str) -> str:
     // deliberately use a runtime what we are going to throw away later to prevent tricks like `Handle::current`
     let udf = rt_tmp.block_on(async {
         let mut permissions = AllowCertainHttpRequests::new();
-        permissions
+        let endpoint = permissions
             .allow_host(server.address().ip().to_string())
-            .allow_port(HttpPort::new(server.address().port()).unwrap())
-            .allow_method(http::Method::GET);
+            .allow_port(HttpPort::new(server.address().port()).unwrap());
+        endpoint.allow_mode(HttpConnectionMode::PlainText);
+        endpoint.allow_method(http::Method::GET);
 
         let udfs = WasmScalarUdf::new(
             python_component().await,
@@ -738,10 +742,11 @@ async fn assert_large_response_works(code: &'static str) {
         .await;
 
     let mut permissions = AllowCertainHttpRequests::new();
-    permissions
+    let endpoint = permissions
         .allow_host(server.address().ip().to_string())
-        .allow_port(HttpPort::new(server.address().port()).unwrap())
-        .allow_method(http::Method::GET);
+        .allow_port(HttpPort::new(server.address().port()).unwrap());
+    endpoint.allow_mode(HttpConnectionMode::PlainText);
+    endpoint.allow_method(http::Method::GET);
     let udf = python_udf_with_permissions(code, permissions).await;
 
     let array = udf
@@ -838,10 +843,11 @@ def perform_request(url: str) -> str:
     }
 
     let mut permissions = AllowCertainHttpRequests::new();
-    permissions
+    let endpoint = permissions
         .allow_host(server.address().ip().to_string())
-        .allow_port(HttpPort::new(server.address().port()).unwrap())
-        .allow_method(http::Method::GET);
+        .allow_port(HttpPort::new(server.address().port()).unwrap());
+    endpoint.allow_mode(HttpConnectionMode::PlainText);
+    endpoint.allow_method(http::Method::GET);
     let udf = python_udf_with_permissions(CODE, permissions).await;
 
     let array = udf
