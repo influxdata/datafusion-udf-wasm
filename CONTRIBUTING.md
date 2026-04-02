@@ -28,6 +28,9 @@ Install [tombi] to format and lint [TOML] files.
 ### Spellcheck
 Install [typos] to run an automatic spellcheck.
 
+### wasm-tools
+Install [wasm-tools], which we need to create certain WASM binaries.
+
 ### Valgrind
 We require [Valgrind] to run our benchmark. However, if you only want to "smoke test" benchmarks (via `just check-rust-bench`), [Valgrind] is NOT required.
 
@@ -175,4 +178,5 @@ $ gh workflow run Prebuild --ref <BRANCH_NAME>
 [typos]: https://github.com/crate-ci/typos
 [uv]: https://docs.astral.sh/uv/
 [Valgrind]: https://valgrind.org/
+[wasm-tools]: https://github.com/bytecodealliance/wasm-tools
 [yamllint]: https://github.com/adrienverge/yamllint

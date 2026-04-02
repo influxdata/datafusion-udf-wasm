@@ -41,10 +41,10 @@ jobs:
           echo "PYO3_CROSS_LIB_DIR=${path_bin}/../lib" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=${path_bin}/../lib" >> "$GITHUB_ENV"
 
-      - name: Install `cargo-deny` & `just` & `tombi` & 'typos'
+      - name: Install `cargo-deny` & `just` & `tombi` & 'typos' & 'wasm-tools'
         uses: taiki-e/install-action@6ef672efc2b5aabc787a9e94baf4989aa02a97df  # v2
         with:
-          tool: cargo-deny,just,tombi,typos
+          tool: cargo-deny,just,tombi,typos,wasm-tools
 
       - name: Install Rust toolchain
         run: rustup toolchain install

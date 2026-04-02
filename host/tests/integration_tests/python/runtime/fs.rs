@@ -39,7 +39,7 @@ def listdir(cwd: str | None, dir: str) -> str:
         TestCase {
             cwd: None,
             dir: "/",
-            results: &["lib"],
+            results: &["LICENSE", "lib"],
         },
         TestCase {
             cwd: None,
@@ -82,7 +82,7 @@ def listdir(cwd: str | None, dir: str) -> str:
         TestCase {
             cwd: Some("/lib"),
             dir: "..",
-            results: &["lib"],
+            results: &["LICENSE", "lib"],
         },
     ];
 
@@ -326,7 +326,7 @@ async fn test_limit_bytes() {
 
     // normalize sizes
     let err = err.to_string();
-    let err = Regex::new(r#"[0-9.]+ [KM]B"#)
+    let err = Regex::new(r#"[0-9.]+ [KM]?B"#)
         .unwrap()
         .replace_all(&err, "<SIZE>");
 
