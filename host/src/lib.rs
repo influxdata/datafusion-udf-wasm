@@ -7,8 +7,8 @@ pub use crate::{
     component::WasmComponentPrecompiled,
     conversion::limits::TrustedDataLimits,
     http::{
-        AllowCertainHttpRequests, AllowHttpEndpoint, AllowHttpHost, HttpMethod, HttpPort,
-        HttpRequestRejected, HttpRequestValidator, RejectAllHttpRequests,
+        AllowCertainHttpRequests, AllowHttpEndpoint, AllowHttpHost, HttpConnectionMode, HttpMethod,
+        HttpPort, HttpRequestRejected, HttpRequestValidator, RejectAllHttpRequests,
     },
     limiter::StaticResourceLimits,
     permissions::WasmPermissions,
