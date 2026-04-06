@@ -80,6 +80,10 @@ impl Evil {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(fs::udfs),
             },
+            "fs::seeded" => Self {
+                root: Box::new(fs::root),
+                udfs: Box::new(fs::seeded_udfs),
+            },
             "net" => Self {
                 root: Box::new(common::root_empty),
                 udfs: Box::new(net::udfs),

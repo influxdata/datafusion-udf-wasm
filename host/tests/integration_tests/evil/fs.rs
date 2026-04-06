@@ -2909,9 +2909,143 @@ async fn test_symlink_metadata() {
     );
 }
 
+#[derive(Debug)]
+struct WriteCase<'a> {
+    path: &'a str,
+    content: &'a str,
+    expected: &'a str,
+}
+
+#[tokio::test]
+async fn test_seeded_write_read_back() {
+    assert_seeded_write_cases(
+        "write_read_back",
+        &[
+            WriteCase {
+                path: "/seed.txt",
+                content: "overwrite",
+                expected: "OK: overwrite",
+            },
+            WriteCase {
+                path: "/nested/child.txt",
+                content: "nested evil",
+                expected: "OK: nested evil",
+            },
+            WriteCase {
+                path: "/dir",
+                content: "blocked",
+                expected: "ERR: Is a directory (os error 31)",
+            },
+            WriteCase {
+                path: "/etc/passwd",
+                content: "blocked",
+                expected: "ERR: No such file or directory (os error 44)",
+            },
+        ],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_seeded_truncate_write_read_back() {
+    assert_seeded_write_cases(
+        "truncate_write_read_back",
+        &[
+            WriteCase {
+                path: "/seed.txt",
+                content: "tiny",
+                expected: "OK: tiny",
+            },
+            WriteCase {
+                path: "/nested/child.txt",
+                content: "x",
+                expected: "OK: x",
+            },
+            WriteCase {
+                path: "/dir",
+                content: "blocked",
+                expected: "ERR: Is a directory (os error 31)",
+            },
+        ],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_seeded_create_write_read_back() {
+    assert_seeded_write_cases(
+        "create_write_read_back",
+        &[
+            WriteCase {
+                path: "/created.txt",
+                content: "fresh",
+                expected: "OK: fresh",
+            },
+            WriteCase {
+                path: "/seed.txt",
+                content: "fresh",
+                expected: "OK: freshdata",
+            },
+            WriteCase {
+                path: "/nested/new.txt",
+                content: "deeper",
+                expected: "OK: deeper",
+            },
+            WriteCase {
+                path: "/missing/new.txt",
+                content: "blocked",
+                expected: "ERR: No such file or directory (os error 44)",
+            },
+            WriteCase {
+                path: "/dir",
+                content: "blocked",
+                expected: "ERR: Is a directory (os error 31)",
+            },
+        ],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_seeded_create_new_write_read_back() {
+    assert_seeded_write_cases(
+        "create_new_write_read_back",
+        &[
+            WriteCase {
+                path: "/brand-new.txt",
+                content: "fresh",
+                expected: "OK: fresh",
+            },
+            WriteCase {
+                path: "/seed.txt",
+                content: "blocked",
+                expected: "ERR: File exists (os error 20)",
+            },
+        ],
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_seeded_write_chunked_respects_memory_limit() {
+    let size = (16 * 1024 * 1024).to_string();
+    let error = try_invoke_2("fs::seeded", "write_chunked", "/big.txt", &size)
+        .await
+        .unwrap_err();
+
+    assert!(
+        error.contains("insufficient-memory") || error.contains("Resources exhausted"),
+        "unexpected error: {error}"
+    );
+}
+
 /// Get evil UDF.
 async fn udf(name: &'static str) -> WasmScalarUdf {
-    try_scalar_udfs("fs")
+    udf_for("fs", name).await
+}
+
+async fn udf_for(evil: &'static str, name: &'static str) -> WasmScalarUdf {
+    try_scalar_udfs(evil)
         .await
         .unwrap()
         .into_iter()
@@ -2940,6 +3074,55 @@ where
 /// Make path nicely printable.
 fn nice_path(path: &str) -> String {
     path.replace("\0", r#"\0"#)
+}
+
+async fn assert_seeded_write_cases(name: &'static str, cases: &[WriteCase<'_>]) {
+    for case in cases {
+        let result = invoke_2("fs::seeded", name, case.path, case.content).await;
+        assert_eq!(result, case.expected, "unexpected result for {:?}", case);
+    }
+}
+
+async fn invoke_2(evil: &'static str, name: &'static str, a: &str, b: &str) -> String {
+    let udf = udf_for(evil, name).await;
+    try_invoke_2_with_udf(&udf, a, b).await.unwrap()
+}
+
+async fn try_invoke_2(
+    evil: &'static str,
+    name: &'static str,
+    a: &str,
+    b: &str,
+) -> Result<String, String> {
+    let udf = udf_for(evil, name).await;
+    try_invoke_2_with_udf(&udf, a, b).await
+}
+
+async fn try_invoke_2_with_udf(udf: &WasmScalarUdf, a: &str, b: &str) -> Result<String, String> {
+    let result = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![
+                ColumnarValue::Scalar(ScalarValue::Utf8(Some(a.to_owned()))),
+                ColumnarValue::Scalar(ScalarValue::Utf8(Some(b.to_owned()))),
+            ],
+            arg_fields: vec![
+                Arc::new(Field::new("a", DataType::Utf8, true)),
+                Arc::new(Field::new("b", DataType::Utf8, true)),
+            ],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("result", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .unwrap_array();
+
+    Ok(result
+        .as_any()
+        .downcast_ref::<StringArray>()
+        .unwrap()
+        .value(0)
+        .to_owned())
 }
 
 /// Run UDF that expects one string input.

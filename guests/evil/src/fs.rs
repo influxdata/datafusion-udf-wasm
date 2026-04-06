@@ -1,5 +1,5 @@
 //! Payload that interact with the (virtual) file system.
-use std::{hash::Hash, sync::Arc};
+use std::{hash::Hash, io::Write, sync::Arc};
 
 use arrow::{array::StringArray, datatypes::DataType};
 use datafusion_common::{Result as DataFusionResult, cast::as_string_array};
@@ -75,6 +75,167 @@ impl ScalarUDFImpl for String2Udf {
             .collect::<StringArray>();
         Ok(ColumnarValue::Array(Arc::new(array)))
     }
+}
+
+/// Write mode for our write-and-read-back UDFs. This is just a convenient way
+/// to bundle the various options for opening a file for writing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct WriteMode {
+    /// Whether writes append to the file.
+    append: bool,
+    /// Whether the open may create a missing file.
+    create: bool,
+    /// Whether the open must create a new file.
+    create_new: bool,
+    /// Whether the open truncates an existing file first.
+    truncate: bool,
+    /// Whether the open requests write access.
+    write: bool,
+}
+
+impl WriteMode {
+    /// Open an existing file and overwrite bytes in place.
+    const OVERWRITE: Self = Self {
+        append: false,
+        create: false,
+        create_new: false,
+        truncate: false,
+        write: true,
+    };
+
+    /// Open an existing file and truncate it before writing.
+    const TRUNCATE: Self = Self {
+        append: false,
+        create: false,
+        create_new: false,
+        truncate: true,
+        write: true,
+    };
+
+    /// Create the file if it does not exist before writing.
+    const CREATE: Self = Self {
+        append: false,
+        create: true,
+        create_new: false,
+        truncate: false,
+        write: true,
+    };
+
+    /// Require the file to not exist before writing.
+    const CREATE_NEW: Self = Self {
+        append: false,
+        create: false,
+        create_new: true,
+        truncate: false,
+        write: true,
+    };
+}
+
+/// Return a small pre-seeded root filesystem for malicious write tests.
+#[expect(clippy::unnecessary_wraps, reason = "public API through export! macro")]
+pub(crate) fn root() -> Option<Vec<u8>> {
+    let mut ar = tar::Builder::new(Vec::new());
+
+    append_dir(&mut ar, "dir");
+    append_dir(&mut ar, "nested");
+    append_file(&mut ar, "seed.txt", b"seed data");
+    append_file(&mut ar, "nested/child.txt", b"nested data");
+
+    Some(ar.into_inner().unwrap())
+}
+
+/// Append a directory entry to the seeded TAR archive.
+fn append_dir(ar: &mut tar::Builder<Vec<u8>>, path: &str) {
+    let mut header = tar::Header::new_gnu();
+    header.set_entry_type(tar::EntryType::Directory);
+    header.set_mode(0o755);
+    header.set_path(path).unwrap();
+    header.set_size(0);
+    header.set_cksum();
+    ar.append(&header, b"".as_slice()).unwrap();
+}
+
+/// Append a regular file entry to the seeded TAR archive.
+fn append_file(ar: &mut tar::Builder<Vec<u8>>, path: &str, content: &[u8]) {
+    let mut header = tar::Header::new_gnu();
+    header.set_entry_type(tar::EntryType::Regular);
+    header.set_mode(0o644);
+    header.set_path(path).unwrap();
+    header.set_size(content.len() as u64);
+    header.set_cksum();
+    ar.append(&header, content).unwrap();
+}
+
+/// Write content to a path using the configured open mode and then read it back.
+fn write_and_read_back(path: String, content: String, mode: WriteMode) -> Result<String, String> {
+    let mut file = std::fs::File::options()
+        .append(mode.append)
+        .create(mode.create)
+        .create_new(mode.create_new)
+        .read(false)
+        .truncate(mode.truncate)
+        .write(mode.write)
+        .open(&path)
+        .map_err(|e| e.to_string())?;
+
+    file.write_all(content.as_bytes())
+        .map_err(|e| e.to_string())?;
+    drop(file);
+
+    std::fs::read_to_string(path).map_err(|e| e.to_string())
+}
+
+/// Write a large payload in chunks so resource exhaustion happens inside the guest write path.
+fn write_chunked(path: String, size: String) -> Result<String, String> {
+    let mut file = std::fs::File::options()
+        .append(false)
+        .create(true)
+        .create_new(false)
+        .read(false)
+        .truncate(false)
+        .write(true)
+        .open(&path)
+        .map_err(|e| e.to_string())?;
+
+    let mut remaining = size.parse::<usize>().map_err(|e| e.to_string())?;
+    let mut written = 0usize;
+    let chunk = vec![b'x'; 64 * 1024];
+
+    while remaining > 0 {
+        let n = remaining.min(chunk.len());
+        if let Err(e) = file.write_all(&chunk[..n]) {
+            return Err(format!("write failed after {written} bytes: {e}"));
+        }
+        written += n;
+        remaining -= n;
+    }
+
+    Ok(written.to_string())
+}
+
+/// Returns UDFs that perform writes to the filesystem and read back the
+/// results.
+fn seeded_write_udfs() -> Vec<Arc<dyn ScalarUDFImpl>> {
+    vec![
+        Arc::new(String2Udf::new("write_read_back", |path, content| {
+            write_and_read_back(path, content, WriteMode::OVERWRITE)
+        })),
+        Arc::new(String2Udf::new(
+            "truncate_write_read_back",
+            |path, content| write_and_read_back(path, content, WriteMode::TRUNCATE),
+        )),
+        Arc::new(String2Udf::new(
+            "create_write_read_back",
+            |path, content| write_and_read_back(path, content, WriteMode::CREATE),
+        )),
+        Arc::new(String2Udf::new(
+            "create_new_write_read_back",
+            |path, content| write_and_read_back(path, content, WriteMode::CREATE_NEW),
+        )),
+        Arc::new(String2Udf::new("write_chunked", |path, size| {
+            write_chunked(path, size)
+        })),
+    ]
 }
 
 /// Returns our evil UDFs.
@@ -236,4 +397,10 @@ pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImp
                 .map_err(|e| e.to_string())
         })),
     ])
+}
+
+/// Returns UDFs that perform writes to the filesystem and read back the
+#[expect(clippy::unnecessary_wraps, reason = "public API through export! macro")]
+pub(crate) fn seeded_udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
+    Ok(seeded_write_udfs())
 }
