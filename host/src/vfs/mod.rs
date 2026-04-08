@@ -1001,8 +1001,8 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         _self_: Resource<Descriptor>,
         _path: String,
     ) -> FsResult<String> {
-        // Symlinks not supported
-        Err(FsError::trap(ErrorCode::Unsupported))
+        // Symlinks not supported, hence a path can NEVER be a symlink and we shall return `Invalid`/`EINVAL`.
+        Err(FsError::trap(ErrorCode::Invalid))
     }
 
     async fn remove_directory_at(

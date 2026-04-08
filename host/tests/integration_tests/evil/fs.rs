@@ -55,29 +55,29 @@ async fn test_canonicalize() {
     | .           | OK: /                                           |
     | ..          | OK: /                                           |
     | /           | OK: /                                           |
-    | /bin        | ERR: Not supported (os error 58)                |
-    | /boot       | ERR: Not supported (os error 58)                |
-    | /dev        | ERR: Not supported (os error 58)                |
-    | /etc        | ERR: Not supported (os error 58)                |
-    | /etc/group  | ERR: Not supported (os error 58)                |
-    | /etc/passwd | ERR: Not supported (os error 58)                |
-    | /etc/shadow | ERR: Not supported (os error 58)                |
-    | /home       | ERR: Not supported (os error 58)                |
-    | /lib        | ERR: Not supported (os error 58)                |
-    | /lib64      | ERR: Not supported (os error 58)                |
-    | /opt        | ERR: Not supported (os error 58)                |
-    | /proc       | ERR: Not supported (os error 58)                |
-    | /proc/self  | ERR: Not supported (os error 58)                |
-    | /root       | ERR: Not supported (os error 58)                |
-    | /run        | ERR: Not supported (os error 58)                |
-    | /sbin       | ERR: Not supported (os error 58)                |
-    | /srv        | ERR: Not supported (os error 58)                |
-    | /sys        | ERR: Not supported (os error 58)                |
-    | /tmp        | ERR: Not supported (os error 58)                |
-    | /usr        | ERR: Not supported (os error 58)                |
-    | /var        | ERR: Not supported (os error 58)                |
+    | /bin        | OK: /bin                                        |
+    | /boot       | OK: /boot                                       |
+    | /dev        | OK: /dev                                        |
+    | /etc        | OK: /etc                                        |
+    | /etc/group  | OK: /etc/group                                  |
+    | /etc/passwd | OK: /etc/passwd                                 |
+    | /etc/shadow | OK: /etc/shadow                                 |
+    | /home       | OK: /home                                       |
+    | /lib        | OK: /lib                                        |
+    | /lib64      | OK: /lib64                                      |
+    | /opt        | OK: /opt                                        |
+    | /proc       | OK: /proc                                       |
+    | /proc/self  | OK: /proc/self                                  |
+    | /root       | OK: /root                                       |
+    | /run        | OK: /run                                        |
+    | /sbin       | OK: /sbin                                       |
+    | /srv        | OK: /srv                                        |
+    | /sys        | OK: /sys                                        |
+    | /tmp        | OK: /tmp                                        |
+    | /usr        | OK: /usr                                        |
+    | /var        | OK: /var                                        |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Not supported (os error 58)                |
+    | /x/..       | OK: /                                           |
     +-------------+-------------------------------------------------+
     ",
     );
@@ -1975,33 +1975,33 @@ async fn test_read_link() {
     +-------------+-------------------------------------------------+
     | path        | result                                          |
     +-------------+-------------------------------------------------+
-    |             | ERR: Not supported (os error 58)                |
-    | .           | ERR: Not supported (os error 58)                |
-    | ..          | ERR: Not supported (os error 58)                |
-    | /           | ERR: Not supported (os error 58)                |
-    | /bin        | ERR: Not supported (os error 58)                |
-    | /boot       | ERR: Not supported (os error 58)                |
-    | /dev        | ERR: Not supported (os error 58)                |
-    | /etc        | ERR: Not supported (os error 58)                |
-    | /etc/group  | ERR: Not supported (os error 58)                |
-    | /etc/passwd | ERR: Not supported (os error 58)                |
-    | /etc/shadow | ERR: Not supported (os error 58)                |
-    | /home       | ERR: Not supported (os error 58)                |
-    | /lib        | ERR: Not supported (os error 58)                |
-    | /lib64      | ERR: Not supported (os error 58)                |
-    | /opt        | ERR: Not supported (os error 58)                |
-    | /proc       | ERR: Not supported (os error 58)                |
-    | /proc/self  | ERR: Not supported (os error 58)                |
-    | /root       | ERR: Not supported (os error 58)                |
-    | /run        | ERR: Not supported (os error 58)                |
-    | /sbin       | ERR: Not supported (os error 58)                |
-    | /srv        | ERR: Not supported (os error 58)                |
-    | /sys        | ERR: Not supported (os error 58)                |
-    | /tmp        | ERR: Not supported (os error 58)                |
-    | /usr        | ERR: Not supported (os error 58)                |
-    | /var        | ERR: Not supported (os error 58)                |
+    |             | ERR: Invalid argument (os error 28)             |
+    | .           | ERR: Invalid argument (os error 28)             |
+    | ..          | ERR: Invalid argument (os error 28)             |
+    | /           | ERR: Invalid argument (os error 28)             |
+    | /bin        | ERR: Invalid argument (os error 28)             |
+    | /boot       | ERR: Invalid argument (os error 28)             |
+    | /dev        | ERR: Invalid argument (os error 28)             |
+    | /etc        | ERR: Invalid argument (os error 28)             |
+    | /etc/group  | ERR: Invalid argument (os error 28)             |
+    | /etc/passwd | ERR: Invalid argument (os error 28)             |
+    | /etc/shadow | ERR: Invalid argument (os error 28)             |
+    | /home       | ERR: Invalid argument (os error 28)             |
+    | /lib        | ERR: Invalid argument (os error 28)             |
+    | /lib64      | ERR: Invalid argument (os error 28)             |
+    | /opt        | ERR: Invalid argument (os error 28)             |
+    | /proc       | ERR: Invalid argument (os error 28)             |
+    | /proc/self  | ERR: Invalid argument (os error 28)             |
+    | /root       | ERR: Invalid argument (os error 28)             |
+    | /run        | ERR: Invalid argument (os error 28)             |
+    | /sbin       | ERR: Invalid argument (os error 28)             |
+    | /srv        | ERR: Invalid argument (os error 28)             |
+    | /sys        | ERR: Invalid argument (os error 28)             |
+    | /tmp        | ERR: Invalid argument (os error 28)             |
+    | /usr        | ERR: Invalid argument (os error 28)             |
+    | /var        | ERR: Invalid argument (os error 28)             |
     | \0          | ERR: file name contained an unexpected NUL byte |
-    | /x/..       | ERR: Not supported (os error 58)                |
+    | /x/..       | ERR: Invalid argument (os error 28)             |
     +-------------+-------------------------------------------------+
     ",
     );
