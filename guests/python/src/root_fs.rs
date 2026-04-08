@@ -14,6 +14,10 @@ pub(crate) fn populate_root_fs_from_tar(root_fs_tar: Option<&[u8]>) -> std::io::
 
     let cursor = Cursor::new(root_fs_tar);
     let mut archive = tar::Archive::new(cursor);
+    archive.unpack("/").inspect_err(|e| {
+        dbg!(e);
+    })?;
+    return Ok(true);
     for entry in archive.entries()? {
         let mut entry = entry?;
         let path = entry.path()?;

@@ -512,6 +512,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         &mut self,
         _self_: Resource<Descriptor>,
     ) -> FsResult<Resource<OutputStream>> {
+        dbg!();
         Err(FsError::trap(ErrorCode::Unsupported))
     }
 
@@ -901,6 +902,7 @@ impl<'a> filesystem::types::HostDescriptor for VfsCtxView<'a> {
         _path: String,
     ) -> FsResult<String> {
         // Symlinks not supported
+        dbg!();
         Err(FsError::trap(ErrorCode::Unsupported))
     }
 
