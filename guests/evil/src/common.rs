@@ -6,14 +6,6 @@ use arrow::{array::StringArray, datatypes::DataType};
 use datafusion_common::{Result as DataFusionResult, cast::as_string_array};
 use datafusion_expr::{ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, Signature, Volatility};
 
-/// Returns empty list of UDFs.
-///
-/// The passed `source` is ignored.
-#[expect(clippy::unnecessary_wraps, reason = "public API through export! macro")]
-pub(crate) fn udfs_empty(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
-    Ok(vec![])
-}
-
 /// A container that shadows its inner dynamic value.
 ///
 /// This is mostly used to simplify the handling of `Box<dyn Fn(...) -> ...>`.
