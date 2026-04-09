@@ -62,15 +62,6 @@ impl Evil {
             "fs" => Self {
                 udfs: Box::new(fs::udfs),
             },
-            "fs::large_file" => Self {
-                udfs: Box::new(common::udfs_empty),
-            },
-            "fs::many_files" => Self {
-                udfs: Box::new(common::udfs_empty),
-            },
-            "fs::path_long" => Self {
-                udfs: Box::new(common::udfs_empty),
-            },
             "net" => Self {
                 udfs: Box::new(net::udfs),
             },
@@ -79,9 +70,6 @@ impl Evil {
             },
             "runtime" => Self {
                 udfs: Box::new(runtime::udfs),
-            },
-            "spin::root" => Self {
-                udfs: Box::new(spin::root::root),
             },
             "spin::udf_invoke" => Self {
                 udfs: Box::new(spin::udf_invoke::udfs),

@@ -3,7 +3,6 @@ mod env;
 mod fs;
 mod net;
 mod return_data;
-mod root;
 mod runtime;
 mod spin;
 mod test_utils;

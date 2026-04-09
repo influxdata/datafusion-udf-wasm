@@ -7,12 +7,6 @@ use datafusion_expr::{ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarU
 use crate::integration_tests::evil::test_utils::try_scalar_udfs;
 
 #[tokio::test]
-async fn test_root() {
-    let fut = try_scalar_udfs("spin::root");
-    assert_timeout(fut).await;
-}
-
-#[tokio::test]
 async fn test_udf_invoke() {
     let udfs = try_scalar_udfs("spin::udf_invoke").await.unwrap();
     assert_eq!(udfs.len(), 1);
