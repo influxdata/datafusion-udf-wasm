@@ -332,7 +332,7 @@ async fn test_udfs_many() {
 
     insta::assert_snapshot!(
         err,
-        @"Resources exhausted: guest returned too many UDFs: got=21, limit=20");
+        @"Resources exhausted: guest returned too many UDFs: got=24, limit=23");
 }
 
 /// Test UDF related to Error handling.
