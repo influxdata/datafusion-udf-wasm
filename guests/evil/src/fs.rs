@@ -235,53 +235,5 @@ pub(crate) fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImp
                 .map(|_| "got data".to_owned())
                 .map_err(|e| e.to_string())
         })),
-        Arc::new(String1Udf::new("large_file", |path| {
-            let limit: u64 = std::env::var("limit").unwrap().parse().unwrap();
-
-            std::fs::File::options()
-                .append(false)
-                .create(true)
-                .create_new(true)
-                .read(false)
-                .truncate(false)
-                .write(true)
-                .open(path)
-                .map(|file| {
-                    file.set_len(limit).unwrap();
-                    "created".to_owned()
-                })
-                .map_err(|e| e.to_string())
-        })),
-        Arc::new(String1Udf::new("many_files", |path| {
-            let limit: usize = std::env::var("limit").unwrap().parse().unwrap();
-
-            (0..limit)
-                .try_for_each(|i| {
-                    std::fs::File::options()
-                        .append(false)
-                        .create(true)
-                        .create_new(true)
-                        .read(false)
-                        .truncate(false)
-                        .write(true)
-                        .open(path.to_owned() + &format!("/file_{i}"))
-                        .map(|_| ())
-                })
-                .map(|()| "created".to_owned())
-                .map_err(|e| e.to_string())
-        })),
-        Arc::new(String1Udf::new("path_long", |path| {
-            let limit: usize = std::env::var("limit").unwrap().parse().unwrap();
-            std::fs::File::options()
-                .append(false)
-                .create(true)
-                .create_new(true)
-                .read(false)
-                .truncate(false)
-                .write(true)
-                .open(path.to_owned() + "/" + &"x".repeat(limit))
-                .map(|_| "created".to_owned())
-                .map_err(|e| e.to_string())
-        })),
     ])
 }
