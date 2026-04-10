@@ -48,11 +48,11 @@ tempfile = { version = "3.25.0", default-features = false }
 tokio = { version = "1.51.1", default-features = false }
 uuid = { version = "1.23.0", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
-wasmtime = { version = "43.0.0", default-features = false, features = [
+wasmtime = { version = "43.0.1", default-features = false, features = [
   "async",
 ] }
-wasmtime-wasi = { version = "43.0.0", default-features = false }
-wasmtime-wasi-http = { version = "43.0.0", default-features = false, features = [
+wasmtime-wasi = { version = "43.0.1", default-features = false }
+wasmtime-wasi-http = { version = "43.0.1", default-features = false, features = [
   "default-send-request",
   "p2",
 ] }
@@ -60,20 +60,6 @@ wasmtime-wasi-io = { version = "43.0.0", default-features = false }
 wit-bindgen = { version = "0.55", default-features = false, features = [
   "macros"
 ] }
-
-[workspace.lints.rust]
-missing_copy_implementations = "deny"
-missing_debug_implementations = "deny"
-missing_docs = "deny"
-rust_2018_idioms = { level = "deny", priority = -1 }
-unexpected_cfgs = "deny"
-unreachable_pub = "deny"
-unused_crate_dependencies = "deny"
-
-[workspace.lints.rustdoc]
-bare_urls = "deny"
-broken_intra_doc_links = "deny"
-private_intra_doc_links = "deny"
 
 [workspace.lints.clippy]
 allow_attributes = "deny"
@@ -93,6 +79,20 @@ unnecessary_wraps = "deny"
 unused_async = "deny"
 unused_self = "deny"
 use_self = "deny"
+
+[workspace.lints.rust]
+missing_copy_implementations = "deny"
+missing_debug_implementations = "deny"
+missing_docs = "deny"
+rust_2018_idioms = { level = "deny", priority = -1 }
+unexpected_cfgs = "deny"
+unreachable_pub = "deny"
+unused_crate_dependencies = "deny"
+
+[workspace.lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+private_intra_doc_links = "deny"
 
 [profile.bench]
 debug = true
