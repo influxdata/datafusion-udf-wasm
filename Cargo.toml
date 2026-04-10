@@ -31,7 +31,7 @@ datafusion-udf-wasm-host = { path = "host", version = "0.1.0", default-features 
 datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0", default-features = false }
 datafusion-udf-wasm-query = { path = "query", version = "0.1.0", default-features = false }
 flate2 = "1.1.9"
-gungraun = "0.17.2"
+gungraun = "0.18.0"
 http = { version = "1.4.0", default-features = false }
 hyper = { version = "1.9", default-features = false }
 insta = { version = "1.47.2", "default-features" = false }
