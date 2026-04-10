@@ -85,8 +85,13 @@ pub(crate) fn normalize_panic_location(e: impl ToString) -> String {
 
     static REGEX: LazyLock<Regex> =
         LazyLock::new(|| Regex::new(r#"(?<m>panicked at) [^:]+:[0-9]+:[0-9]+:"#).unwrap());
+    static THREAD_REGEX: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r#"thread '<unnamed>' \([0-9]+\)"#).unwrap());
 
-    REGEX
+    let e = REGEX
         .replace_all(&e, r#"$m <FILE>:<LINE>:<ROW>:"#)
+        .to_string();
+    THREAD_REGEX
+        .replace_all(&e, "thread '<unnamed>' (<THREAD>)")
         .to_string()
 }

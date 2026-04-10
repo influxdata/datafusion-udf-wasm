@@ -62,6 +62,7 @@ pub(crate) trait WasmToDataFusionResultExt {
     /// The context has:
     /// - `msg`: a closure that generates a human-readable context description based on the error
     /// - `stderr`: stderr output of the WASM payload if available
+    #[cfg(feature = "compiler")]
     fn with_context<F>(self, msg: F, stderr: Option<&[u8]>) -> Result<Self::T, DataFusionError>
     where
         F: for<'a> FnOnce(&'a Self::E) -> String;
@@ -75,6 +76,7 @@ impl<T> WasmToDataFusionResultExt for Result<T, wasmtime::Error> {
         self.map_err(|err| WasmToDataFusionErrorExt::context(err, msg, stderr))
     }
 
+    #[cfg(feature = "compiler")]
     fn with_context<F>(self, msg: F, stderr: Option<&[u8]>) -> Result<Self::T, DataFusionError>
     where
         F: for<'a> FnOnce(&'a Self::E) -> String,

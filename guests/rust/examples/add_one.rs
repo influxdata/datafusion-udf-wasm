@@ -93,13 +93,6 @@ impl ScalarUDFImpl for AddOne {
     }
 }
 
-/// Return root file system.
-///
-/// This always returns [`None`] because the example does not need any files.
-fn root() -> Option<Vec<u8>> {
-    None
-}
-
 /// Returns our one example UDF.
 ///
 /// The passed `source` is ignored.
@@ -109,6 +102,5 @@ fn udfs(_source: String) -> DataFusionResult<Vec<Arc<dyn ScalarUDFImpl>>> {
 }
 
 export! {
-    root_fs_tar: root,
     scalar_udfs: udfs,
 }

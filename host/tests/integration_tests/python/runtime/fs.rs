@@ -284,11 +284,18 @@ async fn test_limit_inodes() {
 
     insta::assert_snapshot!(
         err,
-        @r"
-    populate root FS from TAR
+        @r#"
+    calling scalar_udfs() method failed
+
+    stderr:
+
+    thread '<unnamed>' (1) panicked at guests/python/src/lib.rs:328:27:
+    cannot prepare root filesystem for Python: Custom { kind: Other, error: Execution("I/O error (os error 29)") }
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
     caused by
-    IO error: inodes limit reached: limit<=42 current==42 requested+=1
-    ");
+    External error: wasm trap: wasm `unreachable` instruction executed
+    "#);
 }
 
 #[tokio::test]
@@ -333,8 +340,8 @@ async fn test_limit_bytes() {
     insta::assert_snapshot!(
         err,
         @r"
-    populate root FS from TAR
+    calling scalar_udfs() method failed
     caused by
-    IO error: Resources exhausted: Failed to allocate additional <SIZE> for WASM UDF resources with <SIZE> already allocated for this reservation - <SIZE> remain available for the total pool
+    External error: insufficient-memory (error 22)
     ");
 }

@@ -2,7 +2,6 @@
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-pub(crate) mod root;
 pub(crate) mod udf_invoke;
 pub(crate) mod udf_name;
 pub(crate) mod udf_return_type_exact;

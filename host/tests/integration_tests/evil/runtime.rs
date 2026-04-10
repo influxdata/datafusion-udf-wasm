@@ -56,7 +56,7 @@ async fn test_alloc_try() {
 
     stderr:
 
-    thread '<unnamed>' (1) panicked at <FILE>:<LINE>:<ROW>:
+    thread '<unnamed>' (<THREAD>) panicked at <FILE>:<LINE>:<ROW>:
     called `Result::unwrap()` on an `Err` value: TryReserveError { kind: AllocError { layout: Layout { size: 1000000000, align: 1 (1 << 0) }, non_exhaustive: () } }
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
@@ -117,7 +117,7 @@ async fn test_divzero() {
 
     stderr:
 
-    thread '<unnamed>' (1) panicked at <FILE>:<LINE>:<ROW>:
+    thread '<unnamed>' (<THREAD>) panicked at <FILE>:<LINE>:<ROW>:
     attempt to divide by zero
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
@@ -158,7 +158,7 @@ async fn test_nullptr() {
 
     stderr:
 
-    thread '<unnamed>' (1) panicked at <FILE>:<LINE>:<ROW>:
+    thread '<unnamed>' (<THREAD>) panicked at <FILE>:<LINE>:<ROW>:
     null pointer dereference occurred
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
     thread caused non-unwinding panic. aborting.
@@ -180,7 +180,7 @@ async fn test_panic() {
 
     stderr:
 
-    thread '<unnamed>' (1) panicked at <FILE>:<LINE>:<ROW>:
+    thread '<unnamed>' (<THREAD>) panicked at <FILE>:<LINE>:<ROW>:
     foo
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
@@ -215,7 +215,7 @@ async fn test_thread() {
 
     stderr:
 
-    thread '<unnamed>' (2) panicked at <FILE>:<LINE>:<ROW>:
+    thread '<unnamed>' (<THREAD>) panicked at <FILE>:<LINE>:<ROW>:
     failed to spawn thread: Error { kind: Unsupported, message: "operation not supported on this platform" }
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 

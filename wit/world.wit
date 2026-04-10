@@ -1,4 +1,4 @@
-package datafusion-udf-wasm:udf@0.4.0;
+package datafusion-udf-wasm:udf@0.5.0;
 
 interface types {
     // TODO: add more variants
@@ -101,7 +101,6 @@ interface types {
         invoke-with-args: func(args: scalar-function-args) -> result<columnar-value, data-fusion-error>;
     }
 
-    root-fs-tar: func() -> option<list<u8>>;
     scalar-udfs: func(source: string) -> result<list<scalar-udf>, data-fusion-error>;
 }
 
