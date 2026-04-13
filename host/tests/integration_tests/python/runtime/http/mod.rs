@@ -19,16 +19,26 @@ use datafusion_udf_wasm_host::{
     AllowCertainHttpRequests, HttpConnectionMode, HttpPort, HttpRequestValidator, WasmPermissions,
     WasmScalarUdf,
 };
-use http::header::{ACCEPT_ENCODING, CONTENT_ENCODING};
+use http::{
+    HeaderName, HeaderValue, Method,
+    header::{ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_TYPE},
+};
+use http_body_util::{BodyExt, Full};
 use regex::Regex;
 use tokio::runtime::Handle;
 use wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS;
-use wiremock::{Mock, MockServer, Request, ResponseTemplate, matchers};
 
 use crate::integration_tests::{
-    python::test_utils::{python_component, python_scalar_udf},
+    python::{
+        runtime::http::mock_server::{
+            Matcher, MockServer, Request, ResponseGenFn, ServerMock, SimpleResponseGen,
+        },
+        test_utils::{python_component, python_scalar_udf},
+    },
     test_utils::ColumnarValueExt,
 };
+
+mod mock_server;
 
 #[tokio::test]
 async fn test_requests_simple() {
@@ -40,11 +50,13 @@ def perform_request(url: str) -> str:
 "#;
 
     let server = MockServer::start().await;
-    Mock::given(matchers::any())
-        .respond_with(ResponseTemplate::new(200).set_body_string("hello world!"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    server.mock(ServerMock {
+        response: Box::new(SimpleResponseGen {
+            body: "hello world!".to_owned(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
 
     let mut permissions = AllowCertainHttpRequests::new();
     let endpoint = permissions
@@ -84,11 +96,10 @@ def perform_request(url: str) -> str:
     let udf = python_scalar_udf(CODE).await.unwrap();
 
     let server = MockServer::start().await;
-    Mock::given(matchers::any())
-        .respond_with(ResponseTemplate::new(200))
-        .expect(0)
-        .mount(&server)
-        .await;
+    server.mock(ServerMock {
+        hits: Some(0),
+        ..Default::default()
+    });
 
     let err = udf
         .invoke_async_with_args(ScalarFunctionArgs {
@@ -365,9 +376,7 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
     let mut builder_result = StringBuilder::new();
 
     for case in &cases {
-        if let Some(mock) = case.mock(&server, NUMBER_OF_IMPLEMENTATIONS) {
-            mock.mount(&server).await;
-        }
+        case.mock(&server, NUMBER_OF_IMPLEMENTATIONS);
         case.allow(&server, &mut permissions);
 
         let TestCase {
@@ -489,7 +498,7 @@ impl TestCase {
         endpoint.allow_method(self.method.try_into().unwrap());
     }
 
-    fn mock(&self, server: &MockServer, hits: usize) -> Option<Mock> {
+    fn mock(&self, server: &MockServer, hits: usize) {
         let Self {
             base,
             method,
@@ -499,7 +508,7 @@ impl TestCase {
             resp,
         } = self;
         if base.is_some() {
-            return None;
+            return;
         }
 
         let TestResponse {
@@ -508,36 +517,50 @@ impl TestCase {
             body: resp_body,
         } = resp.clone().unwrap_or_default();
 
-        let mut builder = Mock::given(matchers::method(method))
-            .and(matchers::path(path.as_str()))
-            .and(NoForbiddenHeaders::new(
-                server.address().ip().to_string(),
-                server.address().port(),
-            ));
+        let matcher = Matcher {
+            method: Some([Method::try_from(*method).unwrap()].into()),
+            path: Some(path.clone()),
+            headers: Some(
+                requ_headers
+                    .iter()
+                    .filter(|(k, _v)| {
+                        // Python `requests` sends this so we allow it but later drop it from the actual request.
+                        k.as_str() != http::header::CONNECTION
+                    })
+                    .flat_map(|(k, v)| {
+                        let k = HeaderName::try_from(k.clone()).unwrap();
 
-        for (k, v) in requ_headers {
-            // Python `requests` sends this so we allow it but later drop it from the actual request.
-            if k.as_str() == http::header::CONNECTION {
-                continue;
-            }
+                        v.iter()
+                            .map(move |v| (k.clone(), HeaderValue::from_str(v).unwrap()))
+                    })
+                    .collect(),
+            ),
+            body: requ_body.map(|s| s.to_string()),
+        };
 
-            builder = builder.and(matchers::headers(k.as_str(), v.to_vec()));
-        }
+        let response = SimpleResponseGen {
+            status: resp_status.try_into().unwrap(),
+            headers: Some(
+                resp_headers
+                    .iter()
+                    .flat_map(|(k, v)| {
+                        let k = HeaderName::try_from(k.clone()).unwrap();
 
-        if let Some(requ_body) = requ_body {
-            builder = builder.and(matchers::body_string(*requ_body));
-        }
+                        v.iter()
+                            .map(move |v| (k.clone(), HeaderValue::from_str(v).unwrap()))
+                    })
+                    .collect(),
+            ),
+            body: resp_body.map(|s| s.to_owned()).unwrap_or_default(),
+        };
 
-        let mut resp_template = ResponseTemplate::new(resp_status)
-            .append_headers(resp_headers.iter().map(|(k, v)| (k, v.join(","))));
-        if let Some(resp_body) = resp_body {
-            resp_template = resp_template.set_body_string(resp_body);
-        }
+        let hits = if resp.is_ok() { hits as u64 } else { 0 };
 
-        let expect = if resp.is_ok() { hits as u64 } else { 0 };
-
-        let mock = builder.respond_with(resp_template).expect(expect);
-        Some(mock)
+        server.mock(ServerMock {
+            matcher,
+            response: Box::new(response),
+            hits: Some(hits),
+        });
     }
 }
 
@@ -550,35 +573,6 @@ fn headers_to_string(headers: &[(String, &[&str])]) -> Option<String> {
             .map(|(k, v)| format!("{k}:{}", v.join(",")))
             .collect::<Vec<_>>();
         Some(headers.join(";"))
-    }
-}
-
-struct NoForbiddenHeaders {
-    host: String,
-    port: u16,
-}
-
-impl NoForbiddenHeaders {
-    fn new(host: String, port: u16) -> Self {
-        Self { host, port }
-    }
-}
-
-impl wiremock::Match for NoForbiddenHeaders {
-    fn matches(&self, request: &wiremock::Request) -> bool {
-        // "host" is part of the forbidden headers that the client is not supposed to use, but it is set by our own
-        // host HTTP lib
-        let Some(host_val) = request.headers.get(http::header::HOST) else {
-            return false;
-        };
-        if host_val.to_str().expect("always a string") != format!("{}:{}", self.host, self.port) {
-            return false;
-        }
-
-        DEFAULT_FORBIDDEN_HEADERS
-            .iter()
-            .filter(|h| *h != http::header::HOST)
-            .all(|h| !request.headers.contains_key(h))
     }
 }
 
@@ -635,11 +629,13 @@ def perform_request(url: str) -> str:
 
     let server = rt_io.block_on(async {
         let server = MockServer::start().await;
-        Mock::given(matchers::any())
-            .respond_with(ResponseTemplate::new(200).set_body_string("hello world!"))
-            .expect(1)
-            .mount(&server)
-            .await;
+        server.mock(ServerMock {
+            response: Box::new(SimpleResponseGen {
+                body: "hello world!".to_owned(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
         server
     });
 
@@ -735,11 +731,13 @@ async fn assert_large_response_works(code: &'static str) {
     let content = std::iter::repeat_n('x', CONTENT_LEN).collect::<String>();
 
     let server = MockServer::start().await;
-    Mock::given(matchers::any())
-        .respond_with(ResponseTemplate::new(200).set_body_string(&content))
-        .expect(1)
-        .mount(&server)
-        .await;
+    server.mock(ServerMock {
+        response: Box::new(SimpleResponseGen {
+            body: content.to_owned(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
 
     let mut permissions = AllowCertainHttpRequests::new();
     let endpoint = permissions
@@ -791,15 +789,19 @@ def perform_request(url: str) -> str:
         let path = format!("/{path_suffix}");
         paths.push(path.clone());
 
-        Mock::given(matchers::path(path))
-            .respond_with(move |req: &Request| {
+        server.mock(ServerMock {
+            matcher: Matcher {
+                path: Some(path),
+                ..Default::default()
+            },
+            response: Box::new(ResponseGenFn::new(move |req: &Request| {
                 // poor man's header parsing
                 //
                 // See:
                 // - https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Accept-Encoding
                 // - https://developer.mozilla.org/en-US/docs/Glossary/Quality_values
                 let accepted = req
-                    .headers
+                    .headers()
                     .get(ACCEPT_ENCODING)
                     .into_iter()
                     .flat_map(|v| v.to_str().unwrap().split(","))
@@ -831,15 +833,16 @@ def perform_request(url: str) -> str:
                     content_encoding = Some(compression.as_str());
                 }
 
-                let mut resp = ResponseTemplate::new(200);
+                let mut resp = http::Response::builder()
+                    .status(200)
+                    .header(CONTENT_TYPE, "text/plain");
                 if let Some(content_encoding) = content_encoding {
-                    resp = resp.append_header(CONTENT_ENCODING, content_encoding);
+                    resp = resp.header(CONTENT_ENCODING, content_encoding);
                 }
-                resp.set_body_raw(body_bytes, "text/plain")
-            })
-            .expect(1)
-            .mount(&server)
-            .await;
+                resp.body(Full::new(body_bytes.into()).boxed()).unwrap()
+            })),
+            ..Default::default()
+        });
     }
 
     let mut permissions = AllowCertainHttpRequests::new();
