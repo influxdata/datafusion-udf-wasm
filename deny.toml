@@ -12,15 +12,6 @@ ignore = [
   # this is only used by our dependencies, most notably
   # `gungraun`, which is only used for testing/benchmarking.
   "RUSTSEC-2025-0141",
-  # The dependency chain is:
-  # 1. wasmtime-wasi-http v43.0.0
-  # 2. tokio-rustls v0.25.0
-  # 3. rustls v0.22.4
-  # 4. rustls-webpki v0.102.8
-  #
-  # We are waiting for wasmtime to update:
-  # https://github.com/bytecodealliance/wasmtime/issues/12814
-  "RUSTSEC-2026-0049",
 ]
 git-fetch-with-cli = true
 
@@ -59,6 +50,8 @@ deny = [
   # dependencies you have introduced and check if there's a way to depend on
   # rustls instead of OpenSSL (tip: check the crate's feature flags).
   { name = "openssl-sys" },
+  # Use `ring` for our crypto, not `aws-lc`, which depeends on a lot of C-tooling.
+  { name = "aws-lc" },
   # Use stdlib ( https://doc.rust-lang.org/stable/std/io/trait.IsTerminal.html )
   { name = "atty" },
 ]
