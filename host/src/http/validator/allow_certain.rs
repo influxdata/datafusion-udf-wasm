@@ -1,134 +1,15 @@
-//! Interfaces for HTTP interactions of the guest.
-
+//! [`AllowHttpEndpoint`].
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    fmt,
-    num::NonZeroU16,
-    sync::Arc,
 };
 
-use http::HeaderName;
-pub use http::Method as HttpMethod;
-use tokio::runtime::Handle;
-use wasmtime_wasi_http::{
-    DEFAULT_FORBIDDEN_HEADERS,
-    p2::{
-        HttpResult, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
-        bindings::http::types::ErrorCode as HttpErrorCode,
-        body::HyperOutgoingBody,
-        default_send_request_handler,
-        types::{HostFutureIncomingResponse, OutgoingRequestConfig},
-    },
+use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
+
+use crate::http::{
+    types::{HttpConnectionMode, HttpMethod, HttpPort},
+    validator::{HttpRequestRejected, HttpRequestValidator},
 };
-
-use crate::state::WasmStateImpl;
-
-/// HTTP connection mode.
-///
-/// Defaults to [`Encrypted`](Self::Encrypted).
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
-pub enum HttpConnectionMode {
-    /// Encrypted via TLS, i.e. HTTPs.
-    #[default]
-    Encrypted,
-
-    /// Unencrypted, i.e. plain HTTP.
-    PlainText,
-}
-
-impl HttpConnectionMode {
-    /// Default port for this connection mode.
-    pub const fn default_port(&self) -> HttpPort {
-        match self {
-            Self::Encrypted => HttpPort::new(443).expect("valid port"),
-            Self::PlainText => HttpPort::new(80).expect("valid port"),
-        }
-    }
-
-    /// Derive mode from boolean "use TLS?" flag.
-    fn from_use_tls(use_tls: bool) -> Self {
-        if use_tls {
-            Self::Encrypted
-        } else {
-            Self::PlainText
-        }
-    }
-}
-
-/// An HTTP port.
-///
-/// Can be any [`u16`] value except for zero.
-#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct HttpPort(NonZeroU16);
-
-impl HttpPort {
-    /// Create new port from [`u16`].
-    ///
-    /// Returns [`None`] if port is zero.
-    pub const fn new(p: u16) -> Option<Self> {
-        // NOTE: `Option::map` isn't const-stable
-        match NonZeroU16::new(p) {
-            Some(p) => Some(Self(p)),
-            None => None,
-        }
-    }
-
-    /// Get [`u16`] representation of that port.
-    pub const fn get_u16(&self) -> u16 {
-        self.0.get()
-    }
-}
-
-impl std::fmt::Debug for HttpPort {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.get().fmt(f)
-    }
-}
-
-impl std::fmt::Display for HttpPort {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.get().fmt(f)
-    }
-}
-
-impl std::str::FromStr for HttpPort {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let p: NonZeroU16 = s.parse()?;
-        Ok(Self(p))
-    }
-}
-
-/// Validates if an outgoing HTTP interaction is allowed.
-///
-/// You can implement your own business logic here or use one of the pre-built implementations, e.g.
-/// [`RejectAllHttpRequests`] or [`AllowCertainHttpRequests`].
-pub trait HttpRequestValidator: fmt::Debug + Send + Sync + 'static {
-    /// Validate incoming request.
-    ///
-    /// Return [`Ok`] if the request should be allowed, return [`Err`] otherwise.
-    fn validate(
-        &self,
-        request: &hyper::Request<HyperOutgoingBody>,
-        mode: HttpConnectionMode,
-    ) -> Result<(), HttpRequestRejected>;
-}
-
-/// Reject ALL requests.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct RejectAllHttpRequests;
-
-impl HttpRequestValidator for RejectAllHttpRequests {
-    fn validate(
-        &self,
-        _request: &hyper::Request<HyperOutgoingBody>,
-        _mode: HttpConnectionMode,
-    ) -> Result<(), HttpRequestRejected> {
-        Err(HttpRequestRejected)
-    }
-}
 
 /// Allow settings for a given endpoint.
 ///
@@ -226,104 +107,12 @@ impl HttpRequestValidator for AllowCertainHttpRequests {
     }
 }
 
-/// Reject HTTP request.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct HttpRequestRejected;
-
-impl fmt::Display for HttpRequestRejected {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("rejected")
-    }
-}
-
-impl std::error::Error for HttpRequestRejected {}
-
-impl WasiHttpView for WasmStateImpl {
-    fn http(&mut self) -> WasiHttpCtxView<'_> {
-        WasiHttpCtxView {
-            ctx: &mut self.wasi_http_ctx,
-            table: &mut self.resource_table,
-            hooks: &mut self.wasi_http_hooks,
-        }
-    }
-}
-
-/// Implements [`WasiHttpHooks`].
-#[derive(Debug)]
-pub(crate) struct WasiHttpHooksImpl {
-    /// HTTP request validator.
-    pub(crate) http_validator: Arc<dyn HttpRequestValidator>,
-
-    /// Handle to tokio I/O runtime.
-    pub(crate) io_rt: Handle,
-}
-
-impl WasiHttpHooks for WasiHttpHooksImpl {
-    fn send_request(
-        &mut self,
-        mut request: hyper::Request<HyperOutgoingBody>,
-        config: OutgoingRequestConfig,
-    ) -> HttpResult<HostFutureIncomingResponse> {
-        let _guard = self.io_rt.enter();
-
-        // Python `requests` sends this so we allow it but later drop it from the actual request.
-        request.headers_mut().remove(hyper::header::CONNECTION);
-
-        // technically we could return an error straight away, but `urllib3` doesn't handle that super well, so we
-        // create a future and validate the error in there (before actually starting the request of course)
-
-        let validator = Arc::clone(&self.http_validator);
-        let handle = wasmtime_wasi::runtime::spawn(async move {
-            // yes, that's another layer of futures. The WASI interface is somewhat nested.
-            let fut = async {
-                let mode = HttpConnectionMode::from_use_tls(config.use_tls);
-                validator
-                    .validate(&request, mode)
-                    .map_err(|_| HttpErrorCode::HttpRequestDenied)?;
-
-                log::debug!(
-                    "UDF HTTP request: {} {} ({mode:?})",
-                    request.method().as_str(),
-                    request.uri(),
-                );
-                default_send_request_handler(request, config).await
-            };
-
-            Ok(fut.await)
-        });
-
-        Ok(HostFutureIncomingResponse::pending(handle))
-    }
-
-    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
-        // Python `requests` sends this so we allow it but later drop it from the actual request.
-        if name == hyper::header::CONNECTION {
-            return false;
-        }
-
-        DEFAULT_FORBIDDEN_HEADERS.contains(name)
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    fn reject_all() {
-        let policy = RejectAllHttpRequests;
-
-        let request = hyper::Request::builder().body(Default::default()).unwrap();
-        policy
-            .validate(&request, HttpConnectionMode::Encrypted)
-            .unwrap_err();
-        policy
-            .validate(&request, HttpConnectionMode::PlainText)
-            .unwrap_err();
-    }
-
-    #[test]
-    fn allow_certain() {
+    fn test_allow_deny() {
         const HOST_1: &str = "foo.bar";
         const HOST_2: &str = "my.universe";
         const SPECIFIC_PORT: HttpPort = HttpPort::new(1337).expect("valid port");
