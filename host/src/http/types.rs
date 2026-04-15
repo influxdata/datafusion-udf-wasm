@@ -1,5 +1,5 @@
 //! Common types used for HTTP routines.
-use std::{fmt, num::NonZeroU16};
+use std::{fmt, num::NonZeroU16, str::FromStr};
 
 pub use http::Method as HttpMethod;
 
@@ -76,6 +76,45 @@ impl HttpConnectionMode {
             Self::Encrypted
         } else {
             Self::PlainText
+        }
+    }
+
+    /// Represent mode as string.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Encrypted => "encrypted",
+            Self::PlainText => "plaintext",
+        }
+    }
+}
+
+impl std::fmt::Display for HttpConnectionMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// Invalid [`HttpConnectionMode`].
+#[derive(Debug)]
+pub struct InvalidHttpConnectionMode(String);
+
+impl std::fmt::Display for InvalidHttpConnectionMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Invalid HTTP connection mode: `{}`", self.0)
+    }
+}
+
+impl std::error::Error for InvalidHttpConnectionMode {}
+
+impl FromStr for HttpConnectionMode {
+    type Err = InvalidHttpConnectionMode;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s_lower = s.to_ascii_lowercase();
+        match s_lower.as_str() {
+            "encrypted" => Ok(Self::Encrypted),
+            "plaintext" => Ok(Self::PlainText),
+            _ => Err(InvalidHttpConnectionMode(s.to_owned())),
         }
     }
 }
