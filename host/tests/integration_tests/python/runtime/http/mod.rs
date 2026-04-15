@@ -6,7 +6,7 @@ use std::{
 };
 
 use arrow::{
-    array::{Array, StringArray, StringBuilder},
+    array::{Array, ArrayRef, Int64Array, RecordBatch, StringArray, StringBuilder},
     datatypes::{DataType, Field},
 };
 use datafusion_common::config::ConfigOptions;
@@ -376,7 +376,6 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
     let mut builder_result = StringBuilder::new();
 
     for case in &cases {
-        case.mock(&server, NUMBER_OF_IMPLEMENTATIONS);
         case.allow(&server, &mut permissions);
 
         let TestCase {
@@ -441,12 +440,42 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
     for udf in udfs {
         println!("{}", udf.name());
 
-        let array = udf
+        for case in &cases {
+            case.mock(&server);
+        }
+
+        let actual = udf
             .invoke_async_with_args(args.clone())
             .await
             .unwrap()
             .unwrap_array();
-        assert_eq!(array.as_ref(), &array_result as &dyn Array);
+
+        // check output and pretty-print failures
+        if actual.as_ref() != &array_result as &dyn Array {
+            let mask = arrow::compute::kernels::cmp::neq(&actual, &array_result).unwrap();
+            let batch =
+                RecordBatch::try_from_iter(
+                    std::iter::once((
+                        "case",
+                        Arc::new(Int64Array::from_iter_values(
+                            (1..=args.number_rows).map(|i| i as i64),
+                        )) as ArrayRef,
+                    ))
+                    .chain(args.arg_fields.iter().map(|f| f.name().as_str()).zip(
+                        args.args.iter().map(|c| match c {
+                            ColumnarValue::Array(array) => Arc::clone(array),
+                            ColumnarValue::Scalar(_) => unreachable!(),
+                        }),
+                    ))
+                    .chain([("actual", actual), ("expected", Arc::new(array_result))]),
+                )
+                .unwrap();
+            let batch = arrow::compute::filter_record_batch(&batch, &mask).unwrap();
+            let s = arrow::util::pretty::pretty_format_batches(&[batch]).unwrap();
+            panic!("FAIL:\n\n{s}");
+        }
+
+        server.clear_mocks();
     }
 }
 
@@ -498,7 +527,7 @@ impl TestCase {
         endpoint.allow_method(self.method.try_into().unwrap());
     }
 
-    fn mock(&self, server: &MockServer, hits: usize) {
+    fn mock(&self, server: &MockServer) {
         let Self {
             base,
             method,
@@ -554,7 +583,7 @@ impl TestCase {
             body: resp_body.map(|s| s.to_owned()).unwrap_or_default(),
         };
 
-        let hits = if resp.is_ok() { hits as u64 } else { 0 };
+        let hits = if resp.is_ok() { 1 } else { 0 };
 
         server.mock(ServerMock {
             matcher,

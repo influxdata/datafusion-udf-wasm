@@ -295,20 +295,22 @@ impl MockServer {
     pub(crate) fn mock(&self, mock: ServerMock) {
         self.state.lock().unwrap().mocks.push((mock, 0));
     }
-}
 
-impl Drop for MockServer {
-    fn drop(&mut self) {
-        let state = self.state.lock().unwrap();
+    /// Clear mocks.
+    ///
+    /// # Panic
+    /// Panics if a mock hit count doesn't match or there where any other errors.
+    pub(crate) fn clear_mocks(&self) {
+        let mut state = self.state.lock().unwrap();
 
-        let mut errors = state.errors.clone();
+        let mut errors = std::mem::take(&mut state.errors);
 
         // check hit rates
-        for (mock, hits) in &state.mocks {
+        for (mock, hits) in state.mocks.drain(..) {
             let Some(expected) = mock.hits else {
                 continue;
             };
-            if *hits != expected {
+            if hits != expected {
                 errors.push(format!(
                     "Should hit {expected} times but got {hits}:\n{mock:#?}",
                 ));
@@ -327,6 +329,12 @@ impl Drop for MockServer {
                 panic!("{msg}");
             }
         }
+    }
+}
+
+impl Drop for MockServer {
+    fn drop(&mut self) {
+        self.clear_mocks();
     }
 }
 
