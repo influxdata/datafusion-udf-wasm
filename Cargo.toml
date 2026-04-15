@@ -54,7 +54,7 @@ sqlparser = { version = "0.59.0", default-features = false, features = [
 tar = { version = "0.4.45", default-features = false }
 target-lexicon = { version = "0.13", default-features = false }
 tempfile = { version = "3.25.0", default-features = false }
-tokio = { version = "1.51.1", default-features = false }
+tokio = { version = "1.52.0", default-features = false }
 uuid = { version = "1.23.0", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
 wasmtime = { version = "43.0.1", default-features = false, features = [
@@ -65,7 +65,7 @@ wasmtime-wasi-http = { version = "43.0.1", default-features = false, features = 
   "p2",
 ] }
 wasmtime-wasi-io = { version = "43.0.0", default-features = false }
-wit-bindgen = { version = "0.55", default-features = false, features = [
+wit-bindgen = { version = "0.56", default-features = false, features = [
   "macros"
 ] }
 
