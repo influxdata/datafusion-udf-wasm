@@ -2,16 +2,18 @@
 
 use std::sync::Arc;
 
+use datafusion_common::{DataFusionError, error::Result as DataFusionResult};
 use http::HeaderName;
+use http_body_util::BodyExt;
+use hyper::body::Frame;
 use tokio::runtime::Handle;
 use wasmtime_wasi_http::{
     DEFAULT_FORBIDDEN_HEADERS,
     p2::{
         HttpResult, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
         bindings::http::types::ErrorCode as HttpErrorCode,
-        body::HyperOutgoingBody,
-        default_send_request_handler,
-        types::{HostFutureIncomingResponse, OutgoingRequestConfig},
+        body::{HyperIncomingBody, HyperOutgoingBody},
+        types::{HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig},
     },
 };
 
@@ -40,10 +42,55 @@ impl WasiHttpView for WasmStateImpl {
 #[derive(Debug)]
 pub(crate) struct WasiHttpHooksImpl {
     /// HTTP request validator.
-    pub(crate) http_validator: Arc<dyn HttpRequestValidator>,
+    http_validator: Arc<dyn HttpRequestValidator>,
 
     /// Handle to tokio I/O runtime.
-    pub(crate) io_rt: Handle,
+    io_rt: Handle,
+
+    /// HTTP client.
+    ///
+    /// This may cache connections and TLS state.
+    client: reqwest::Client,
+}
+
+impl WasiHttpHooksImpl {
+    /// Set up data structures.
+    pub(crate) fn new(
+        http_validator: Arc<dyn HttpRequestValidator>,
+        io_rt: Handle,
+    ) -> DataFusionResult<Self> {
+        // https://github.com/seanmonstar/reqwest/issues/2924
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
+
+        let client = reqwest::Client::builder()
+            // disable response body compression (the guest shall do that)
+            .no_brotli()
+            .no_deflate()
+            .no_gzip()
+            .no_zstd()
+            // disable redirect handling (the guest shall do that)
+            .redirect(reqwest::redirect::Policy::none())
+            // disable proxy
+            // TODO: allow overrides
+            .no_proxy()
+            // set up DNS
+            // TODO: allow overrides
+            .no_hickory_dns()
+            // TLS setup
+            // TODO: allow admin to set CA etc.
+            .tls_backend_rustls()
+            // done
+            .build()
+            .map_err(|e| DataFusionError::External(Box::new(e)))?;
+
+        Ok(Self {
+            http_validator,
+            io_rt,
+            client,
+        })
+    }
 }
 
 impl WasiHttpHooks for WasiHttpHooksImpl {
@@ -61,6 +108,7 @@ impl WasiHttpHooks for WasiHttpHooksImpl {
         // create a future and validate the error in there (before actually starting the request of course)
 
         let validator = Arc::clone(&self.http_validator);
+        let client = self.client.clone();
         let handle = wasmtime_wasi::runtime::spawn(async move {
             // yes, that's another layer of futures. The WASI interface is somewhat nested.
             let fut = async {
@@ -74,7 +122,8 @@ impl WasiHttpHooks for WasiHttpHooksImpl {
                     request.method().as_str(),
                     request.uri(),
                 );
-                default_send_request_handler(request, config).await
+
+                send_request(&client, request, config).await
             };
 
             Ok(fut.await)
@@ -91,4 +140,100 @@ impl WasiHttpHooks for WasiHttpHooksImpl {
 
         DEFAULT_FORBIDDEN_HEADERS.contains(name)
     }
+}
+
+/// Send HTTP request.
+async fn send_request(
+    client: &reqwest::Client,
+    request: hyper::Request<HyperOutgoingBody>,
+    config: OutgoingRequestConfig,
+) -> Result<IncomingResponse, HttpErrorCode> {
+    let OutgoingRequestConfig {
+        use_tls,
+        connect_timeout,
+        first_byte_timeout,
+        between_bytes_timeout,
+    } = config;
+
+    // "connections" are a rather low-level concept and technically opaque to the guest. We are free to cache
+    // connections and TLS state. Hence we just use it to cap the "first byte timeout" and don't really apply it to
+    // connections.
+    let first_byte_timeout = first_byte_timeout.min(connect_timeout);
+
+    let resp = tokio::time::timeout(
+        first_byte_timeout,
+        assemble_request(client, request, use_tls)?.send(),
+    )
+    .await
+    .map_err(|_| HttpErrorCode::ConnectionReadTimeout)?
+    .map_err(map_reqwest_err)?;
+
+    Ok(IncomingResponse {
+        resp: assemble_response(resp)?,
+        worker: None,
+        between_bytes_timeout,
+    })
+}
+
+/// Build outgoing request object.
+fn assemble_request(
+    client: &reqwest::Client,
+    request: hyper::Request<HyperOutgoingBody>,
+    use_tls: bool,
+) -> Result<reqwest::RequestBuilder, HttpErrorCode> {
+    let (parts, body) = request.into_parts();
+    let http::request::Parts {
+        method,
+        uri,
+        version,
+        headers,
+        extensions: _,
+        ..
+    } = parts;
+
+    let mut uri_parts = uri.into_parts();
+    uri_parts.scheme = Some(if use_tls {
+        http::uri::Scheme::HTTPS
+    } else {
+        http::uri::Scheme::HTTP
+    });
+    let uri = http::Uri::from_parts(uri_parts)
+        .map_err(|e| HttpErrorCode::InternalError(Some(e.to_string())))?;
+
+    Ok(client
+        .request(method, uri.to_string())
+        .version(version)
+        .headers(headers)
+        .body(reqwest::Body::wrap_stream(body.into_data_stream())))
+}
+
+/// Build incoming response object.
+fn assemble_response(
+    resp: reqwest::Response,
+) -> Result<hyper::Response<HyperIncomingBody>, HttpErrorCode> {
+    let mut builder = hyper::Response::builder()
+        .status(resp.status())
+        .version(resp.version());
+
+    *builder.headers_mut().ok_or_else(|| {
+        HttpErrorCode::InternalError(Some("cannot assemble response".to_owned()))
+    })? = resp.headers().clone();
+
+    builder
+        .body(
+            http_body_util::StreamBody::new(futures_util::stream::try_unfold(
+                resp,
+                async |mut resp| {
+                    let maybe_chunk = resp.chunk().await.map_err(map_reqwest_err)?;
+                    Ok(maybe_chunk.map(|chunk| (Frame::data(chunk), resp)))
+                },
+            ))
+            .boxed_unsync(),
+        )
+        .map_err(|e| HttpErrorCode::InternalError(Some(e.to_string())))
+}
+
+/// Map [`reqwest::Error`] to [`HttpErrorCode`].
+fn map_reqwest_err(e: reqwest::Error) -> HttpErrorCode {
+    HttpErrorCode::InternalError(Some(e.to_string()))
 }

@@ -31,13 +31,20 @@ datafusion-udf-wasm-host = { path = "host", version = "0.1.0", default-features 
 datafusion-udf-wasm-python = { path = "guests/python", version = "0.1.0", default-features = false }
 datafusion-udf-wasm-query = { path = "query", version = "0.1.0", default-features = false }
 flate2 = "1.1.9"
+futures-util = { version = "0.3.32", default-features = false }
 gungraun = "0.18.1"
 http = { version = "1.4.0", default-features = false }
+http-body-util = "0.1.3"
 hyper = { version = "1.9", default-features = false }
 insta = { version = "1.47.2", "default-features" = false }
 log = { version = "0.4.29", default-features = false }
 pyo3 = { version = "0.28.3", default-features = false, features = ["macros"] }
 regex = { version = "1", default-features = false }
+reqwest = { version = "0.13.2", default-features = false, features = [
+  "rustls-no-provider",
+  "stream"
+] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
 sqlparser = { version = "0.59.0", default-features = false, features = [
   "std",
   "visitor"
@@ -53,7 +60,6 @@ wasmtime = { version = "43.0.1", default-features = false, features = [
 ] }
 wasmtime-wasi = { version = "43.0.1", default-features = false }
 wasmtime-wasi-http = { version = "43.0.1", default-features = false, features = [
-  "default-send-request",
   "p2",
 ] }
 wasmtime-wasi-io = { version = "43.0.0", default-features = false }
