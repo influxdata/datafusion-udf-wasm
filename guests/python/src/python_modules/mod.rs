@@ -1154,7 +1154,7 @@ mod wit_world {
                 }
 
                 fn stream(&self) -> PyResult<InputStream> {
-                    let stream = self.inner()?.stream().to_pyres()?;
+                    let stream = self.inner()?.stream().map_err(|()| "stream").to_pyres()?;
                     Ok(InputStream {
                         inner: Some(stream),
                     })
@@ -1170,7 +1170,7 @@ mod wit_world {
             #[pymethods]
             impl IncomingResponse {
                 fn consume(&self) -> PyResult<IncomingBody> {
-                    let body = self.inner.consume().to_pyres()?;
+                    let body = self.inner.consume().map_err(|()| "consume").to_pyres()?;
                     Ok(IncomingBody { inner: Some(body) })
                 }
 
@@ -1402,7 +1402,7 @@ mod wit_world {
             #[pymethods]
             impl OutgoingBody {
                 fn write(&self) -> PyResult<OutputStream> {
-                    let stream = self.inner()?.write().to_pyres()?;
+                    let stream = self.inner()?.write().map_err(|()| "write").to_pyres()?;
                     Ok(OutputStream {
                         inner: Some(stream),
                     })
@@ -1442,32 +1442,40 @@ mod wit_world {
                 }
 
                 fn body(&self) -> PyResult<OutgoingBody> {
-                    let body = self.inner()?.body().to_pyres()?;
+                    let body = self.inner()?.body().map_err(|()| "body").to_pyres()?;
                     Ok(OutgoingBody { inner: Some(body) })
                 }
 
                 fn set_authority(&self, authority: Option<String>) -> PyResult<()> {
                     self.inner()?
                         .set_authority(authority.as_deref())
+                        .map_err(|()| format!("set_authority: {authority:?}"))
                         .to_pyres()?;
                     Ok(())
                 }
 
                 fn set_method(&self, method: Method) -> PyResult<()> {
-                    self.inner()?.set_method(&method.into()).to_pyres()?;
+                    let method = method.into();
+                    self.inner()?
+                        .set_method(&method)
+                        .map_err(|()| format!("set_method: {method:?}"))
+                        .to_pyres()?;
                     Ok(())
                 }
 
                 fn set_path_with_query(&self, path_with_query: Option<String>) -> PyResult<()> {
                     self.inner()?
                         .set_path_with_query(path_with_query.as_deref())
+                        .map_err(|()| format!("set_path_with_query: {path_with_query:?}"))
                         .to_pyres()?;
                     Ok(())
                 }
 
                 fn set_scheme(&self, scheme: Option<Scheme>) -> PyResult<()> {
+                    let scheme = scheme.map(|s| s.into());
                     self.inner()?
-                        .set_scheme(scheme.map(|s| s.into()).as_ref())
+                        .set_scheme(scheme.as_ref())
+                        .map_err(|()| format!("set_scheme: {scheme:?}"))
                         .to_pyres()?;
                     Ok(())
                 }
@@ -1494,7 +1502,10 @@ mod wit_world {
                 }
 
                 fn set_connect_timeout(&self, duration: Option<u64>) -> PyResult<()> {
-                    self.inner()?.set_connect_timeout(duration).to_pyres()?;
+                    self.inner()?
+                        .set_connect_timeout(duration)
+                        .map_err(|()| format!("set_connect_timeout: {duration:?}"))
+                        .to_pyres()?;
                     Ok(())
                 }
             }

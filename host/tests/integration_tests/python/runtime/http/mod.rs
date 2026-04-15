@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     io::Write,
     sync::{Arc, LazyLock},
     time::Duration,
@@ -31,7 +31,8 @@ use wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS;
 use crate::integration_tests::{
     python::{
         runtime::http::mock_server::{
-            Matcher, MockServer, Request, ResponseGenFn, ServerMock, SimpleResponseGen,
+            Matcher, MockServer, MockServerOptions, Request, ResponseGenFn, ServerMock,
+            SimpleResponseGen,
         },
         test_utils::{python_component, python_scalar_udf},
     },
@@ -263,6 +264,41 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
 "#;
     const NUMBER_OF_IMPLEMENTATIONS: usize = 2;
 
+    let servers = BTreeMap::from([
+        (
+            "ipv4",
+            MockServer::with_options(MockServerOptions {
+                ip_version: mock_server::IpVersion::V4,
+                ..Default::default()
+            })
+            .await,
+        ),
+        (
+            "ipv6",
+            MockServer::with_options(MockServerOptions {
+                ip_version: mock_server::IpVersion::V6,
+                ..Default::default()
+            })
+            .await,
+        ),
+        (
+            "reject_all",
+            MockServer::with_options(MockServerOptions {
+                failure: Some(mock_server::Failure::RejectConnections),
+                ..Default::default()
+            })
+            .await,
+        ),
+        (
+            "no_answer",
+            MockServer::with_options(MockServerOptions {
+                failure: Some(mock_server::Failure::CloseWithoutAnswer),
+                ..Default::default()
+            })
+            .await,
+        ),
+    ]);
+
     let mut cases = vec![
         TestCase {
             resp: Ok(TestResponse {
@@ -352,6 +388,26 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             }),
             ..Default::default()
         },
+        // https://github.com/influxdata/datafusion-udf-wasm/issues/464
+        TestCase {
+            server: "ipv6",
+            resp: Err(format!(
+                "Err {{ value: set_authority: Some(\"{ip}:{port}\") }}",
+                ip=servers.get("ipv6").unwrap().address().ip(),
+                port=servers.get("ipv6").unwrap().address().port(),
+            )),
+            ..Default::default()
+        },
+        TestCase {
+            server: "reject_all",
+            resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_ConnectionRefused'))".to_owned()),
+            ..Default::default()
+        },
+        TestCase {
+            server: "no_answer",
+            resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpResponseIncomplete'))".to_owned()),
+            ..Default::default()
+        },
     ];
     cases.extend(
         DEFAULT_FORBIDDEN_HEADERS
@@ -365,8 +421,6 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
                 ..Default::default()
             }),
     );
-
-    let server = MockServer::start().await;
     let mut permissions = AllowCertainHttpRequests::default();
 
     let mut builder_method = StringBuilder::new();
@@ -376,9 +430,8 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
     let mut builder_result = StringBuilder::new();
 
     for case in &cases {
-        case.allow(&server, &mut permissions);
-
         let TestCase {
+            server,
             base,
             method,
             path,
@@ -386,6 +439,10 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             requ_body,
             resp,
         } = case;
+
+        case.allow(&servers, &mut permissions);
+
+        let server = servers.get(server).unwrap();
 
         builder_method.append_value(method);
         builder_url.append_value(format!(
@@ -438,10 +495,11 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
     assert_eq!(udfs.len(), NUMBER_OF_IMPLEMENTATIONS);
 
     for udf in udfs {
+        println!("============================================================");
         println!("{}", udf.name());
 
         for case in &cases {
-            case.mock(&server);
+            case.mock(&servers);
         }
 
         let actual = udf
@@ -475,7 +533,10 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             panic!("FAIL:\n\n{s}");
         }
 
-        server.clear_mocks();
+        for (name, server) in &servers {
+            println!("clean up server `{name}`...");
+            server.clear_mocks();
+        }
     }
 }
 
@@ -497,6 +558,7 @@ impl Default for TestResponse {
 }
 
 struct TestCase {
+    server: &'static str,
     base: Option<&'static str>,
     method: &'static str,
     path: String,
@@ -508,6 +570,7 @@ struct TestCase {
 impl Default for TestCase {
     fn default() -> Self {
         Self {
+            server: "ipv4",
             base: None,
             method: "GET",
             path: "/".to_owned(),
@@ -519,7 +582,12 @@ impl Default for TestCase {
 }
 
 impl TestCase {
-    fn allow(&self, server: &MockServer, permissions: &mut AllowCertainHttpRequests) {
+    fn allow(
+        &self,
+        servers: &BTreeMap<&'static str, MockServer>,
+        permissions: &mut AllowCertainHttpRequests,
+    ) {
+        let server = servers.get(self.server).unwrap();
         let endpoint = permissions
             .allow_host(server.address().ip().to_string())
             .allow_port(HttpPort::new(server.address().port()).unwrap());
@@ -527,8 +595,9 @@ impl TestCase {
         endpoint.allow_method(self.method.try_into().unwrap());
     }
 
-    fn mock(&self, server: &MockServer) {
+    fn mock(&self, servers: &BTreeMap<&'static str, MockServer>) {
         let Self {
+            server,
             base,
             method,
             path,
@@ -536,6 +605,7 @@ impl TestCase {
             requ_body,
             resp,
         } = self;
+        let server = servers.get(server).unwrap();
         if base.is_some() {
             return;
         }
