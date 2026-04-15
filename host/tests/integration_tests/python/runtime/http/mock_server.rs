@@ -299,7 +299,7 @@ impl MockServer {
     /// Clear mocks.
     ///
     /// # Panic
-    /// Panics if a mock hit count doesn't match or there where any other errors.
+    /// Panics if a mock hit count doesn't match or there were any other errors.
     pub(crate) fn clear_mocks(&self) {
         let mut state = self.state.lock().unwrap();
 
