@@ -36,6 +36,7 @@ wasmtime-wasi-http.workspace = true
 wasmtime-wasi-io.workspace = true
 
 [dev-dependencies]
+bytes.workspace = true
 datafusion-udf-wasm-bundle = { workspace = true, features = [
   "evil",
   "example",
@@ -43,11 +44,12 @@ datafusion-udf-wasm-bundle = { workspace = true, features = [
 ] }
 flate2.workspace = true
 gungraun.workspace = true
+http-body-util = { workspace = true, features = ["full"] }
+hyper-util = { workspace = true, features = ["server", "tokio"] }
 insta.workspace = true
 regex.workspace = true
 target-lexicon.workspace = true
 tokio = { workspace = true, features = ["fs", "macros"] }
-wiremock = "0.6.5"
 
 [features]
 default = ["compiler"]

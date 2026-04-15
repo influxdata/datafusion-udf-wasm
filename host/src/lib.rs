@@ -21,17 +21,19 @@ pub use crate::component::CompilationFlags;
 
 // unused-crate-dependencies false positives
 #[cfg(test)]
+use bytes as _;
+#[cfg(test)]
 use datafusion_udf_wasm_bundle as _;
 #[cfg(test)]
 use flate2 as _;
 #[cfg(test)]
 use gungraun as _;
 #[cfg(test)]
+use hyper_util as _;
+#[cfg(test)]
 use regex as _;
 #[cfg(test)]
 use target_lexicon as _;
-#[cfg(test)]
-use wiremock as _;
 
 mod bindings;
 mod component;
