@@ -16,7 +16,7 @@ use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl,
 };
 use datafusion_udf_wasm_host::{
-    AllowCertainHttpRequests, HttpConnectionMode, HttpPort, HttpRequestValidator, WasmPermissions,
+    AllowCertainHttpRequests, HttpConfig, HttpConnectionMode, HttpPort, WasmPermissions,
     WasmScalarUdf,
 };
 use http::{
@@ -30,16 +30,21 @@ use wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS;
 
 use crate::integration_tests::{
     python::{
-        runtime::http::mock_server::{
-            Matcher, MockServer, MockServerOptions, Request, ResponseGenFn, ServerMock,
-            SimpleResponseGen,
+        runtime::http::{
+            mock_resolver::{MockResolver, dns_not_found_err},
+            mock_server::{
+                Matcher, MockServer, MockServerOptions, Request, ResponseGenFn, ServerMock,
+                SimpleResponseGen,
+            },
         },
         test_utils::{python_component, python_scalar_udf},
     },
     test_utils::ColumnarValueExt,
 };
 
+mod mock_resolver;
 mod mock_server;
+mod test_utils;
 
 #[tokio::test]
 async fn test_requests_simple() {
@@ -59,13 +64,14 @@ def perform_request(url: str) -> str:
         ..Default::default()
     });
 
-    let mut permissions = AllowCertainHttpRequests::new();
-    let endpoint = permissions
-        .allow_host(server.address().ip().to_string())
-        .allow_port(HttpPort::new(server.address().port()).unwrap());
+    let mut validator = AllowCertainHttpRequests::new();
+    let endpoint = validator
+        .allow_host(server.hostname())
+        .allow_port(HttpPort::new(server.port()).unwrap());
     endpoint.allow_mode(HttpConnectionMode::PlainText);
     endpoint.allow_method(http::Method::GET);
-    let udf = python_udf_with_permissions(CODE, permissions).await;
+    let udf =
+        python_udf_with_http_config(CODE, HttpConfig::default().with_validator(validator)).await;
 
     let array = udf
         .invoke_async_with_args(ScalarFunctionArgs {
@@ -116,7 +122,7 @@ def perform_request(url: str) -> str:
     // the port number is part of the error message and not deterministic, so we replace it with a placeholder
     let err = err
         .to_string()
-        .replace(&format!("port={}", server.address().port()), "port=???");
+        .replace(&format!("port={}", server.port()), "port=???");
 
     insta::assert_snapshot!(
         normalize_exception_location(err),
@@ -249,10 +255,8 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             url=url,
             headers=_headers_str_to_dict(headers),
             body=body,
+            retries=False,
         )
-    except urllib3.exceptions.MaxRetryError as e:
-        e = e.reason
-        return f"ERR: {e}"
     except Exception as e:
         return f"ERR: {e}"
 
@@ -293,6 +297,14 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             "no_answer",
             MockServer::with_options(MockServerOptions {
                 failure: Some(mock_server::Failure::CloseWithoutAnswer),
+                ..Default::default()
+            })
+            .await,
+        ),
+        (
+            "via_dns",
+            MockServer::with_options(MockServerOptions {
+                hostname: Some("works.test".to_owned()),
                 ..Default::default()
             })
             .await,
@@ -374,7 +386,8 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             ..Default::default()
         },
         TestCase {
-            base: Some("http://test.com"),
+            hostname: Some("denied.test"),
+            allow: false,
             resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpRequestDenied'))".to_owned()),
             ..Default::default()
         },
@@ -392,9 +405,9 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
         TestCase {
             server: "ipv6",
             resp: Err(format!(
-                "Err {{ value: set_authority: Some(\"{ip}:{port}\") }}",
-                ip=servers.get("ipv6").unwrap().address().ip(),
-                port=servers.get("ipv6").unwrap().address().port(),
+                "Err {{ value: set_authority: Some(\"{hostname}:{port}\") }}",
+                hostname=servers.get("ipv6").unwrap().hostname(),
+                port=servers.get("ipv6").unwrap().port(),
             )),
             ..Default::default()
         },
@@ -406,6 +419,29 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
         TestCase {
             server: "no_answer",
             resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpResponseIncomplete'))".to_owned()),
+            ..Default::default()
+        },
+        TestCase {
+            server: "via_dns",
+            resp: Ok(TestResponse {
+                body: Some("hello DNS"),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        TestCase {
+            hostname: Some("empty.test"),
+            resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_DestinationUnavailable'))".to_owned()),
+            ..Default::default()
+        },
+        TestCase {
+            hostname: Some("invalid.test"),
+            resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_DestinationUnavailable'))".to_owned()),
+            ..Default::default()
+        },
+        TestCase {
+            hostname: Some("portnotzero.test"),
+            resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_InternalError { value: Some(\"resolved port for `portnotzero.test` is not zero: 1234\") }'))".to_owned()),
             ..Default::default()
         },
     ];
@@ -421,7 +457,7 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
                 ..Default::default()
             }),
     );
-    let mut permissions = AllowCertainHttpRequests::default();
+    let mut validator = AllowCertainHttpRequests::default();
 
     let mut builder_method = StringBuilder::new();
     let mut builder_url = StringBuilder::new();
@@ -432,24 +468,26 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
     for case in &cases {
         let TestCase {
             server,
-            base,
+            hostname,
             method,
             path,
             requ_headers,
             requ_body,
+            allow: _,
             resp,
         } = case;
 
-        case.allow(&servers, &mut permissions);
+        case.allow(&servers, &mut validator);
 
         let server = servers.get(server).unwrap();
 
+        let base = match hostname {
+            Some(hostname) => format!("http://{hostname}:{port}", port = server.port()),
+            None => server.uri(),
+        };
+
         builder_method.append_value(method);
-        builder_url.append_value(format!(
-            "{}{}",
-            base.map(|b| b.to_owned()).unwrap_or_else(|| server.uri()),
-            path
-        ));
+        builder_url.append_value(format!("{base}{path}"));
         builder_headers.append_option(headers_to_string(requ_headers));
         builder_body.append_option(requ_body.map(|s| s.to_owned()));
 
@@ -491,7 +529,17 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
     };
     let array_result = builder_result.finish();
 
-    let udfs = python_udfs_with_permissions(CODE, permissions).await;
+    let resolver = MockResolver::default();
+
+    let udfs = python_udfs_with_http_config(
+        CODE,
+        HttpConfig::default()
+            // avoid connection caching
+            .with_pool_max_idle_per_host(0)
+            .with_resolver(resolver.clone())
+            .with_validator(validator),
+    )
+    .await;
     assert_eq!(udfs.len(), NUMBER_OF_IMPLEMENTATIONS);
 
     for udf in udfs {
@@ -501,6 +549,14 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
         for case in &cases {
             case.mock(&servers);
         }
+        resolver.mock_ok("works.test", vec!["127.0.0.1:0".parse().unwrap()], 1);
+        resolver.mock_ok("empty.test", vec![], 1);
+        resolver.mock_err("invalid.test", dns_not_found_err(), 1);
+        resolver.mock_ok(
+            "portnotzero.test",
+            vec!["127.0.0.1:1234".parse().unwrap()],
+            1,
+        );
 
         let actual = udf
             .invoke_async_with_args(args.clone())
@@ -537,6 +593,8 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             println!("clean up server `{name}`...");
             server.clear_mocks();
         }
+        println!("clean up resolver...");
+        resolver.clear_mocks();
     }
 }
 
@@ -559,11 +617,12 @@ impl Default for TestResponse {
 
 struct TestCase {
     server: &'static str,
-    base: Option<&'static str>,
+    hostname: Option<&'static str>,
     method: &'static str,
     path: String,
     requ_headers: Vec<(String, &'static [&'static str])>,
     requ_body: Option<&'static str>,
+    allow: bool,
     resp: Result<TestResponse, String>,
 }
 
@@ -571,11 +630,12 @@ impl Default for TestCase {
     fn default() -> Self {
         Self {
             server: "ipv4",
-            base: None,
+            hostname: None,
             method: "GET",
             path: "/".to_owned(),
             requ_headers: vec![],
             requ_body: None,
+            allow: true,
             resp: Ok(TestResponse::default()),
         }
     }
@@ -588,9 +648,17 @@ impl TestCase {
         permissions: &mut AllowCertainHttpRequests,
     ) {
         let server = servers.get(self.server).unwrap();
+        if !self.allow {
+            return;
+        }
+
         let endpoint = permissions
-            .allow_host(server.address().ip().to_string())
-            .allow_port(HttpPort::new(server.address().port()).unwrap());
+            .allow_host(
+                self.hostname
+                    .map(|s| s.to_owned())
+                    .unwrap_or_else(|| server.hostname()),
+            )
+            .allow_port(HttpPort::new(server.port()).unwrap());
         endpoint.allow_mode(HttpConnectionMode::PlainText);
         endpoint.allow_method(self.method.try_into().unwrap());
     }
@@ -598,15 +666,16 @@ impl TestCase {
     fn mock(&self, servers: &BTreeMap<&'static str, MockServer>) {
         let Self {
             server,
-            base,
+            hostname,
             method,
             path,
             requ_headers,
             requ_body,
+            allow,
             resp,
         } = self;
         let server = servers.get(server).unwrap();
-        if base.is_some() {
+        if !allow || hostname.is_some() {
             return;
         }
 
@@ -675,13 +744,10 @@ fn headers_to_string(headers: &[(String, &[&str])]) -> Option<String> {
     }
 }
 
-async fn python_udfs_with_permissions<V>(code: &'static str, permissions: V) -> Vec<WasmScalarUdf>
-where
-    V: HttpRequestValidator,
-{
+async fn python_udfs_with_http_config(code: &'static str, cfg: HttpConfig) -> Vec<WasmScalarUdf> {
     WasmScalarUdf::new(
         python_component().await,
-        &WasmPermissions::new().with_http(permissions),
+        &WasmPermissions::new().with_http(cfg),
         Handle::current(),
         &(Arc::new(UnboundedMemoryPool::default()) as _),
         code.to_owned(),
@@ -690,11 +756,8 @@ where
     .unwrap()
 }
 
-async fn python_udf_with_permissions<V>(code: &'static str, permissions: V) -> WasmScalarUdf
-where
-    V: HttpRequestValidator,
-{
-    let udfs = python_udfs_with_permissions(code, permissions).await;
+async fn python_udf_with_http_config(code: &'static str, cfg: HttpConfig) -> WasmScalarUdf {
+    let udfs = python_udfs_with_http_config(code, cfg).await;
     assert_eq!(udfs.len(), 1);
     udfs.into_iter().next().unwrap()
 }
@@ -740,16 +803,16 @@ def perform_request(url: str) -> str:
 
     // deliberately use a runtime what we are going to throw away later to prevent tricks like `Handle::current`
     let udf = rt_tmp.block_on(async {
-        let mut permissions = AllowCertainHttpRequests::new();
-        let endpoint = permissions
-            .allow_host(server.address().ip().to_string())
-            .allow_port(HttpPort::new(server.address().port()).unwrap());
+        let mut validator = AllowCertainHttpRequests::new();
+        let endpoint = validator
+            .allow_host(server.hostname())
+            .allow_port(HttpPort::new(server.port()).unwrap());
         endpoint.allow_mode(HttpConnectionMode::PlainText);
         endpoint.allow_method(http::Method::GET);
 
         let udfs = WasmScalarUdf::new(
             python_component().await,
-            &WasmPermissions::new().with_http(permissions),
+            &WasmPermissions::new().with_http(HttpConfig::default().with_validator(validator)),
             rt_io.handle().clone(),
             &(Arc::new(UnboundedMemoryPool::default()) as _),
             CODE.to_owned(),
@@ -838,13 +901,14 @@ async fn assert_large_response_works(code: &'static str) {
         ..Default::default()
     });
 
-    let mut permissions = AllowCertainHttpRequests::new();
-    let endpoint = permissions
-        .allow_host(server.address().ip().to_string())
-        .allow_port(HttpPort::new(server.address().port()).unwrap());
+    let mut validator = AllowCertainHttpRequests::new();
+    let endpoint = validator
+        .allow_host(server.hostname())
+        .allow_port(HttpPort::new(server.port()).unwrap());
     endpoint.allow_mode(HttpConnectionMode::PlainText);
     endpoint.allow_method(http::Method::GET);
-    let udf = python_udf_with_permissions(code, permissions).await;
+    let udf =
+        python_udf_with_http_config(code, HttpConfig::default().with_validator(validator)).await;
 
     let array = udf
         .invoke_async_with_args(ScalarFunctionArgs {
@@ -944,13 +1008,14 @@ def perform_request(url: str) -> str:
         });
     }
 
-    let mut permissions = AllowCertainHttpRequests::new();
-    let endpoint = permissions
-        .allow_host(server.address().ip().to_string())
-        .allow_port(HttpPort::new(server.address().port()).unwrap());
+    let mut validator = AllowCertainHttpRequests::new();
+    let endpoint = validator
+        .allow_host(server.hostname())
+        .allow_port(HttpPort::new(server.port()).unwrap());
     endpoint.allow_mode(HttpConnectionMode::PlainText);
     endpoint.allow_method(http::Method::GET);
-    let udf = python_udf_with_permissions(CODE, permissions).await;
+    let udf =
+        python_udf_with_http_config(CODE, HttpConfig::default().with_validator(validator)).await;
 
     let array = udf
         .invoke_async_with_args(ScalarFunctionArgs {

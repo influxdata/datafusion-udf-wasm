@@ -203,6 +203,7 @@ pub(crate) enum Failure {
 pub(crate) struct MockServerOptions {
     pub(crate) ip_version: IpVersion,
     pub(crate) failure: Option<Failure>,
+    pub(crate) hostname: Option<String>,
 }
 
 type SharedState = Arc<Mutex<State>>;
@@ -212,6 +213,7 @@ pub(crate) struct MockServer {
     _task: JoinSet<()>,
     state: SharedState,
     addr: SocketAddr,
+    hostname: String,
 }
 
 impl MockServer {
@@ -223,6 +225,7 @@ impl MockServer {
         let MockServerOptions {
             ip_version,
             failure,
+            hostname,
         } = options;
         let tcp_listener = TcpListener::bind(match ip_version {
             IpVersion::V4 => LISTEN_ADDR_IPV4,
@@ -232,11 +235,14 @@ impl MockServer {
         .expect("bind");
         let addr = tcp_listener.local_addr().unwrap();
 
+        let hostname = hostname.unwrap_or_else(|| addr.ip().to_string());
+
         let state = SharedState::default();
 
         let mut task = JoinSet::new();
         if failure != Some(Failure::RejectConnections) {
             let state_captured = Arc::clone(&state);
+            let hostname_captured = hostname.clone();
             task.spawn(async move {
                 let mut connections = JoinSet::new();
 
@@ -254,6 +260,7 @@ impl MockServer {
                     }
 
                     let state = Arc::clone(&state_captured);
+                    let hostname = hostname_captured.clone();
                     let serve_connection = async move {
                         let result =
                             hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
@@ -261,6 +268,7 @@ impl MockServer {
                                     TokioIo::new(stream),
                                     service_fn(move |req: http::Request<Incoming>| {
                                         let state = Arc::clone(&state);
+                                        let hostname = hostname.clone();
 
                                         async move {
                                             // hydrate entire body so we can process it easier
@@ -270,7 +278,7 @@ impl MockServer {
 
                                             let mut state = state.lock().unwrap();
 
-                                            if has_forbidden_headers(&req, addr) {
+                                            if has_forbidden_headers(&req, &hostname, addr.port()) {
                                                 return Ok(state.fail(format!(
                                                     "Forbidden headers:\n{req:#?}"
                                                 )));
@@ -327,15 +335,26 @@ impl MockServer {
             _task: task,
             state,
             addr,
+            hostname,
         }
     }
 
-    pub(crate) fn address(&self) -> SocketAddr {
-        self.addr
+    pub(crate) fn hostname(&self) -> String {
+        self.hostname.clone()
+    }
+
+    pub(crate) fn port(&self) -> u16 {
+        self.addr.port()
     }
 
     pub(crate) fn uri(&self) -> String {
-        format!("http://{}", self.addr)
+        let mut hostname = self.hostname().to_owned();
+        // enclose IPv6 addresses
+        if hostname.contains(":") {
+            hostname = format!("[{hostname}]");
+        }
+
+        format!("http://{hostname}:{port}", port = self.port())
     }
 
     pub(crate) fn mock(&self, mock: ServerMock) {
@@ -384,11 +403,11 @@ impl Drop for MockServer {
     }
 }
 
-fn has_forbidden_headers(request: &Request, addr: SocketAddr) -> bool {
+fn has_forbidden_headers(request: &Request, hostname: &str, port: u16) -> bool {
     // "host" is part of the forbidden headers that the client is not supposed to use, but it is set by our own
     // host HTTP lib
     if let Some(host_val) = request.headers().get(http::header::HOST)
-        && host_val.to_str().expect("always a string") != addr.to_string()
+        && host_val.to_str().expect("always a string") != format!("{hostname}:{port}")
     {
         return true;
     }
@@ -405,6 +424,8 @@ mod tests {
 
     use http::HeaderValue;
     use regex::Regex;
+
+    use crate::integration_tests::python::runtime::http::test_utils::should_panic;
 
     use super::*;
 
@@ -620,6 +641,7 @@ mod tests {
         let server = MockServer::start().await;
         server.mock(ServerMock::default());
 
+        set_crypto_provider();
         let resp = reqwest::Client::new()
             .get(server.uri())
             .send()
@@ -682,6 +704,7 @@ mod tests {
     async fn test_forbidden_headers() {
         let server = MockServer::start().await;
 
+        set_crypto_provider();
         let resp = reqwest::Client::new()
             .get(server.uri())
             .header(http::header::CONNECTION, "upgrade")
@@ -735,6 +758,7 @@ mod tests {
     async fn test_wrong_hostname() {
         let server = MockServer::start().await;
 
+        set_crypto_provider();
         let resp = reqwest::Client::new()
             .get(server.uri())
             .header(http::header::HOST, "foo.bar")
@@ -786,6 +810,7 @@ mod tests {
     async fn test_not_mocked() {
         let server = MockServer::start().await;
 
+        set_crypto_provider();
         let resp = reqwest::Client::new()
             .get(server.uri())
             .send()
@@ -832,24 +857,6 @@ mod tests {
         );
     }
 
-    fn should_panic<F>(f: F) -> String
-    where
-        F: FnOnce(),
-    {
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
-            Ok(()) => panic!("did not panic"),
-            Err(msg) => {
-                if let Some(msg) = msg.downcast_ref::<&str>() {
-                    msg.to_string()
-                } else if let Some(msg) = msg.downcast_ref::<String>() {
-                    msg.clone()
-                } else {
-                    panic!("cannot extract message")
-                }
-            }
-        }
-    }
-
     /// Normalize addresses since they are not deterministic.
     fn normalize_addr(e: impl ToString) -> String {
         let e = e.to_string();
@@ -858,5 +865,12 @@ mod tests {
             LazyLock::new(|| Regex::new(r#"[0-9]+(\.[0-9]+){3}:[0-9]+"#).unwrap());
 
         REGEX.replace_all(&e, r#"<ADDR>"#).to_string()
+    }
+
+    // https://github.com/seanmonstar/reqwest/issues/2924
+    fn set_crypto_provider() {
+        if rustls::crypto::CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
     }
 }

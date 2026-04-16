@@ -17,14 +17,20 @@ use wasmtime_wasi_http::{
     },
 };
 
+pub use config::HttpConfig;
 pub use types::{HttpConnectionMode, HttpMethod, HttpPort};
 pub use validator::{
     AllowCertainHttpRequests, AllowHttpEndpoint, AllowHttpHost, HttpRequestRejected,
     HttpRequestValidator, RejectAllHttpRequests,
 };
 
-use crate::state::WasmStateImpl;
+use crate::{
+    http::dns::{ResolvedPortNotZero, ResolverWrapper},
+    state::WasmStateImpl,
+};
 
+mod config;
+mod dns;
 mod types;
 mod validator;
 
@@ -55,10 +61,13 @@ pub(crate) struct WasiHttpHooksImpl {
 
 impl WasiHttpHooksImpl {
     /// Set up data structures.
-    pub(crate) fn new(
-        http_validator: Arc<dyn HttpRequestValidator>,
-        io_rt: Handle,
-    ) -> DataFusionResult<Self> {
+    pub(crate) fn new(config: HttpConfig, io_rt: Handle) -> DataFusionResult<Self> {
+        let HttpConfig {
+            pool_max_idle_per_host,
+            resolver,
+            validator,
+        } = config;
+
         // https://github.com/seanmonstar/reqwest/issues/2924
         if rustls::crypto::CryptoProvider::get_default().is_none() {
             let _ = rustls::crypto::ring::default_provider().install_default();
@@ -76,17 +85,18 @@ impl WasiHttpHooksImpl {
             // TODO: allow overrides
             .no_proxy()
             // set up DNS
-            // TODO: allow overrides
-            .no_hickory_dns()
+            .dns_resolver(ResolverWrapper::new(resolver))
             // TLS setup
             // TODO: allow admin to set CA etc.
             .tls_backend_rustls()
+            // connection pool setup
+            .pool_max_idle_per_host(pool_max_idle_per_host)
             // done
             .build()
             .map_err(|e| DataFusionError::External(Box::new(e)))?;
 
         Ok(Self {
-            http_validator,
+            http_validator: validator,
             io_rt,
             client,
         })
@@ -235,6 +245,11 @@ fn assemble_response(
 
 /// Map [`reqwest::Error`] to [`HttpErrorCode`].
 fn map_reqwest_err(e: reqwest::Error) -> HttpErrorCode {
+    // known "internal" case
+    if let Some(e) = extract_error_type::<ResolvedPortNotZero>(&e) {
+        return HttpErrorCode::InternalError(Some(e.to_string()));
+    }
+
     // try to find an IO error first, since this is potentially the most low-level information
     if let Some(e) = extract_error_type::<std::io::Error>(&e) {
         match e.kind() {
@@ -243,6 +258,9 @@ fn map_reqwest_err(e: reqwest::Error) -> HttpErrorCode {
             }
             ErrorKind::ConnectionReset => {
                 return HttpErrorCode::ConnectionTerminated;
+            }
+            ErrorKind::NotConnected => {
+                return HttpErrorCode::DestinationUnavailable;
             }
             ErrorKind::TimedOut => {
                 return HttpErrorCode::ConnectionTimeout;
@@ -260,6 +278,13 @@ fn map_reqwest_err(e: reqwest::Error) -> HttpErrorCode {
         } else if e.is_timeout() {
             return HttpErrorCode::ConnectionTimeout;
         }
+    }
+
+    // catch-all for connection-style errors
+    //
+    // This also includes DNS, see https://github.com/seanmonstar/reqwest/issues/1501
+    if e.is_connect() {
+        return HttpErrorCode::DestinationUnavailable;
     }
 
     // cannot really extract anything meaningful, fall back to "internal error" ("internal" as in "in our stack", not
