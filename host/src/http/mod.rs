@@ -1,6 +1,6 @@
 //! Interfaces for HTTP interactions of the guest.
 
-use std::sync::Arc;
+use std::{io::ErrorKind, sync::Arc};
 
 use datafusion_common::{DataFusionError, error::Result as DataFusionResult};
 use http::HeaderName;
@@ -235,5 +235,57 @@ fn assemble_response(
 
 /// Map [`reqwest::Error`] to [`HttpErrorCode`].
 fn map_reqwest_err(e: reqwest::Error) -> HttpErrorCode {
+    // try to find an IO error first, since this is potentially the most low-level information
+    if let Some(e) = extract_error_type::<std::io::Error>(&e) {
+        match e.kind() {
+            ErrorKind::ConnectionRefused => {
+                return HttpErrorCode::ConnectionRefused;
+            }
+            ErrorKind::ConnectionReset => {
+                return HttpErrorCode::ConnectionTerminated;
+            }
+            ErrorKind::TimedOut => {
+                return HttpErrorCode::ConnectionTimeout;
+            }
+            _ => {}
+        }
+    }
+
+    // hyper might have some hints for us
+    if let Some(e) = extract_error_type::<hyper::Error>(&e) {
+        if e.is_incomplete_message() {
+            return HttpErrorCode::HttpResponseIncomplete;
+        } else if e.is_parse() {
+            return HttpErrorCode::HttpProtocolError;
+        } else if e.is_timeout() {
+            return HttpErrorCode::ConnectionTimeout;
+        }
+    }
+
+    // cannot really extract anything meaningful, fall back to "internal error" ("internal" as in "in our stack", not
+    // as in "internal server error")
     HttpErrorCode::InternalError(Some(e.to_string()))
+}
+
+/// Extract concrete error type from error chain.
+fn extract_error_type<'a, E>(e: &'a (dyn std::error::Error + 'static)) -> Option<&'a E>
+where
+    E: std::error::Error + 'static,
+{
+    let mut current = e;
+
+    loop {
+        if let Some(concrete) = current.downcast_ref::<E>() {
+            return Some(concrete);
+        }
+
+        match current.source() {
+            Some(next) => {
+                current = next;
+            }
+            None => {
+                return None;
+            }
+        }
+    }
 }

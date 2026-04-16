@@ -13,7 +13,8 @@ use hyper_util::rt::{TokioExecutor, TokioIo};
 use tokio::{net::TcpListener, task::JoinSet};
 use wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS;
 
-const LISTEN_ADDR: &str = "127.0.0.1:0";
+const LISTEN_ADDR_IPV4: &str = "127.0.0.1:0";
+const LISTEN_ADDR_IPV6: &str = "[::1]:0";
 
 pub(crate) type Request = http::Request<Bytes>;
 pub(crate) type Response = http::Response<BoxBody<Bytes, Infallible>>;
@@ -182,6 +183,28 @@ impl State {
     }
 }
 
+#[derive(Debug, Default)]
+pub(crate) enum IpVersion {
+    #[default]
+    V4,
+    V6,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Failure {
+    /// Reject all TCP connections.
+    RejectConnections,
+
+    /// Close connection w/o answering.
+    CloseWithoutAnswer,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct MockServerOptions {
+    pub(crate) ip_version: IpVersion,
+    pub(crate) failure: Option<Failure>,
+}
+
 type SharedState = Arc<Mutex<State>>;
 
 #[derive(Debug)]
@@ -193,89 +216,112 @@ pub(crate) struct MockServer {
 
 impl MockServer {
     pub(crate) async fn start() -> Self {
-        let tcp_listener = TcpListener::bind(LISTEN_ADDR).await.expect("bind");
+        Self::with_options(MockServerOptions::default()).await
+    }
+
+    pub(crate) async fn with_options(options: MockServerOptions) -> Self {
+        let MockServerOptions {
+            ip_version,
+            failure,
+        } = options;
+        let tcp_listener = TcpListener::bind(match ip_version {
+            IpVersion::V4 => LISTEN_ADDR_IPV4,
+            IpVersion::V6 => LISTEN_ADDR_IPV6,
+        })
+        .await
+        .expect("bind");
         let addr = tcp_listener.local_addr().unwrap();
 
         let state = SharedState::default();
 
         let mut task = JoinSet::new();
-        let state_captured = Arc::clone(&state);
-        task.spawn(async move {
-            let mut connections = JoinSet::new();
+        if failure != Some(Failure::RejectConnections) {
+            let state_captured = Arc::clone(&state);
+            task.spawn(async move {
+                let mut connections = JoinSet::new();
 
-            loop {
-                let (stream, accept_addr) = match tcp_listener.accept().await {
-                    Ok(x) => x,
-                    Err(e) => {
-                        eprintln!("failed to accept connection: {e}");
+                loop {
+                    let (stream, accept_addr) = match tcp_listener.accept().await {
+                        Ok(x) => x,
+                        Err(e) => {
+                            eprintln!("failed to accept connection: {e}");
+                            continue;
+                        }
+                    };
+
+                    if failure == Some(Failure::CloseWithoutAnswer) {
                         continue;
                     }
-                };
 
-                let state = Arc::clone(&state_captured);
-                let serve_connection = async move {
-                    let result = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
-                        .serve_connection(
-                            TokioIo::new(stream),
-                            service_fn(move |req: http::Request<Incoming>| {
-                                let state = Arc::clone(&state);
+                    let state = Arc::clone(&state_captured);
+                    let serve_connection = async move {
+                        let result =
+                            hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
+                                .serve_connection(
+                                    TokioIo::new(stream),
+                                    service_fn(move |req: http::Request<Incoming>| {
+                                        let state = Arc::clone(&state);
 
-                                async move {
-                                    // hydrate entire body so we can process it easier
-                                    let (parts, body) = req.into_parts();
-                                    let body = body.collect().await.unwrap().to_bytes();
-                                    let req = http::Request::from_parts(parts, body);
+                                        async move {
+                                            // hydrate entire body so we can process it easier
+                                            let (parts, body) = req.into_parts();
+                                            let body = body.collect().await.unwrap().to_bytes();
+                                            let req = http::Request::from_parts(parts, body);
 
-                                    let mut state = state.lock().unwrap();
+                                            let mut state = state.lock().unwrap();
 
-                                    if has_forbidden_headers(&req, addr) {
-                                        return Ok(
-                                            state.fail(format!("Forbidden headers:\n{req:#?}"))
-                                        );
-                                    }
+                                            if has_forbidden_headers(&req, addr) {
+                                                return Ok(state.fail(format!(
+                                                    "Forbidden headers:\n{req:#?}"
+                                                )));
+                                            }
 
-                                    let Some((mock, count)) = state
-                                        .mocks
-                                        .iter_mut()
-                                        .find(|(mock, _hits)| mock.matcher.matches(&req))
-                                    else {
-                                        return Ok(state.fail(format!("Not mocked:\n{req:#?}")));
-                                    };
+                                            let Some((mock, count)) = state
+                                                .mocks
+                                                .iter_mut()
+                                                .find(|(mock, _hits)| mock.matcher.matches(&req))
+                                            else {
+                                                return Ok(
+                                                    state.fail(format!("Not mocked:\n{req:#?}"))
+                                                );
+                                            };
 
-                                    *count += 1;
+                                            *count += 1;
 
-                                    let mut resp = mock.response.resp(&req);
+                                            let mut resp = mock.response.resp(&req);
 
-                                    // combine repeated headers, but we should probably not do that
-                                    // See https://github.com/influxdata/datafusion-udf-wasm/issues/452
-                                    let headers = resp.headers_mut();
-                                    *headers = headers
-                                        .keys()
-                                        .map(|k| {
-                                            let vals = headers
-                                                .get_all(k)
-                                                .iter()
-                                                .map(|v| v.to_str().unwrap())
-                                                .collect::<Vec<_>>();
-                                            let v = HeaderValue::from_str(&vals.join(",")).unwrap();
-                                            (k.clone(), v)
-                                        })
-                                        .collect();
+                                            // combine repeated headers, but we should probably not do that
+                                            // See https://github.com/influxdata/datafusion-udf-wasm/issues/452
+                                            let headers = resp.headers_mut();
+                                            *headers = headers
+                                                .keys()
+                                                .map(|k| {
+                                                    let vals = headers
+                                                        .get_all(k)
+                                                        .iter()
+                                                        .map(|v| v.to_str().unwrap())
+                                                        .collect::<Vec<_>>();
+                                                    let v = HeaderValue::from_str(&vals.join(","))
+                                                        .unwrap();
+                                                    (k.clone(), v)
+                                                })
+                                                .collect();
 
-                                    Result::<_, Infallible>::Ok(resp)
-                                }
-                            }),
-                        )
-                        .await;
+                                            Result::<_, Infallible>::Ok(resp)
+                                        }
+                                    }),
+                                )
+                                .await;
 
-                    if let Err(e) = result {
-                        eprintln!("error serving {accept_addr}: {e}");
-                    }
-                };
+                        if let Err(e) = result {
+                            eprintln!("error serving {accept_addr}: {e}");
+                        }
+                    };
 
-                connections.spawn(serve_connection);
-            }
-        });
+                    connections.spawn(serve_connection);
+                }
+            });
+        }
 
         Self {
             _task: task,
