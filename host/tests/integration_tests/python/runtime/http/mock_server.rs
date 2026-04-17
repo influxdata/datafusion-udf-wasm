@@ -10,7 +10,10 @@ use http::{HeaderMap, HeaderValue, Method, StatusCode};
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{body::Incoming, service::service_fn};
 use hyper_util::rt::{TokioExecutor, TokioIo};
-use tokio::{net::TcpListener, task::JoinSet};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    task::JoinSet,
+};
 use wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS;
 
 const LISTEN_ADDR_IPV4: &str = "127.0.0.1:0";
@@ -250,7 +253,9 @@ impl MockServer {
                     let (stream, accept_addr) = match tcp_listener.accept().await {
                         Ok(x) => x,
                         Err(e) => {
-                            eprintln!("failed to accept connection: {e}");
+                            let msg = format!("failed to accept connection: {e}");
+                            eprintln!("{msg}");
+                            state_captured.lock().unwrap().errors.push(msg);
                             continue;
                         }
                     };
@@ -262,68 +267,7 @@ impl MockServer {
                     let state = Arc::clone(&state_captured);
                     let hostname = hostname_captured.clone();
                     let serve_connection = async move {
-                        let result =
-                            hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
-                                .serve_connection(
-                                    TokioIo::new(stream),
-                                    service_fn(move |req: http::Request<Incoming>| {
-                                        let state = Arc::clone(&state);
-                                        let hostname = hostname.clone();
-
-                                        async move {
-                                            // hydrate entire body so we can process it easier
-                                            let (parts, body) = req.into_parts();
-                                            let body = body.collect().await.unwrap().to_bytes();
-                                            let req = http::Request::from_parts(parts, body);
-
-                                            let mut state = state.lock().unwrap();
-
-                                            if has_forbidden_headers(&req, &hostname, addr.port()) {
-                                                return Ok(state.fail(format!(
-                                                    "Forbidden headers:\n{req:#?}"
-                                                )));
-                                            }
-
-                                            let Some((mock, count)) = state
-                                                .mocks
-                                                .iter_mut()
-                                                .find(|(mock, _hits)| mock.matcher.matches(&req))
-                                            else {
-                                                return Ok(
-                                                    state.fail(format!("Not mocked:\n{req:#?}"))
-                                                );
-                                            };
-
-                                            *count += 1;
-
-                                            let mut resp = mock.response.resp(&req);
-
-                                            // combine repeated headers, but we should probably not do that
-                                            // See https://github.com/influxdata/datafusion-udf-wasm/issues/452
-                                            let headers = resp.headers_mut();
-                                            *headers = headers
-                                                .keys()
-                                                .map(|k| {
-                                                    let vals = headers
-                                                        .get_all(k)
-                                                        .iter()
-                                                        .map(|v| v.to_str().unwrap())
-                                                        .collect::<Vec<_>>();
-                                                    let v = HeaderValue::from_str(&vals.join(","))
-                                                        .unwrap();
-                                                    (k.clone(), v)
-                                                })
-                                                .collect();
-
-                                            Result::<_, Infallible>::Ok(resp)
-                                        }
-                                    }),
-                                )
-                                .await;
-
-                        if let Err(e) = result {
-                            eprintln!("error serving {accept_addr}: {e}");
-                        }
+                        serve_http_conn(stream, accept_addr, state, hostname, addr.port()).await;
                     };
 
                     connections.spawn(serve_connection);
@@ -416,6 +360,83 @@ fn has_forbidden_headers(request: &Request, hostname: &str, port: u16) -> bool {
         .iter()
         .filter(|h| *h != http::header::HOST)
         .any(|h| request.headers().contains_key(h))
+}
+
+/// Implementation of the HTTP service function
+async fn service_function_impl(
+    req: http::Request<Incoming>,
+    state: &SharedState,
+    hostname: &str,
+    port: u16,
+) -> Result<Response, Infallible> {
+    // hydrate entire body so we can process it easier
+    let (parts, body) = req.into_parts();
+    let body = body.collect().await.unwrap().to_bytes();
+    let req = http::Request::from_parts(parts, body);
+
+    let mut state = state.lock().unwrap();
+
+    if has_forbidden_headers(&req, hostname, port) {
+        return Ok(state.fail(format!("Forbidden headers:\n{req:#?}")));
+    }
+
+    let Some((mock, count)) = state
+        .mocks
+        .iter_mut()
+        .find(|(mock, _hits)| mock.matcher.matches(&req))
+    else {
+        return Ok(state.fail(format!("Not mocked:\n{req:#?}")));
+    };
+
+    *count += 1;
+
+    let mut resp = mock.response.resp(&req);
+
+    // combine repeated headers, but we should probably not do that
+    // See https://github.com/influxdata/datafusion-udf-wasm/issues/452
+    let headers = resp.headers_mut();
+    *headers = headers
+        .keys()
+        .map(|k| {
+            let vals = headers
+                .get_all(k)
+                .iter()
+                .map(|v| v.to_str().unwrap())
+                .collect::<Vec<_>>();
+            let v = HeaderValue::from_str(&vals.join(",")).unwrap();
+            (k.clone(), v)
+        })
+        .collect();
+
+    Ok(resp)
+}
+
+/// Server HTTP connection on given stream.
+async fn serve_http_conn(
+    stream: TcpStream,
+    accept_addr: SocketAddr,
+    state: SharedState,
+    hostname: String,
+    port: u16,
+) {
+    let state_captured = Arc::clone(&state);
+    let result = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
+        .serve_connection(
+            TokioIo::new(stream),
+            service_fn(move |req| {
+                let state = Arc::clone(&state_captured);
+                let hostname = hostname.clone();
+
+                async move { service_function_impl(req, &state, &hostname, port).await }
+            }),
+        )
+        .await;
+
+    if let Err(e) = result {
+        let msg = format!("error serving {accept_addr}: {e}");
+        eprintln!("{msg}");
+        state.lock().unwrap().errors.push(msg);
+    }
 }
 
 /// Test the tester.
