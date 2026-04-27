@@ -30,7 +30,7 @@ impl WasmToDataFusionErrorExt for wasmtime::Error {
         let this = match self.to_string().as_str() {
             // that's somewhat a hack but there isn't a better API for this yet, see
             // https://github.com/bytecodealliance/wasmtime/issues/12465
-            "host-owned resource is being used with the wrong type" => {
+            "host-owned resource was already de-allocated" => {
                 "Resource (e.g. `Field` or `ConfigOptions`) was already de-allocated. You may need to increase resource cache limits in `WasmPermissions`.".into()
             }
             _ => {
