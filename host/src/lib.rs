@@ -9,6 +9,7 @@ pub use crate::{
     http::{
         AllowCertainHttpRequests, AllowHttpEndpoint, AllowHttpHost, HttpConfig, HttpConnectionMode,
         HttpMethod, HttpPort, HttpRequestRejected, HttpRequestValidator, RejectAllHttpRequests,
+        TlsClientConfig,
     },
     limiter::StaticResourceLimits,
     permissions::WasmPermissions,
@@ -31,9 +32,15 @@ use gungraun as _;
 #[cfg(test)]
 use hyper_util as _;
 #[cfg(test)]
+use rcgen as _;
+#[cfg(test)]
 use regex as _;
 #[cfg(test)]
 use target_lexicon as _;
+#[cfg(test)]
+use time as _;
+#[cfg(test)]
+use tokio_rustls as _;
 
 mod bindings;
 mod component;

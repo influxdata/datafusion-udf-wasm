@@ -16,8 +16,8 @@ use datafusion_expr::{
     ColumnarValue, ScalarFunctionArgs, ScalarUDFImpl, async_udf::AsyncScalarUDFImpl,
 };
 use datafusion_udf_wasm_host::{
-    AllowCertainHttpRequests, HttpConfig, HttpConnectionMode, HttpPort, WasmPermissions,
-    WasmScalarUdf,
+    AllowCertainHttpRequests, HttpConfig, HttpConnectionMode, HttpPort, TlsClientConfig,
+    WasmPermissions, WasmScalarUdf,
 };
 use http::{
     HeaderName, HeaderValue, Method,
@@ -42,6 +42,7 @@ use crate::integration_tests::{
     test_utils::ColumnarValueExt,
 };
 
+mod mock_ca;
 mod mock_resolver;
 mod mock_server;
 mod test_utils;
@@ -309,6 +310,68 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             })
             .await,
         ),
+        ("plaintext_allowed_tls", MockServer::start().await),
+        (
+            "plaintext_allowed_tls_and_connected",
+            MockServer::with_options(MockServerOptions {
+                ignore_errors: vec!["invalid HTTP method parsed"],
+                ..Default::default()
+            })
+            .await,
+        ),
+        (
+            "tls_allowed_plaintext",
+            MockServer::with_options(MockServerOptions {
+                tls: true,
+                ..Default::default()
+            })
+            .await,
+        ),
+        (
+            "tls_allowed_plaintext_and_connected",
+            MockServer::with_options(MockServerOptions {
+                tls: true,
+                ignore_errors: vec!["received corrupt message of type InvalidContentType"],
+                ..Default::default()
+            })
+            .await,
+        ),
+        (
+            "tls_ca_not_allowed",
+            MockServer::with_options(MockServerOptions {
+                tls: true,
+                ignore_errors: vec!["received fatal alert: UnknownCA"],
+                ..Default::default()
+            })
+            .await,
+        ),
+        (
+            "tls_ipv4",
+            MockServer::with_options(MockServerOptions {
+                ip_version: mock_server::IpVersion::V4,
+                tls: true,
+                ..Default::default()
+            })
+            .await,
+        ),
+        (
+            "tls_ipv6",
+            MockServer::with_options(MockServerOptions {
+                ip_version: mock_server::IpVersion::V6,
+                tls: true,
+                ..Default::default()
+            })
+            .await,
+        ),
+        (
+            "tls_via_dns",
+            MockServer::with_options(MockServerOptions {
+                hostname: Some("tls.test".to_owned()),
+                tls: true,
+                ..Default::default()
+            })
+            .await,
+        ),
     ]);
 
     let mut cases = vec![
@@ -386,8 +449,9 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             ..Default::default()
         },
         TestCase {
-            hostname: Some("denied.test"),
-            allow: false,
+            base: Some("http://denied.test:<port>"),
+            allow: None,
+            mock: false,
             resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpRequestDenied'))".to_owned()),
             ..Default::default()
         },
@@ -404,6 +468,7 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
         // https://github.com/influxdata/datafusion-udf-wasm/issues/464
         TestCase {
             server: "ipv6",
+            mock: false,
             resp: Err(format!(
                 "Err {{ value: set_authority: Some(\"{hostname}:{port}\") }}",
                 hostname=servers.get("ipv6").unwrap().hostname(),
@@ -413,11 +478,13 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
         },
         TestCase {
             server: "reject_all",
+            mock: false,
             resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_ConnectionRefused'))".to_owned()),
             ..Default::default()
         },
         TestCase {
             server: "no_answer",
+            mock: false,
             resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpResponseIncomplete'))".to_owned()),
             ..Default::default()
         },
@@ -430,18 +497,108 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             ..Default::default()
         },
         TestCase {
-            hostname: Some("empty.test"),
+            base: Some("http://empty.test:<port>"),
+            allow: Some(Allow {
+                hostname: Some("empty.test"),
+                ..Default::default()
+            }),
+            mock: false,
             resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_DestinationUnavailable'))".to_owned()),
             ..Default::default()
         },
         TestCase {
-            hostname: Some("invalid.test"),
+            base: Some("http://invalid.test:<port>"),
+            allow: Some(Allow {
+                hostname: Some("invalid.test"),
+                ..Default::default()
+            }),
+            mock: false,
             resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_DestinationUnavailable'))".to_owned()),
             ..Default::default()
         },
         TestCase {
-            hostname: Some("portnotzero.test"),
+            base: Some("http://portnotzero.test:<port>"),
+            allow: Some(Allow {
+                hostname: Some("portnotzero.test"),
+                ..Default::default()
+            }),
+            mock: false,
             resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_InternalError { value: Some(\"resolved port for `portnotzero.test` is not zero: 1234\") }'))".to_owned()),
+            ..Default::default()
+        },
+        TestCase {
+            server: "plaintext_allowed_tls",
+            allow: Some(Allow {
+                mode: Some(HttpConnectionMode::Encrypted),
+                ..Default::default()
+            }),
+            mock: false,
+            resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpRequestDenied'))".to_owned()),
+            ..Default::default()
+        },
+        TestCase {
+            server: "tls_allowed_plaintext",
+            allow: Some(Allow {
+                mode: Some(HttpConnectionMode::PlainText),
+                ..Default::default()
+            }),
+            mock: false,
+            resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpRequestDenied'))".to_owned()),
+            ..Default::default()
+        },
+        TestCase {
+            server: "plaintext_allowed_tls_and_connected",
+            base: Some("https://<host>:<port>"),
+            allow: Some(Allow {
+                mode: Some(HttpConnectionMode::Encrypted),
+                ..Default::default()
+            }),
+            mock: false,
+            resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_TlsProtocolError'))".to_owned()),
+            ..Default::default()
+        },
+        TestCase {
+            server: "tls_allowed_plaintext_and_connected",
+            base: Some("http://<host>:<port>"),
+            allow: Some(Allow {
+                mode: Some(HttpConnectionMode::PlainText),
+                ..Default::default()
+            }),
+            mock: false,
+            resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_HttpProtocolError'))".to_owned()),
+            ..Default::default()
+        },
+        TestCase {
+            server: "tls_ca_not_allowed",
+            mock: false,
+            resp: Err("('Connection aborted.', WasiErrorCode('Request failed with wasi http error ErrorCode_TlsCertificateError'))".to_owned()),
+            ..Default::default()
+        },
+        TestCase {
+            server: "tls_ipv4",
+            resp: Ok(TestResponse {
+                body: Some("hello TLS"),
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        // https://github.com/influxdata/datafusion-udf-wasm/issues/464
+        TestCase {
+            server: "tls_ipv6",
+            mock: false,
+            resp: Err(format!(
+                "Err {{ value: set_authority: Some(\"{hostname}:{port}\") }}",
+                hostname=servers.get("tls_ipv6").unwrap().hostname(),
+                port=servers.get("tls_ipv6").unwrap().port(),
+            )),
+            ..Default::default()
+        },
+        TestCase {
+            server: "tls_via_dns",
+            resp: Ok(TestResponse {
+                body: Some("hello DNS+TLS"),
+                ..Default::default()
+            }),
             ..Default::default()
         },
     ];
@@ -453,6 +610,7 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             .map(|h| TestCase {
                 path: format!("/forbidden_header/{h}"),
                 requ_headers: vec![(h.to_string(), &["foo"])],
+                mock: false,
                 resp: Err("Err { value: HeaderError_Forbidden }".to_owned()),
                 ..Default::default()
             }),
@@ -468,12 +626,13 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
     for case in &cases {
         let TestCase {
             server,
-            hostname,
+            base,
             method,
             path,
             requ_headers,
             requ_body,
             allow: _,
+            mock: _,
             resp,
         } = case;
 
@@ -481,8 +640,10 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
 
         let server = servers.get(server).unwrap();
 
-        let base = match hostname {
-            Some(hostname) => format!("http://{hostname}:{port}", port = server.port()),
+        let base = match base {
+            Some(base) => base
+                .replace("<host>", &server.hostname())
+                .replace("<port>", &server.port().to_string()),
             None => server.uri(),
         };
 
@@ -537,7 +698,10 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             // avoid connection caching
             .with_pool_max_idle_per_host(0)
             .with_resolver(resolver.clone())
-            .with_validator(validator),
+            .with_validator(validator)
+            .with_tls_config(TlsClientConfig::default().with_ca_certs(
+                ["tls_ipv4", "tls_via_dns"].map(|name| servers.get(name).unwrap().ca().unwrap()),
+            )),
     )
     .await;
     assert_eq!(udfs.len(), NUMBER_OF_IMPLEMENTATIONS);
@@ -557,6 +721,7 @@ def test_urllib3(method: str, url: str, headers: str | None, body: str | None) -
             vec!["127.0.0.1:1234".parse().unwrap()],
             1,
         );
+        resolver.mock_ok("tls.test", vec!["127.0.0.1:0".parse().unwrap()], 1);
 
         let actual = udf
             .invoke_async_with_args(args.clone())
@@ -615,14 +780,21 @@ impl Default for TestResponse {
     }
 }
 
+#[derive(Default)]
+struct Allow {
+    hostname: Option<&'static str>,
+    mode: Option<HttpConnectionMode>,
+}
+
 struct TestCase {
     server: &'static str,
-    hostname: Option<&'static str>,
+    base: Option<&'static str>,
     method: &'static str,
     path: String,
     requ_headers: Vec<(String, &'static [&'static str])>,
     requ_body: Option<&'static str>,
-    allow: bool,
+    allow: Option<Allow>,
+    mock: bool,
     resp: Result<TestResponse, String>,
 }
 
@@ -630,12 +802,13 @@ impl Default for TestCase {
     fn default() -> Self {
         Self {
             server: "ipv4",
-            hostname: None,
+            base: None,
             method: "GET",
             path: "/".to_owned(),
             requ_headers: vec![],
             requ_body: None,
-            allow: true,
+            allow: Some(Allow::default()),
+            mock: true,
             resp: Ok(TestResponse::default()),
         }
     }
@@ -648,34 +821,41 @@ impl TestCase {
         permissions: &mut AllowCertainHttpRequests,
     ) {
         let server = servers.get(self.server).unwrap();
-        if !self.allow {
+        let Some(Allow { hostname, mode }) = &self.allow else {
             return;
-        }
+        };
 
         let endpoint = permissions
             .allow_host(
-                self.hostname
+                hostname
                     .map(|s| s.to_owned())
                     .unwrap_or_else(|| server.hostname()),
             )
             .allow_port(HttpPort::new(server.port()).unwrap());
-        endpoint.allow_mode(HttpConnectionMode::PlainText);
+        endpoint.allow_mode(mode.as_ref().copied().unwrap_or_else(|| {
+            if server.ca().is_some() {
+                HttpConnectionMode::Encrypted
+            } else {
+                HttpConnectionMode::PlainText
+            }
+        }));
         endpoint.allow_method(self.method.try_into().unwrap());
     }
 
     fn mock(&self, servers: &BTreeMap<&'static str, MockServer>) {
         let Self {
             server,
-            hostname,
+            base: _,
             method,
             path,
             requ_headers,
             requ_body,
-            allow,
+            allow: _,
+            mock,
             resp,
         } = self;
         let server = servers.get(server).unwrap();
-        if !allow || hostname.is_some() {
+        if !mock {
             return;
         }
 
@@ -683,7 +863,9 @@ impl TestCase {
             status: resp_status,
             headers: resp_headers,
             body: resp_body,
-        } = resp.clone().unwrap_or_default();
+        } = resp
+            .clone()
+            .expect("test responses must be `Ok(...)` if `mock=true`");
 
         let matcher = Matcher {
             method: Some([Method::try_from(*method).unwrap()].into()),
@@ -722,12 +904,10 @@ impl TestCase {
             body: resp_body.map(|s| s.to_owned()).unwrap_or_default(),
         };
 
-        let hits = if resp.is_ok() { 1 } else { 0 };
-
         server.mock(ServerMock {
             matcher,
             response: Box::new(response),
-            hits: Some(hits),
+            hits: Some(1),
         });
     }
 }

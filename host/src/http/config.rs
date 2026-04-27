@@ -4,7 +4,9 @@ use std::sync::Arc;
 
 use reqwest::dns::Resolve;
 
-use crate::{HttpRequestValidator, RejectAllHttpRequests, http::dns::ShuffleResolver};
+use crate::{
+    HttpRequestValidator, RejectAllHttpRequests, TlsClientConfig, http::dns::ShuffleResolver,
+};
 
 /// HTTP-related configs.
 #[derive(Clone)]
@@ -17,6 +19,9 @@ pub struct HttpConfig {
 
     /// Validator.
     pub(crate) validator: Arc<dyn HttpRequestValidator>,
+
+    /// TLS config.
+    pub(crate) tls_config: TlsClientConfig,
 }
 
 impl HttpConfig {
@@ -64,6 +69,14 @@ impl HttpConfig {
             ..self
         }
     }
+
+    /// Set TLS client config.
+    pub fn with_tls_config(self, config: TlsClientConfig) -> Self {
+        Self {
+            tls_config: config,
+            ..self
+        }
+    }
 }
 
 impl Default for HttpConfig {
@@ -72,6 +85,7 @@ impl Default for HttpConfig {
             resolver: Arc::new(ShuffleResolver),
             pool_max_idle_per_host: usize::MAX,
             validator: Arc::new(RejectAllHttpRequests),
+            tls_config: TlsClientConfig::default(),
         }
     }
 }
@@ -83,12 +97,14 @@ impl std::fmt::Debug for HttpConfig {
             // doesn't implement Debug
             resolver: _,
             validator,
+            tls_config,
         } = self;
 
         f.debug_struct("HttpConfig")
             .field("pool_max_idle_per_host", pool_max_idle_per_host)
             .field("resolver", &"<RESOLVER>")
             .field("validator", validator)
+            .field("tls_config", tls_config)
             .finish()
     }
 }

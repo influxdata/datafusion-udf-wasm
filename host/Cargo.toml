@@ -47,9 +47,12 @@ gungraun.workspace = true
 http-body-util = { workspace = true, features = ["full"] }
 hyper-util = { workspace = true, features = ["server", "tokio"] }
 insta.workspace = true
+rcgen.workspace = true
 regex.workspace = true
 target-lexicon.workspace = true
+time.workspace = true
 tokio = { workspace = true, features = ["fs", "macros"] }
+tokio-rustls.workspace = true
 
 [features]
 default = ["compiler"]
