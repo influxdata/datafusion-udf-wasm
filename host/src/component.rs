@@ -324,7 +324,7 @@ impl WasmComponentInstance {
             stderr,
             wasi_ctx: wasi_ctx_builder.build().into(),
             wasi_http_ctx: WasiHttpCtx::new(),
-            wasi_http_hooks: WasiHttpHooksImpl::new(Arc::clone(&permissions.http), io_rt)
+            wasi_http_hooks: WasiHttpHooksImpl::new(permissions.http.clone(), io_rt)
                 .context("set up HTTP")?,
             resource_table: ResourceTable::new(),
         };

@@ -1,10 +1,8 @@
 //! Permission for guests.
 
-use std::{collections::BTreeMap, num::NonZeroUsize, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, num::NonZeroUsize, time::Duration};
 
-use crate::{
-    HttpRequestValidator, RejectAllHttpRequests, StaticResourceLimits, TrustedDataLimits, VfsLimits,
-};
+use crate::{HttpConfig, StaticResourceLimits, TrustedDataLimits, VfsLimits};
 
 /// Permissions for a WASM component.
 #[derive(Debug)]
@@ -19,8 +17,8 @@ pub struct WasmPermissions {
     /// increasing the timeout.
     pub(crate) inplace_blocking_max_ticks: u32,
 
-    /// Validator for HTTP requests.
-    pub(crate) http: Arc<dyn HttpRequestValidator>,
+    /// HTTP configs.
+    pub(crate) http: HttpConfig,
 
     /// Virtual file system limits.
     pub(crate) vfs: VfsLimits,
@@ -70,7 +68,7 @@ impl Default for WasmPermissions {
             inplace_blocking_max_ticks: inplace_blocking_timeout
                 .div_duration_f32(epoch_tick_time)
                 .floor() as _,
-            http: Arc::new(RejectAllHttpRequests),
+            http: HttpConfig::default(),
             vfs: VfsLimits::default(),
             stderr_bytes: 1024, // 1KB
             resource_limits: StaticResourceLimits::default(),
@@ -111,15 +109,9 @@ impl WasmPermissions {
         }
     }
 
-    /// Set HTTP validator.
-    pub fn with_http<V>(self, http: V) -> Self
-    where
-        V: HttpRequestValidator,
-    {
-        Self {
-            http: Arc::new(http),
-            ..self
-        }
+    /// Set HTTP config.
+    pub fn with_http(self, http: HttpConfig) -> Self {
+        Self { http, ..self }
     }
 
     /// Limit of the stored stderr data.
