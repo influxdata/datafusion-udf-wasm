@@ -50,8 +50,8 @@ deny = [
   # dependencies you have introduced and check if there's a way to depend on
   # rustls instead of OpenSSL (tip: check the crate's feature flags).
   { name = "openssl-sys" },
-  # Use `ring` for our crypto, not `aws-lc`, which depeends on a lot of C-tooling.
-  { name = "aws-lc" },
+  # Use `ring` for our crypto, not `aws-lc-rs`, which depeends on a lot of C-tooling.
+  { name = "aws-lc-rs" },
   # Use stdlib ( https://doc.rust-lang.org/stable/std/io/trait.IsTerminal.html )
   { name = "atty" },
 ]
