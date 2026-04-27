@@ -57,14 +57,14 @@ tempfile = { version = "3.25.0", default-features = false }
 tokio = { version = "1.52.1", default-features = false }
 uuid = { version = "1.23.1", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
-wasmtime = { version = "43.0.1", default-features = false, features = [
+wasmtime = { version = "44.0.0", default-features = false, features = [
   "async",
 ] }
-wasmtime-wasi = { version = "43.0.1", default-features = false }
-wasmtime-wasi-http = { version = "43.0.1", default-features = false, features = [
+wasmtime-wasi = { version = "44.0.0", default-features = false }
+wasmtime-wasi-http = { version = "44.0.0", default-features = false, features = [
   "p2",
 ] }
-wasmtime-wasi-io = { version = "43.0.0", default-features = false }
+wasmtime-wasi-io = { version = "44.0.0", default-features = false }
 wit-bindgen = { version = "0.57", default-features = false, features = [
   "macros"
 ] }
