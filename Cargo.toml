@@ -16,14 +16,14 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-arrow = { version = "57.1.0", default-features = false, features = ["ipc"] }
+arrow = { version = "58.1.0", default-features = false, features = ["ipc"] }
 bytes = "1.11.1"
 chrono = { version = "0.4.44", default-features = false }
-datafusion = { version = "52.0.0", default-features = false }
-datafusion-common = { version = "52.0.0", default-features = false }
-datafusion-execution = { version = "52.0.0", default-features = false }
-datafusion-expr = { version = "52.0.0", default-features = false }
-datafusion-sql = { version = "52.0.0", default-features = false }
+datafusion = { version = "53.1.0", default-features = false }
+datafusion-common = { version = "53.1.0", default-features = false }
+datafusion-execution = { version = "53.1.0", default-features = false }
+datafusion-expr = { version = "53.1.0", default-features = false }
+datafusion-sql = { version = "53.1.0", default-features = false }
 datafusion-udf-wasm-arrow2bytes = { path = "arrow2bytes", version = "0.1.0", default-features = false }
 datafusion-udf-wasm-bundle = { path = "guests/bundle", version = "0.1.0", default-features = false }
 datafusion-udf-wasm-evil = { path = "guests/evil", version = "0.1.0", default-features = false }
@@ -47,7 +47,7 @@ reqwest = { version = "0.13.3", default-features = false, features = [
   "stream"
 ] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
-sqlparser = { version = "0.59.0", default-features = false, features = [
+sqlparser = { version = "0.61.0", default-features = false, features = [
   "std",
   "visitor"
 ] }
