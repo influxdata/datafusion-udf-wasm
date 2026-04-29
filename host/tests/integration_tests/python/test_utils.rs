@@ -8,8 +8,8 @@ use crate::integration_tests::test_utils::FullError;
 
 /// Memory limit in bytes.
 ///
-/// 100MB.
-const MEMORY_LIMIT: usize = 100_000_000;
+/// 500MB.
+const MEMORY_LIMIT: usize = 500_000_000;
 
 /// Static precompiled Python WASM component for tests
 static COMPONENT: OnceCell<WasmComponentPrecompiled> = OnceCell::const_new();

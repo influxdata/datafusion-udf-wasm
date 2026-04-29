@@ -81,3 +81,36 @@ def foo(x: int) -> int:
         &Int64Array::from_iter([Some(11), Some(22), Some(11)]) as &dyn Array,
     );
 }
+
+#[tokio::test]
+async fn numpy() {
+    const CODE: &str = "
+import numpy as np
+
+def foo(x: int) -> int:
+    x = np.int64(x)
+    x = np.sqrt(x)
+    return int(x)
+";
+
+    let udf = python_scalar_udf(CODE).await.unwrap();
+    let array = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Array(Arc::new(Int64Array::from_iter([
+                Some(1),
+                Some(4),
+                Some(9),
+            ])))],
+            arg_fields: vec![Arc::new(Field::new("a1", DataType::Int64, true))],
+            number_rows: 3,
+            return_field: Arc::new(Field::new("r", DataType::Int64, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap()
+        .unwrap_array();
+    assert_eq!(
+        array.as_ref(),
+        &Int64Array::from_iter([Some(1), Some(2), Some(3)]) as &dyn Array,
+    );
+}

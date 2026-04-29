@@ -39,7 +39,7 @@ def listdir(cwd: str | None, dir: str) -> str:
         TestCase {
             cwd: None,
             dir: "/",
-            results: &["LICENSE", "lib"],
+            results: &["LICENSE", "lib", "libpython3.14.so"],
         },
         TestCase {
             cwd: None,
@@ -82,7 +82,7 @@ def listdir(cwd: str | None, dir: str) -> str:
         TestCase {
             cwd: Some("/lib"),
             dir: "..",
-            results: &["LICENSE", "lib"],
+            results: &["LICENSE", "lib", "libpython3.14.so"],
         },
     ];
 
