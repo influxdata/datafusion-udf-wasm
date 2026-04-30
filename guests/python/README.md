@@ -73,6 +73,7 @@ Currently we bundle the following libraries:
 
 - [`certifi`] (not really used though, see ["I/O > HTTP"](#http))
 - [`charset-normalizer`]
+- [`numpy`]
 - [`requests`]
 - [`urllib3`]
 
@@ -261,6 +262,7 @@ There is NO other I/O available that escapes the sandbox.
 [`Int64`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Int64
 [`None`]: https://docs.python.org/3/library/constants.html#None
 [`Null`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Null
+[`numpy`]: https://numpy.org/
 [`time`]: https://docs.python.org/3/library/datetime.html#datetime.time
 [`Time64`]: https://docs.rs/arrow/latest/arrow/datatypes/enum.DataType.html#variant.Time64
 [`timedelta`]: https://docs.python.org/3/library/datetime.html#datetime.timedelta

@@ -5,3 +5,6 @@ requests==2.33.0 --hash=sha256:3324635456fa185245e24865e810cecec7b4caf933d7eb133
 
 # See https://github.com/influxdata/urllib3/pull/1 .
 urllib3 @ https://github.com/influxdata/urllib3/releases/download/2.6.103/urllib3-2.6.103-py3-none-any.whl --hash=sha256:bd06baffa5df72a88f8b0edaeb13cf55b1880bcbcd67c62b391f3ec124add2c3
+
+# our own WASI-native wheels
+numpy @ https://github.com/influxdata/python-wasm-wheels/releases/download/v1/numpy-1.26.0-py2.py3-none-any.whl --hash=sha256:ae15276be55efbeaf1de0c82468940aa799024f87f0b679d28351362ff96c466

@@ -11,7 +11,10 @@
 use std::{fs::File, io::Write, path::PathBuf};
 
 /// File endings that should be skipped when bundling the up the Python lib.
-const SKIP_ENDINGS: &[&str] = &[".a", ".pyc", ".so", ".wasm"];
+const SKIP_ENDINGS: &[&str] = &[".a", ".pyc", ".wasm"];
+
+/// File endings that are mocked as empty files.
+const MOCK_ENDINGS: &[&str] = &[".so"];
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
@@ -48,7 +51,17 @@ fn bundle_python_lib() {
             continue;
         }
 
-        archive.append_path_with_name(path_abs, path_rel).unwrap();
+        if MOCK_ENDINGS.iter().any(|ending| path_str.ends_with(ending)) {
+            const MOCK: &[u8] = b"";
+
+            let mut header = tar::Header::new_gnu();
+            header.set_size(MOCK.len() as _);
+            header.set_cksum();
+
+            archive.append_data(&mut header, path_rel, MOCK).unwrap();
+        } else {
+            archive.append_path_with_name(path_abs, path_rel).unwrap();
+        }
     }
     archive.finish().unwrap();
     archive.into_inner().unwrap().flush().unwrap();

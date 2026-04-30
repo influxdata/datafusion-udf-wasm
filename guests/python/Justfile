@@ -331,8 +331,15 @@ link-lib profile: (build-lib profile) download-wasi-sdk download-wasi-adapter
         -L{{PYTHON_SDK_DIR}} \
         -lpython{{PYTHON_VERSION_HALF}}
 
-    # Link everything together.
-    wasm-tools component link \
+    # Link everything together:
+    #
+    # - Python compiled extensions (mapped to the correct place inside the guest file system)
+    # - libdl stub/mock for `dlopen`/`dlsym`
+    # - our Rust-based payload
+    # - CPython
+    # - WASI SDK libc/libc++ and emulated functionality/stubs
+    find "{{PYTHON_SITE_PACKAGES}}" -iname '*.so' | sed -E 's|^({{PYTHON_SDK_DIR}})(/.*)$|--dl-openable=\2=\1\2|' | xargs -- \
+        wasm-tools component link \
         --adapt={{WASI_ADAPTER}} \
         --output=$target/datafusion_udf_wasm_python.full.wasm \
         --use-built-in-libdl \
@@ -340,6 +347,8 @@ link-lib profile: (build-lib profile) download-wasi-sdk download-wasi-adapter
         $target/libdatafusion_udf_wasm_python.so \
         {{PYTHON_SDK_DIR}}/libpython{{PYTHON_VERSION_HALF}}.so \
         {{WASI_SYSROOT}}/lib/wasm32-wasip2/libc.so \
+        {{WASI_SYSROOT}}/lib/wasm32-wasip2/libc++.so \
+        {{WASI_SYSROOT}}/lib/wasm32-wasip2/libc++abi.so \
         {{WASI_SYSROOT}}/lib/wasm32-wasip2/libwasi-emulated-getpid.so \
         {{WASI_SYSROOT}}/lib/wasm32-wasip2/libwasi-emulated-process-clocks.so \
         {{WASI_SYSROOT}}/lib/wasm32-wasip2/libwasi-emulated-signal.so
