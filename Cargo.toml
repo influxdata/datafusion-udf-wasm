@@ -41,6 +41,7 @@ hyper-util = "0.1.20"
 insta = { version = "1.47.2", "default-features" = false }
 log = { version = "0.4.29", default-features = false }
 pyo3 = { version = "0.28.3", default-features = false, features = ["macros"] }
+rcgen = "0.14.7"
 regex = { version = "1", default-features = false }
 reqwest = { version = "0.13.3", default-features = false, features = [
   "rustls-no-provider",
@@ -54,7 +55,11 @@ sqlparser = { version = "0.59.0", default-features = false, features = [
 tar = { version = "0.4.45", default-features = false }
 target-lexicon = { version = "0.13", default-features = false }
 tempfile = { version = "3.25.0", default-features = false }
+time = { version = "0.3.6", default-features = false }
 tokio = { version = "1.52.2", default-features = false }
+tokio-rustls = { version = "0.26.4", default-features = false, features = [
+  "ring"
+] }
 uuid = { version = "1.23.1", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
 wasmtime = { version = "44.0.1", default-features = false, features = [

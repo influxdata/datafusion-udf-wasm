@@ -18,6 +18,7 @@ use wasmtime_wasi_http::{
 };
 
 pub use config::HttpConfig;
+pub use tls::TlsClientConfig;
 pub use types::{HttpConnectionMode, HttpMethod, HttpPort};
 pub use validator::{
     AllowCertainHttpRequests, AllowHttpEndpoint, AllowHttpHost, HttpRequestRejected,
@@ -31,6 +32,7 @@ use crate::{
 
 mod config;
 mod dns;
+mod tls;
 mod types;
 mod validator;
 
@@ -66,6 +68,7 @@ impl WasiHttpHooksImpl {
             pool_max_idle_per_host,
             resolver,
             validator,
+            tls_config,
         } = config;
 
         // https://github.com/seanmonstar/reqwest/issues/2924
@@ -73,7 +76,7 @@ impl WasiHttpHooksImpl {
             let _ = rustls::crypto::ring::default_provider().install_default();
         }
 
-        let client = reqwest::Client::builder()
+        let client_builder = reqwest::Client::builder()
             // disable response body compression (the guest shall do that)
             .no_brotli()
             .no_deflate()
@@ -86,12 +89,26 @@ impl WasiHttpHooksImpl {
             .no_proxy()
             // set up DNS
             .dns_resolver(ResolverWrapper::new(resolver))
-            // TLS setup
-            // TODO: allow admin to set CA etc.
-            .tls_backend_rustls()
             // connection pool setup
-            .pool_max_idle_per_host(pool_max_idle_per_host)
-            // done
+            .pool_max_idle_per_host(pool_max_idle_per_host);
+
+        // TLS setup
+        let TlsClientConfig {
+            ca_certs,
+            exclude_bundled_ca_certs,
+            version_min,
+        } = tls_config;
+        let client_builder = client_builder
+            .tls_backend_rustls()
+            .tls_version_min(version_min);
+        let client_builder = if exclude_bundled_ca_certs {
+            client_builder.tls_certs_only(ca_certs.iter().cloned())
+        } else {
+            client_builder.tls_certs_merge(ca_certs.iter().cloned())
+        };
+
+        // done
+        let client = client_builder
             .build()
             .map_err(|e| DataFusionError::External(Box::new(e)))?;
 
@@ -269,6 +286,18 @@ fn map_reqwest_err(e: reqwest::Error) -> HttpErrorCode {
         }
     }
 
+    // check rustls for TLS-related errors
+    if let Some(e) = extract_error_type::<rustls::Error>(&e) {
+        match e {
+            rustls::Error::NoCertificatesPresented | rustls::Error::InvalidCertificate(_) => {
+                return HttpErrorCode::TlsCertificateError;
+            }
+            _ => {
+                return HttpErrorCode::TlsProtocolError;
+            }
+        }
+    }
+
     // hyper might have some hints for us
     if let Some(e) = extract_error_type::<hyper::Error>(&e) {
         if e.is_incomplete_message() {
@@ -304,7 +333,17 @@ where
             return Some(concrete);
         }
 
-        match current.source() {
+        let next = if let Some(io_err) = current.downcast_ref::<std::io::Error>() {
+            // `std::io::Error` is a special snowflake and directly jumps over the contained error when
+            // `std::error::Error::source` is called
+            io_err
+                .get_ref()
+                .map(|e| e as &(dyn std::error::Error + 'static))
+        } else {
+            current.source()
+        };
+
+        match next {
             Some(next) => {
                 current = next;
             }

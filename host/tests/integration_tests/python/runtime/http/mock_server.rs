@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
     convert::Infallible,
+    io::Cursor,
     net::SocketAddr,
     sync::{Arc, Mutex},
 };
@@ -10,11 +11,17 @@ use http::{HeaderMap, HeaderValue, Method, StatusCode};
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{body::Incoming, service::service_fn};
 use hyper_util::rt::{TokioExecutor, TokioIo};
+use reqwest::Certificate;
+use rustls::{ServerConfig as TlsServerConfig, pki_types::pem::PemObject};
 use tokio::{
+    io::{AsyncRead, AsyncWrite},
     net::{TcpListener, TcpStream},
     task::JoinSet,
 };
+use tokio_rustls::TlsAcceptor;
 use wasmtime_wasi_http::DEFAULT_FORBIDDEN_HEADERS;
+
+use crate::integration_tests::python::runtime::http::mock_ca::{new_ca, new_end_entity};
 
 const LISTEN_ADDR_IPV4: &str = "127.0.0.1:0";
 const LISTEN_ADDR_IPV6: &str = "[::1]:0";
@@ -168,21 +175,37 @@ impl Default for ServerMock {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct State {
     mocks: Vec<(ServerMock, u64)>,
     errors: Vec<String>,
+    ignore_errors: Vec<&'static str>,
 }
 
 impl State {
+    fn ignored(&self, msg: &str) -> bool {
+        self.ignore_errors.iter().any(|ignore| msg.contains(ignore))
+    }
+
     #[must_use]
-    fn fail(&mut self, msg: impl ToString) -> Response {
+    fn fail_response(&mut self, msg: impl ToString) -> Response {
         let msg = msg.to_string();
-        self.errors.push(msg.clone());
+        if !self.ignored(&msg) {
+            self.errors.push(msg.clone());
+        }
         http::Response::builder()
             .status(http::StatusCode::BAD_REQUEST)
             .body(Full::new(Bytes::from(msg.into_bytes())).boxed())
             .expect("values provided to the builder should be valid")
+    }
+
+    fn fail_no_response(&mut self, msg: impl ToString) {
+        let msg = msg.to_string();
+        if self.ignored(&msg) {
+            return;
+        }
+        eprintln!("{msg}");
+        self.errors.push(msg);
     }
 }
 
@@ -207,6 +230,8 @@ pub(crate) struct MockServerOptions {
     pub(crate) ip_version: IpVersion,
     pub(crate) failure: Option<Failure>,
     pub(crate) hostname: Option<String>,
+    pub(crate) tls: bool,
+    pub(crate) ignore_errors: Vec<&'static str>,
 }
 
 type SharedState = Arc<Mutex<State>>;
@@ -217,6 +242,7 @@ pub(crate) struct MockServer {
     state: SharedState,
     addr: SocketAddr,
     hostname: String,
+    ca: Option<Certificate>,
 }
 
 impl MockServer {
@@ -229,6 +255,8 @@ impl MockServer {
             ip_version,
             failure,
             hostname,
+            tls,
+            ignore_errors,
         } = options;
         let tcp_listener = TcpListener::bind(match ip_version {
             IpVersion::V4 => LISTEN_ADDR_IPV4,
@@ -240,7 +268,32 @@ impl MockServer {
 
         let hostname = hostname.unwrap_or_else(|| addr.ip().to_string());
 
-        let state = SharedState::default();
+        let (tls_server_config, ca) = tls
+            .then(|| {
+                let (ca, issuer) = new_ca();
+                let (cert, key_pair) = new_end_entity(&issuer, &hostname);
+                let private_key = rustls::pki_types::PrivateKeyDer::from_pem_reader(Cursor::new(
+                    key_pair.serialize_pem().into_bytes(),
+                ))
+                .unwrap();
+
+                set_crypto_provider();
+                let config = TlsServerConfig::builder()
+                    .with_no_client_auth()
+                    .with_single_cert(vec![cert.der().clone()], private_key)
+                    .unwrap();
+
+                let ca = Certificate::from_pem(ca.pem().as_bytes()).unwrap();
+
+                (Arc::new(config), ca)
+            })
+            .unzip();
+
+        let state = Arc::new(Mutex::new(State {
+            mocks: vec![],
+            errors: vec![],
+            ignore_errors,
+        }));
 
         let mut task = JoinSet::new();
         if failure != Some(Failure::RejectConnections) {
@@ -253,9 +306,10 @@ impl MockServer {
                     let (stream, accept_addr) = match tcp_listener.accept().await {
                         Ok(x) => x,
                         Err(e) => {
-                            let msg = format!("failed to accept connection: {e}");
-                            eprintln!("{msg}");
-                            state_captured.lock().unwrap().errors.push(msg);
+                            state_captured
+                                .lock()
+                                .unwrap()
+                                .fail_no_response(format!("failed to accept connection: {e}"));
                             continue;
                         }
                     };
@@ -266,8 +320,22 @@ impl MockServer {
 
                     let state = Arc::clone(&state_captured);
                     let hostname = hostname_captured.clone();
+                    let tls_server_config = tls_server_config.clone();
                     let serve_connection = async move {
-                        serve_http_conn(stream, accept_addr, state, hostname, addr.port()).await;
+                        if let Some(tls_server_config) = tls_server_config {
+                            serve_tls_conn(
+                                tls_server_config,
+                                stream,
+                                accept_addr,
+                                state,
+                                hostname,
+                                addr.port(),
+                            )
+                            .await;
+                        } else {
+                            serve_http_conn(stream, accept_addr, state, hostname, addr.port())
+                                .await;
+                        }
                     };
 
                     connections.spawn(serve_connection);
@@ -280,6 +348,7 @@ impl MockServer {
             state,
             addr,
             hostname,
+            ca,
         }
     }
 
@@ -291,14 +360,20 @@ impl MockServer {
         self.addr.port()
     }
 
+    pub(crate) fn ca(&self) -> Option<Certificate> {
+        self.ca.clone()
+    }
+
     pub(crate) fn uri(&self) -> String {
+        let scheme = if self.ca.is_some() { "https" } else { "http" };
+
         let mut hostname = self.hostname().to_owned();
         // enclose IPv6 addresses
         if hostname.contains(":") {
             hostname = format!("[{hostname}]");
         }
 
-        format!("http://{hostname}:{port}", port = self.port())
+        format!("{scheme}://{hostname}:{port}", port = self.port())
     }
 
     pub(crate) fn mock(&self, mock: ServerMock) {
@@ -377,7 +452,7 @@ async fn service_function_impl(
     let mut state = state.lock().unwrap();
 
     if has_forbidden_headers(&req, hostname, port) {
-        return Ok(state.fail(format!("Forbidden headers:\n{req:#?}")));
+        return Ok(state.fail_response(format!("Forbidden headers:\n{req:#?}")));
     }
 
     let Some((mock, count)) = state
@@ -385,7 +460,7 @@ async fn service_function_impl(
         .iter_mut()
         .find(|(mock, _hits)| mock.matcher.matches(&req))
     else {
-        return Ok(state.fail(format!("Not mocked:\n{req:#?}")));
+        return Ok(state.fail_response(format!("Not mocked:\n{req:#?}")));
     };
 
     *count += 1;
@@ -412,13 +487,15 @@ async fn service_function_impl(
 }
 
 /// Server HTTP connection on given stream.
-async fn serve_http_conn(
-    stream: TcpStream,
+async fn serve_http_conn<S>(
+    stream: S,
     accept_addr: SocketAddr,
     state: SharedState,
     hostname: String,
     port: u16,
-) {
+) where
+    S: AsyncRead + AsyncWrite + Unpin + 'static,
+{
     let state_captured = Arc::clone(&state);
     let result = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new())
         .serve_connection(
@@ -433,9 +510,40 @@ async fn serve_http_conn(
         .await;
 
     if let Err(e) = result {
-        let msg = format!("error serving {accept_addr}: {e}");
-        eprintln!("{msg}");
-        state.lock().unwrap().errors.push(msg);
+        state
+            .lock()
+            .unwrap()
+            .fail_no_response(format!("error serving HTTP {accept_addr}: {e}"));
+    }
+}
+
+/// Server TLS connection on given stream.
+async fn serve_tls_conn(
+    tls_server_config: Arc<TlsServerConfig>,
+    stream: TcpStream,
+    accept_addr: SocketAddr,
+    state: SharedState,
+    hostname: String,
+    port: u16,
+) {
+    let acceptor = TlsAcceptor::from(tls_server_config);
+    match acceptor.accept(stream).await {
+        Ok(stream) => {
+            serve_http_conn(stream, accept_addr, state, hostname, port).await;
+        }
+        Err(e) => {
+            state
+                .lock()
+                .unwrap()
+                .fail_no_response(format!("error serving TLS {accept_addr}: {e}"));
+        }
+    }
+}
+
+/// See <https://github.com/seanmonstar/reqwest/issues/2924>.
+fn set_crypto_provider() {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
     }
 }
 
@@ -886,12 +994,5 @@ mod tests {
             LazyLock::new(|| Regex::new(r#"[0-9]+(\.[0-9]+){3}:[0-9]+"#).unwrap());
 
         REGEX.replace_all(&e, r#"<ADDR>"#).to_string()
-    }
-
-    // https://github.com/seanmonstar/reqwest/issues/2924
-    fn set_crypto_provider() {
-        if rustls::crypto::CryptoProvider::get_default().is_none() {
-            let _ = rustls::crypto::ring::default_provider().install_default();
-        }
     }
 }
