@@ -37,11 +37,10 @@ wasmtime-wasi-io.workspace = true
 
 [dev-dependencies]
 bytes.workspace = true
-datafusion-udf-wasm-bundle = { workspace = true, features = [
-  "evil",
-  "example",
-  "python"
-] }
+datafusion-udf-wasm-bundle = {
+  workspace = true,
+  features = ["evil", "example", "python"]
+}
 flate2.workspace = true
 gungraun.workspace = true
 http-body-util = { workspace = true, features = ["full"] }
