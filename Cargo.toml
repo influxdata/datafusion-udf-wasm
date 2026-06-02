@@ -92,7 +92,7 @@ tokio-rustls = {
   default-features = false,
   features = ["ring"]
 }
-uuid = { version = "1.23.1", default-features = false, features = ["v4"] }
+uuid = { version = "1.23.2", default-features = false, features = ["v4"] }
 wasip2 = { version = "1" }
 wasmtime = {
   version = "45.0.0",
