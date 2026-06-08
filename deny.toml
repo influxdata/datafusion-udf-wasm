@@ -8,6 +8,8 @@ ignore = [
   # paste is unmaintained but does not have any known issues;
   # there is no replacement at this time
   "RUSTSEC-2024-0436",
+  # `proc-macro-error2` is unmaintained but is only used by `gungraun`, which is a dev-dependency
+  "RUSTSEC-2026-0173",
 ]
 git-fetch-with-cli = true
 
