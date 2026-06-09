@@ -45,7 +45,7 @@ jobs:
           echo "LD_LIBRARY_PATH=${path_bin}/../lib" >> "$GITHUB_ENV"
 
       - name: Install `cargo-deny` & `just` & `tombi` & 'typos' & 'wasm-tools'
-        uses: taiki-e/install-action@25435dc8dd3baed7417e0c96d3fe89013a5b2e09  # v2
+        uses: taiki-e/install-action@0631aa6515c7d545823c67cfae7ef4fc7f490154  # v2
         with:
           tool: cargo-deny,just,tombi,typos,wasm-tools
           # only allow tools that got pinned via `install-action` to prevent supply chain attacks and surprise-upgrades
