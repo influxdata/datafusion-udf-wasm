@@ -33,7 +33,7 @@ jobs:
           echo TIMESTAMP_TAG="$ts_tag" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           fetch-depth: 1
 
@@ -46,7 +46,7 @@ jobs:
           version-file: "python-tooling/pyproject.toml"
 
       - name: Install `just` & `wasm-tools`
-        uses: taiki-e/install-action@15449e3094499af05d8d964a1c884208e4b8b595  # v2
+        uses: taiki-e/install-action@9e1e5806d4a4822de933115878265be9aaa786d9  # v2
         with:
           tool: just,wasm-tools
           # only allow tools that got pinned via `install-action` to prevent supply chain attacks and surprise-upgrades
@@ -136,7 +136,7 @@ jobs:
           subject-path: out/*
 
       - name: publish release
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3
         with:
           body: |
             WASM guest binaries.
