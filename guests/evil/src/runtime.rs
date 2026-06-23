@@ -33,10 +33,6 @@ impl SideEffect {
 }
 
 impl ScalarUDFImpl for SideEffect {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> &str {
         self.name
     }

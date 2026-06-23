@@ -254,9 +254,8 @@ fn parse_udf(stmt: Statement) -> DataFusionResult<Parsed> {
 /// Extracts the code from the function body, adding it to `code`.
 fn extract_function_body(body: &CreateFunctionBody) -> DataFusionResult<&str> {
     match body {
-        CreateFunctionBody::AsAfterOptions(e) | CreateFunctionBody::AsBeforeOptions(e) => {
-            expression_into_str(e)
-        }
+        CreateFunctionBody::AsAfterOptions(e) => expression_into_str(e),
+        CreateFunctionBody::AsBeforeOptions { body, .. } => expression_into_str(body),
         CreateFunctionBody::Return(_)
         | CreateFunctionBody::AsBeginEnd(_)
         | CreateFunctionBody::AsReturnExpr(_)

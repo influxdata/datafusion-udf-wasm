@@ -3,7 +3,6 @@
 //!
 //! [CPython]: https://www.python.org/
 //! [`pyo3`]: https://pyo3.rs/
-use std::any::Any;
 use std::hash::Hash;
 use std::ops::{ControlFlow, Range};
 use std::sync::{Arc, Once};
@@ -115,10 +114,6 @@ impl Hash for PythonScalarUDF {
 }
 
 impl ScalarUDFImpl for PythonScalarUDF {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         &self.python_function.name
     }

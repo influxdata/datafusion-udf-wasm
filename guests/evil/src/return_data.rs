@@ -13,10 +13,6 @@ use datafusion_expr::{
 struct WrongNumberOfRows;
 
 impl ScalarUDFImpl for WrongNumberOfRows {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "wrong-number-of-rows"
     }

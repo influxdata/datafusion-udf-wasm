@@ -1,6 +1,6 @@
 //! DataFusion UDF types.
 
-use std::{any::Any, collections::HashSet, hash::Hash, sync::Arc};
+use std::{collections::HashSet, hash::Hash, sync::Arc};
 
 use arrow::datatypes::DataType;
 use datafusion_common::{DataFusionError, Result as DataFusionResult};
@@ -233,10 +233,6 @@ impl Hash for WasmScalarUdf {
 }
 
 impl ScalarUDFImpl for WasmScalarUdf {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn name(&self) -> &str {
         &self.name
     }
