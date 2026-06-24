@@ -101,7 +101,7 @@ wasmtime = {
     "async",
   ]
 }
-wasmtime-wasi = { version = "45.0.0", default-features = false }
+wasmtime-wasi = { version = "46.0.0", default-features = false }
 wasmtime-wasi-http = {
   version = "45.0.0",
   default-features = false,
@@ -109,7 +109,7 @@ wasmtime-wasi-http = {
     "p2",
   ]
 }
-wasmtime-wasi-io = { version = "45.0.0", default-features = false }
+wasmtime-wasi-io = { version = "46.0.0", default-features = false }
 wit-bindgen = {
   version = "0.57",
   default-features = false,
