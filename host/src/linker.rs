@@ -65,11 +65,7 @@ fn link_wasi_p2(linker: &mut Linker<WasmStateImpl>) -> Result<()> {
         linker,
         WasmStateImpl::clocks,
     )?;
-    bindings::cli::exit::add_to_linker::<WasmStateImpl, WasiCli>(
-        linker,
-        &(&options).into(),
-        WasmStateImpl::cli,
-    )?;
+    bindings::cli::exit::add_to_linker::<WasmStateImpl, WasiCli>(linker, WasmStateImpl::cli)?;
     bindings::cli::environment::add_to_linker::<WasmStateImpl, WasiCli>(
         linker,
         WasmStateImpl::cli,
