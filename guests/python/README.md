@@ -129,6 +129,7 @@ or via the older syntax:
 ```python
 from typing import Optional
 
+
 def add_old(x: Optional[int], y: Optional[int]) -> Optional[int]:
     if x is None or y is None:
         return None
@@ -142,6 +143,7 @@ def add_left(x: int | None, y: int) -> int | None:
     if x is None:
         return None
     return x + y
+
 
 def add_right(x: int, y: int | None) -> int | None:
     if y is None:
@@ -189,11 +191,14 @@ Default parameters, `*args`, and `**kwargs` are currently NOT supported. So thes
 def m1(x: int = 1) -> int:
     return x + 1
 
+
 def m2(*x: int) -> int:
     return x + 1
 
+
 def m3(*, x: int) -> int:
     return x + 1
+
 
 def m4(**x: int) -> int:
     return x + 1
@@ -204,6 +209,7 @@ We give no guarantees on the lifetime of the Python VM, but you may use state in
 
 ```python
 _cache = {}
+
 
 def compute(x: int) -> int:
     try:
@@ -218,6 +224,7 @@ You may also use a builtin solution like [`functools.cache`]:
 
 ```python
 from functools import cache
+
 
 @cache
 def compute(x: int) -> int:
