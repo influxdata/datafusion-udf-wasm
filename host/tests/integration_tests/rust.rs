@@ -367,12 +367,18 @@ async fn test_match_target() {
 #[cfg(feature = "all-arch")]
 #[tokio::test]
 async fn test_mismatch_target() {
+    // Initially we've used RISC-V as a demo target, since it's unlikely to be used as a host for a time being.
+    // However, this might currently panic due to https://github.com/bytecodealliance/wasmtime/issues/13959 .
+    //
+    // So now we change a demo target from the tier-1 (i.e. properly supported) target list and decide which one to use based on the host.
+    let arch = cfg_select! {
+        target_arch = "x86_64" => "aarch64",
+        _ => "x86_64",
+    };
     let component = WasmComponentPrecompiled::compile(
         datafusion_udf_wasm_bundle::BIN_EXAMPLE_ADD_ONE.into(),
         &CompilationFlags {
-            // It's unlikely that someone is gonna run the tests on a RISC-V 64bit host, but if they do, we need to
-            // make the test code smarter. It won't fail as expected.
-            target: Some("riscv64gc-unknown-linux-gnu".to_owned()),
+            target: Some(format!("{arch}-unknown-linux-gnu")),
         },
     )
     .await
@@ -390,11 +396,11 @@ async fn test_mismatch_target() {
     .unwrap_err();
 
     insta::assert_snapshot!(
-        err,
+        err.to_string().replace(arch, "<ARCH>"),
         @r"
     create WASM component
     caused by
-    External error: Module was compiled for architecture 'riscv64gc'
+    External error: Module was compiled for architecture '<ARCH>'
     "
     );
 
@@ -404,11 +410,11 @@ async fn test_mismatch_target() {
     let res = unsafe { WasmComponentPrecompiled::load(data) };
 
     insta::assert_snapshot!(
-        res.unwrap_err(),
+        res.unwrap_err().to_string().replace(arch, "<ARCH>"),
         @r"
     create WASM component
     caused by
-    External error: Module was compiled for architecture 'riscv64gc'
+    External error: Module was compiled for architecture '<ARCH>'
     "
     );
 }
