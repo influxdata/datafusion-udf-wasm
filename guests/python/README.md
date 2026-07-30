@@ -214,10 +214,10 @@ _cache = {}
 def compute(x: int) -> int:
     try:
         return _cache[x]
-    except ValueError:
+    except KeyError:
         y = x * 100
         _cache[x] = y
-        return x
+        return y
 ```
 
 You may also use a builtin solution like [`functools.cache`]:
