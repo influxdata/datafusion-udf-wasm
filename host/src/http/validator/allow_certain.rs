@@ -1,11 +1,13 @@
 //! [`AllowHttpEndpoint`].
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
+    net::IpAddr,
     str::FromStr,
 };
 
 use datafusion_common::{DataFusionError, Result as DataFusionResult, config::ConfigField};
+use ipnet::IpNet;
 use wasmtime_wasi_http::p2::body::HyperOutgoingBody;
 
 use crate::{
@@ -98,16 +100,58 @@ impl ConfigField for AllowHttpEndpoint {
 }
 
 /// Allow settings for a host.
+///
+/// A resolved IP address is allowed if it is contained in the allow-list, or the allow-list is empty, and it is not
+/// contained in the deny-list. A deny-list entry always takes precedence over an allow-list entry.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AllowHttpHost {
     /// Mapping from port to endpoint.
     ports: HashMap<HttpPort, AllowHttpEndpoint>,
+
+    /// Allow-listed IP subnets.
+    allow_subnets: BTreeSet<IpNet>,
+
+    /// Deny-listed IP subnets.
+    deny_subnets: BTreeSet<IpNet>,
 }
 
 impl AllowHttpHost {
+    /// Separator for IP subnets in the DataFusion configuration.
+    const SUBNET_SEP: &str = "|";
+
     /// Allow given port at this host.
     pub fn allow_port(&mut self, port: HttpPort) -> &mut AllowHttpEndpoint {
         self.ports.entry(port).or_default()
+    }
+
+    /// Allow connections to an IP subnet.
+    ///
+    /// Adding the first subnet switches the host from allowing every IP address to allowing only addresses contained
+    /// in at least one configured subnet. Denied subnets still take precedence.
+    ///
+    /// ```
+    /// # use datafusion_udf_wasm_host::{AllowCertainHttpRequests, IpNet};
+    /// let mut requests = AllowCertainHttpRequests::new();
+    /// requests
+    ///     .allow_host("api.example.com")
+    ///     .allow_subnet("203.0.113.0/24".parse::<IpNet>().unwrap());
+    /// ```
+    pub fn allow_subnet(&mut self, subnet: IpNet) {
+        self.allow_subnets.insert(subnet);
+    }
+
+    /// Deny connections to an IP subnet.
+    ///
+    /// Denied subnets take precedence over allowed subnets, including when the allow-list is empty.
+    pub fn deny_subnet(&mut self, subnet: IpNet) {
+        self.deny_subnets.insert(subnet);
+    }
+
+    /// Check whether an IP address is allowed for this host.
+    fn allows_ip(&self, ip: IpAddr) -> bool {
+        (self.allow_subnets.is_empty()
+            || self.allow_subnets.iter().any(|subnet| subnet.contains(&ip)))
+            && !self.deny_subnets.iter().any(|subnet| subnet.contains(&ip))
     }
 }
 
@@ -118,7 +162,34 @@ impl ConfigField for AllowHttpHost {
         key: &str,
         _description: &'static str,
     ) {
-        let Self { ports } = self;
+        let Self {
+            ports,
+            allow_subnets,
+            deny_subnets,
+        } = self;
+
+        if !allow_subnets.is_empty() {
+            v.some(
+                &format!("{key}.allow_subnets"),
+                allow_subnets
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(Self::SUBNET_SEP),
+                "Allowed IP subnet",
+            );
+        }
+        if !deny_subnets.is_empty() {
+            v.some(
+                &format!("{key}.deny_subnets"),
+                deny_subnets
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(Self::SUBNET_SEP),
+                "Denied IP subnet",
+            );
+        }
 
         let mut ports = ports.iter().collect::<Vec<_>>();
         ports.sort_unstable_by_key(|(port, _cfg)| *port);
@@ -133,6 +204,17 @@ impl ConfigField for AllowHttpHost {
         let (field, key) = key.split_once(".").unwrap_or((key, ""));
 
         match field {
+            "allow_subnets" if key.is_empty() => {
+                self.allow_subnets = parse_subnets(value).context("parse allowed IP subnets")?;
+                Ok(())
+            }
+            "deny_subnets" if key.is_empty() => {
+                self.deny_subnets = parse_subnets(value).context("parse denied IP subnets")?;
+                Ok(())
+            }
+            "allow_subnets" | "deny_subnets" => Err(DataFusionError::Configuration(format!(
+                "unknown field: `{field}.{key}`"
+            ))),
             "port" => {
                 let (port, key) = key.split_once(".").ok_or_else(|| {
                     DataFusionError::Configuration(format!(
@@ -151,6 +233,18 @@ impl ConfigField for AllowHttpHost {
             ))),
         }
     }
+}
+
+/// Parse a delimited IP subnet list from a DataFusion configuration value.
+fn parse_subnets(value: &str) -> DataFusionResult<BTreeSet<IpNet>> {
+    value
+        .split(AllowHttpHost::SUBNET_SEP)
+        .map(|value| {
+            value.parse::<IpNet>().map_err(|e| {
+                DataFusionError::External(Box::new(e)).context("cannot parse IP subnet")
+            })
+        })
+        .collect()
 }
 
 /// Allow-list requests.
@@ -178,10 +272,8 @@ impl HttpRequestValidator for AllowCertainHttpRequests {
         request: &hyper::Request<HyperOutgoingBody>,
         mode: HttpConnectionMode,
     ) -> Result<(), HttpRequestRejected> {
-        let host = self
-            .hosts
-            .get(request.uri().host().ok_or(HttpRequestRejected)?)
-            .ok_or(HttpRequestRejected)?;
+        let hostname = request.uri().host().ok_or(HttpRequestRejected)?;
+        let host = self.hosts.get(hostname).ok_or(HttpRequestRejected)?;
 
         let endpoint = host
             .ports
@@ -203,7 +295,20 @@ impl HttpRequestValidator for AllowCertainHttpRequests {
             return Err(HttpRequestRejected);
         }
 
+        if let Ok(ip) = hostname.parse()
+            && !host.allows_ip(ip)
+        {
+            return Err(HttpRequestRejected);
+        }
+
         Ok(())
+    }
+
+    fn validate_ip(&self, hostname: &str, ip: IpAddr) -> Result<(), HttpRequestRejected> {
+        self.hosts
+            .get(hostname)
+            .ok_or(HttpRequestRejected)
+            .and_then(|host| host.allows_ip(ip).then_some(()).ok_or(HttpRequestRejected))
     }
 }
 
@@ -528,6 +633,43 @@ mod test {
     }
 
     #[test]
+    fn test_subnet_allow_deny() {
+        let mut host = AllowHttpHost::default();
+
+        assert!(host.allows_ip("127.0.0.1".parse().unwrap()));
+        host.allow_subnet("192.168.0.0/16".parse().unwrap());
+        assert!(!host.allows_ip("127.0.0.1".parse().unwrap()));
+        assert!(host.allows_ip("192.168.1.1".parse().unwrap()));
+        host.deny_subnet("192.168.1.0/24".parse().unwrap());
+        assert!(!host.allows_ip("192.168.1.1".parse().unwrap()));
+        assert!(host.allows_ip("192.168.2.1".parse().unwrap()));
+        host.allow_subnet("2001:db8::/32".parse().unwrap());
+        assert!(host.allows_ip("2001:db8::1".parse().unwrap()));
+        assert!(!host.allows_ip("2001:db9::1".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_ip_literal_is_checked_against_subnets() {
+        let mut policy = AllowCertainHttpRequests::new();
+        let host = policy.allow_host("127.0.0.1");
+        let endpoint = host.allow_port(HttpConnectionMode::PlainText.default_port());
+        endpoint.allow_mode(HttpConnectionMode::PlainText);
+        endpoint.allow_method(HttpMethod::GET);
+        host.deny_subnet("127.0.0.0/8".parse().unwrap());
+
+        let request = hyper::Request::builder()
+            .method(HttpMethod::GET)
+            .uri("http://127.0.0.1")
+            .body(Default::default())
+            .unwrap();
+
+        assert_eq!(
+            policy.validate(&request, HttpConnectionMode::PlainText),
+            Err(HttpRequestRejected)
+        );
+    }
+
+    #[test]
     fn test_config_parsing_ok() {
         let cfg = AllowCertainHttpRequests::default();
         insta::assert_snapshot!(
@@ -552,6 +694,9 @@ mod test {
 
         let mut cfg = AllowCertainHttpRequests::default();
         let host_1 = cfg.allow_host("foo.bar");
+        host_1.allow_subnet("10.0.0.0/8".parse().unwrap());
+        host_1.allow_subnet("2001:db8::/32".parse().unwrap());
+        host_1.deny_subnet("10.0.1.0/24".parse().unwrap());
         let endpoint_1_1 = host_1.allow_port(HttpPort::new(1337).unwrap());
         endpoint_1_1.allow_mode(HttpConnectionMode::PlainText);
         endpoint_1_1.allow_method(HttpMethod::POST);
@@ -564,6 +709,12 @@ mod test {
         insta::assert_snapshot!(
             config_roundtrip(cfg),
             @r"
+        # Allowed IP subnet
+        test.host.[foo.bar].allow_subnets=10.0.0.0/8|2001:db8::/32
+
+        # Denied IP subnet
+        test.host.[foo.bar].deny_subnets=10.0.1.0/24
+
         # HTTP connection mode
         test.host.[foo.bar].port.42.mode=encrypted
 
@@ -641,6 +792,16 @@ mod test {
         External error: Invalid HTTP connection mode: `foo`
         ",
         );
+        let err = config_parsing_err("test.host.[foo].allow_subnets=not-a-subnet");
+        assert!(err.to_string().contains("parse allowed IP subnets"));
+        assert!(err.to_string().contains("cannot parse IP subnet"));
+        for field in ["allow_subnets", "deny_subnets"] {
+            let err = config_parsing_err(&format!("test.host.[foo].{field}.typo=127.0.0.0/8"));
+            assert!(
+                err.to_string()
+                    .contains(&format!("unknown field: `{field}.typo`"))
+            );
+        }
     }
 
     fn try_config_parsing(txt: &str) -> DataFusionResult<AllowCertainHttpRequests> {

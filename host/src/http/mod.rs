@@ -18,6 +18,7 @@ use wasmtime_wasi_http::{
 };
 
 pub use config::HttpConfig;
+pub use ipnet::IpNet;
 pub use tls::TlsClientConfig;
 pub use types::{HttpConnectionMode, HttpMethod, HttpPort};
 pub use validator::{
@@ -26,7 +27,7 @@ pub use validator::{
 };
 
 use crate::{
-    http::dns::{ResolvedPortNotZero, ResolverWrapper},
+    http::dns::{ResolvedIpRejected, ResolvedPortNotZero, ResolverWrapper},
     state::WasmStateImpl,
 };
 
@@ -88,7 +89,7 @@ impl WasiHttpHooksImpl {
             // TODO: allow overrides
             .no_proxy()
             // set up DNS
-            .dns_resolver(ResolverWrapper::new(resolver))
+            .dns_resolver(ResolverWrapper::new(resolver, Arc::clone(&validator)))
             // connection pool setup
             .pool_max_idle_per_host(pool_max_idle_per_host);
 
@@ -265,6 +266,9 @@ fn map_reqwest_err(e: reqwest::Error) -> HttpErrorCode {
     // known "internal" case
     if let Some(e) = extract_error_type::<ResolvedPortNotZero>(&e) {
         return HttpErrorCode::InternalError(Some(e.to_string()));
+    }
+    if extract_error_type::<ResolvedIpRejected>(&e).is_some() {
+        return HttpErrorCode::HttpRequestDenied;
     }
 
     // try to find an IO error first, since this is potentially the most low-level information

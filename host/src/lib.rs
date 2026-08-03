@@ -8,8 +8,8 @@ pub use crate::{
     conversion::limits::TrustedDataLimits,
     http::{
         AllowCertainHttpRequests, AllowHttpEndpoint, AllowHttpHost, HttpConfig, HttpConnectionMode,
-        HttpMethod, HttpPort, HttpRequestRejected, HttpRequestValidator, RejectAllHttpRequests,
-        TlsClientConfig,
+        HttpMethod, HttpPort, HttpRequestRejected, HttpRequestValidator, IpNet,
+        RejectAllHttpRequests, TlsClientConfig,
     },
     limiter::StaticResourceLimits,
     permissions::WasmPermissions,

@@ -1498,6 +1498,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "insta",
+ "ipnet",
  "log",
  "rand 0.10.2",
  "rcgen",
