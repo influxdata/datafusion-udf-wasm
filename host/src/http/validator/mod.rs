@@ -1,5 +1,5 @@
 //! Validators that can allow/deny HTTP requests.
-use std::fmt;
+use std::{fmt, net::IpAddr};
 
 pub use allow_certain::{AllowCertainHttpRequests, AllowHttpEndpoint, AllowHttpHost};
 pub use reject_all::RejectAllHttpRequests;
@@ -35,4 +35,12 @@ pub trait HttpRequestValidator: fmt::Debug + Send + Sync + 'static {
         request: &hyper::Request<HyperOutgoingBody>,
         mode: HttpConnectionMode,
     ) -> Result<(), HttpRequestRejected>;
+
+    /// Validate an IP address resolved for a host.
+    ///
+    /// The default allows every address, preserving the behavior of validators that only inspect HTTP requests.
+    /// Implementations that restrict a host's possible DNS results should return [`Err`] for rejected addresses.
+    fn validate_ip(&self, _host: &str, _ip: IpAddr) -> Result<(), HttpRequestRejected> {
+        Ok(())
+    }
 }

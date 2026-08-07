@@ -23,6 +23,7 @@ futures-util.workspace = true
 http.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
+ipnet.workspace = true
 log.workspace = true
 rand = { version = "0.10" }
 reqwest.workspace = true

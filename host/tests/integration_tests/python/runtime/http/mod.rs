@@ -56,7 +56,11 @@ def perform_request(url: str) -> str:
     return requests.get(url).text
 "#;
 
-    let server = MockServer::start().await;
+    let server = MockServer::with_options(MockServerOptions {
+        hostname: Some("allowed.test".to_owned()),
+        ..Default::default()
+    })
+    .await;
     server.mock(ServerMock {
         response: Box::new(SimpleResponseGen {
             body: "hello world!".to_owned(),
@@ -66,13 +70,20 @@ def perform_request(url: str) -> str:
     });
 
     let mut validator = AllowCertainHttpRequests::new();
-    let endpoint = validator
-        .allow_host(server.hostname())
-        .allow_port(HttpPort::new(server.port()).unwrap());
+    let host = validator.allow_host(server.hostname());
+    host.allow_subnet("127.0.0.0/8".parse().unwrap());
+    let endpoint = host.allow_port(HttpPort::new(server.port()).unwrap());
     endpoint.allow_mode(HttpConnectionMode::PlainText);
     endpoint.allow_method(http::Method::GET);
-    let udf =
-        python_udf_with_http_config(CODE, HttpConfig::default().with_validator(validator)).await;
+    let resolver = MockResolver::default();
+    resolver.mock_ok("allowed.test", vec!["127.0.0.1:0".parse().unwrap()], 1);
+    let udf = python_udf_with_http_config(
+        CODE,
+        HttpConfig::default()
+            .with_resolver(resolver.clone())
+            .with_validator(validator),
+    )
+    .await;
 
     let array = udf
         .invoke_async_with_args(ScalarFunctionArgs {
@@ -90,6 +101,51 @@ def perform_request(url: str) -> str:
         array.as_ref(),
         &StringArray::from_iter([Some("hello world!".to_owned()),]) as &dyn Array,
     );
+}
+
+#[tokio::test]
+async fn test_requests_subnet_denied() {
+    const CODE: &str = r#"
+import requests
+
+def perform_request(url: str) -> str:
+    return requests.get(url).text
+"#;
+
+    let server = MockServer::with_options(MockServerOptions {
+        hostname: Some("denied.test".to_owned()),
+        ..Default::default()
+    })
+    .await;
+
+    let mut validator = AllowCertainHttpRequests::new();
+    let host = validator.allow_host(server.hostname());
+    host.deny_subnet("127.0.0.0/8".parse().unwrap());
+    let endpoint = host.allow_port(HttpPort::new(server.port()).unwrap());
+    endpoint.allow_mode(HttpConnectionMode::PlainText);
+    endpoint.allow_method(http::Method::GET);
+    let resolver = MockResolver::default();
+    resolver.mock_ok("denied.test", vec!["127.0.0.1:0".parse().unwrap()], 1);
+    let udf = python_udf_with_http_config(
+        CODE,
+        HttpConfig::default()
+            .with_resolver(resolver.clone())
+            .with_validator(validator),
+    )
+    .await;
+
+    let err = udf
+        .invoke_async_with_args(ScalarFunctionArgs {
+            args: vec![ColumnarValue::Scalar(ScalarValue::Utf8(Some(server.uri())))],
+            arg_fields: vec![Arc::new(Field::new("uri", DataType::Utf8, true))],
+            number_rows: 1,
+            return_field: Arc::new(Field::new("r", DataType::Utf8, true)),
+            config_options: Arc::new(ConfigOptions::default()),
+        })
+        .await
+        .unwrap_err();
+
+    assert!(err.to_string().contains("ErrorCode_HttpRequestDenied"));
 }
 
 #[tokio::test]
