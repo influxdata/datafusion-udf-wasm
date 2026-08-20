@@ -1,23 +1,23 @@
 PYTHON_VERSION_MAJOR := "3"
 PYTHON_VERSION_MINOR := "14"
-PYTHON_VERSION_MICRO := "6"
-PYTHON_BUILD_GENERATION := "2"
+PYTHON_VERSION_MICRO := "7"
+PYTHON_BUILD_GENERATION := "3"
 
-WASI_SDK_VERSION_MAJOR := "24"
+WASI_SDK_VERSION_MAJOR := "33"
 WASI_SDK_VERSION_MINOR := "0"
 WASI_SDK_SYS := replace(arch(), "aarch64", "arm64") + "-" + os()
 WASI_SDK_NAME := "wasi-sdk-" + WASI_SDK_VERSION_MAJOR + "." + WASI_SDK_VERSION_MINOR + "-" + WASI_SDK_SYS
 
-SHA256_PYTHON_SDK := "4f81506b2f0e9a899bdbea8693df03e2e3cb6180d5357b25e338983801e8465e"
-SHA256_PYTHON_SDK_BUILD := "c735e37fd126d7f3c23bf5b813f996e7f4b72e0ecfedd3cc0034e7714bd2eee2"
+SHA256_PYTHON_SDK := "81dc77f3332555ee0903a6679f11a30fda5dee96392362a2a8c9b6427e6f341a"
+SHA256_PYTHON_SDK_BUILD := "c7ad7e31d23931915db5f00fc319567e3c5de87d0a4bbb3e71f165be7cccd253"
 SHA256_WASI_SDK := if WASI_SDK_SYS == "arm64-linux" {
-    "ae6c1417ea161e54bc54c0a168976af57a0c6e53078857886057a71a0d928646"
+    "4f98ee738c7abb45c81a94d1461fc53cc569d1cd01498951c8184d841a027844"
 } else if WASI_SDK_SYS == "arm64-macos" {
-    "aeae999396d5f5caa5ce419f52e83c35869d5fd21d40af80acba2c80f51b0b3a"
+    "85c997a2665ead91673b5bb88b7d0df3fc8900df3bfa244f720d478187bbdc78"
 } else if WASI_SDK_SYS == "x86_64-linux" {
-    "c6c38aab56e5de88adf6c1ebc9c3ae8da72f88ec2b656fb024eda8d4167a0bc5"
+    "0ba8b5bfaeb2adf3f29bab5841d76cf5318ab8e1642ea195f88baba1abd47bce"
 } else if WASI_SDK_SYS == "x86_64-macos" {
-    "4bfc274ae8b68c771dd93e32ad4bd695336ca46b585beb3b1260e5602dbc11a2"
+    "18f3f201ba9734e6a4455b0b6410690395a55e9ffa9f6f5066f66083a94b93b3"
 } else {
     error("unknown WASI SDK system: " + WASI_SDK_SYS)
 }
@@ -347,11 +347,11 @@ link-lib profile: (build-lib profile) download-wasi-sdk download-wasi-adapter
         $target/libdatafusion_udf_wasm_python.so \
         {{PYTHON_SDK_DIR}}/libpython{{PYTHON_VERSION_HALF}}.so \
         {{WASI_SYSROOT}}/lib/wasm32-wasip2/libc.so \
-        {{WASI_SYSROOT}}/lib/wasm32-wasip2/libc++.so \
-        {{WASI_SYSROOT}}/lib/wasm32-wasip2/libc++abi.so \
         {{WASI_SYSROOT}}/lib/wasm32-wasip2/libwasi-emulated-getpid.so \
         {{WASI_SYSROOT}}/lib/wasm32-wasip2/libwasi-emulated-process-clocks.so \
-        {{WASI_SYSROOT}}/lib/wasm32-wasip2/libwasi-emulated-signal.so
+        {{WASI_SYSROOT}}/lib/wasm32-wasip2/libwasi-emulated-signal.so \
+        {{WASI_SYSROOT}}/lib/wasm32-wasip2/noeh/libc++.so \
+        {{WASI_SYSROOT}}/lib/wasm32-wasip2/noeh/libc++abi.so
 
     # Strip debug info
     wasm-tools strip \
