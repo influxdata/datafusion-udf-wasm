@@ -71,7 +71,7 @@ wasmtime-wasi-http = {
   ]
 }
 wasmtime-wasi-io = { version = "47.0.2", default-features = false }
-wit-bindgen = { version = "0.57", default-features = false, features = ["macros"] }
+wit-bindgen = { version = "0.60", default-features = false, features = ["macros"] }
 
 [workspace.lints.clippy]
 allow_attributes = "deny"
