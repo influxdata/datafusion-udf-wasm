@@ -54,7 +54,7 @@ time = { version = "0.3.6", default-features = false }
 tokio = { version = "1.52.3", default-features = false }
 tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring"] }
 uuid = { version = "1.23.3", default-features = false, features = ["v4"] }
-wasip2 = { version = "1" }
+wasip2 = { version = "2" }
 wasmtime = {
   version = "48.0.0",
   default-features = false,
@@ -71,7 +71,7 @@ wasmtime-wasi-http = {
   ]
 }
 wasmtime-wasi-io = { version = "48.0.0", default-features = false }
-wit-bindgen = { version = "0.60", default-features = false, features = ["macros"] }
+wit-bindgen = { version = "0.61", default-features = false, features = ["macros"] }
 
 [workspace.lints.clippy]
 allow_attributes = "deny"
