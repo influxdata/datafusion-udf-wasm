@@ -46,7 +46,7 @@ jobs:
           version-file: "python-tooling/pyproject.toml"
 
       - name: Install `just` & `wasm-tools`
-        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29  # v2
+        uses: taiki-e/install-action@861a07ce7084f55488e375df125cdc99bba60eb7  # v2
         with:
           tool: just,wasm-tools
           # only allow tools that got pinned via `install-action` to prevent supply chain attacks and surprise-upgrades
