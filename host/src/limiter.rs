@@ -78,7 +78,7 @@ impl Limiter {
 
     /// Grow memory usage.
     pub(crate) fn grow(&self, bytes: usize) -> Result<(), GrowthError> {
-        let mut self_guard = self
+        let self_guard = self
             .memory_reservation
             .lock()
             .expect("memory reservation lock poisoned");
@@ -90,7 +90,7 @@ impl Limiter {
 
     /// Shrink memory usage.
     pub(crate) fn shrink(&self, bytes: usize) -> Result<usize, GrowthError> {
-        let mut self_guard = self
+        let self_guard = self
             .memory_reservation
             .lock()
             .expect("memory reservation lock poisoned");
