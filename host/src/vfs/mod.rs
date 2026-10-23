@@ -226,7 +226,7 @@ impl Allocation {
     /// Increase allocation by given amount.
     fn inc(&self, n: u64) -> Result<(), LimitExceeded> {
         self.n
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |old| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |old| {
                 let new = old.checked_add(n)?;
                 (new <= self.limit).then_some(new)
             })
