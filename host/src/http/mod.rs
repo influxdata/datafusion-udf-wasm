@@ -1,15 +1,19 @@
 //! Interfaces for HTTP interactions of the guest.
 
-use std::{future::Future, io::ErrorKind, sync::Arc, time::Duration};
+use std::{
+    future::Future,
+    io::ErrorKind,
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 
 use datafusion_common::{DataFusionError, error::Result as DataFusionResult};
-use http::HeaderName;
 use http_body_util::BodyExt;
 use hyper::body::Frame;
 use tokio::runtime::Handle;
 use wasmtime_wasi_http::{
-    DEFAULT_FORBIDDEN_HEADERS, Error as WasiHttpError, RequestOptions, WasiHttpCtxView,
-    WasiHttpHooks, WasiHttpView,
+    DEFAULT_FORBIDDEN_HEADERS, Error as WasiHttpError, ForbiddenHeaderFilter, RequestOptions,
+    WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
     p2::body::{HyperIncomingBody, HyperOutgoingBody},
 };
 
@@ -169,13 +173,19 @@ impl WasiHttpHooks for WasiHttpHooksImpl {
         })
     }
 
-    fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
-        // Python `requests` sends this so we allow it but later drop it from the actual request.
-        if name == hyper::header::CONNECTION {
-            return false;
-        }
+    fn forbidden_header_filter(&mut self) -> ForbiddenHeaderFilter {
+        static DEFAULT: LazyLock<ForbiddenHeaderFilter> = LazyLock::new(|| {
+            Arc::new(|name| {
+                // Python `requests` sends this so we allow it but later drop it from the actual request.
+                if name == hyper::header::CONNECTION {
+                    return false;
+                }
 
-        DEFAULT_FORBIDDEN_HEADERS.contains(name)
+                DEFAULT_FORBIDDEN_HEADERS.contains(name)
+            })
+        });
+
+        DEFAULT.clone()
     }
 }
 
