@@ -305,7 +305,7 @@ async fn test_limit_bytes() {
     // Since the VFS is immutable, we have to use the limit that is too small for the root FS. At the same time, the
     // memory pool must be large enough to hold the component code itself. So the memory limit should be
     // `code_size < limit < code_size + FS`. Instead of hard-coding this balance here, we try to automatically find it.
-    const START: usize = 100_000_000; // 100MB
+    const START: usize = 120_000_000; // 120MB
     const STEP: usize = 10_000_000; // 10MB
     let try_create = async |limit| {
         WasmScalarUdf::new(

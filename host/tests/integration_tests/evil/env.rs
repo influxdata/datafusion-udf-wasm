@@ -50,7 +50,7 @@ async fn test_process_id() {
     stderr:
 
     thread '<unnamed>' (<THREAD>) panicked at <FILE>:<LINE>:<ROW>:
-    unsupported
+    no pids on this platform
     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
 
     caused by

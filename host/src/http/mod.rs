@@ -218,7 +218,6 @@ fn assemble_request(
         uri,
         version,
         headers,
-        extensions: _,
         ..
     } = parts;
 
