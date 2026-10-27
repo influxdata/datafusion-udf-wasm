@@ -8,6 +8,21 @@ ignore = [
   # paste is unmaintained but does not have any known issues;
   # there is no replacement at this time
   "RUSTSEC-2024-0436",
+  # zstd 0.13 advisories with no fix on the 0.13 line. The fixed zstd 0.14.3
+  # and zstd-safe 8.2.0 are only accepted by arrow-ipc and parquet 60, so
+  # moving to them is an arrow and DataFusion upgrade. Until then:
+  # - RUSTSEC-2026-0391: `with_context` carries an abandoned stream's buffers
+  #   into the next stream. Nothing in the graph calls `with_context`.
+  # - RUSTSEC-2026-0398: `Seekable::decompress` is behind the `seekable`
+  #   feature, which nothing enables, so the code is not compiled.
+  # - RUSTSEC-2026-0403: a corrupt legacy frame leaks stale heap through
+  #   `zstd::stream::write::Decoder`. Nothing uses the write-side decoder:
+  #   our code calls `decode_all`, tonic, arrow-ipc and parquet use the
+  #   read-side and bulk decoders, and compression-codecs (DataFusion's file
+  #   decompression) decodes into a caller-provided slice, not a `Vec`.
+  "RUSTSEC-2026-0391",  # https://rustsec.org/advisories/RUSTSEC-2026-0391
+  "RUSTSEC-2026-0398",  # https://rustsec.org/advisories/RUSTSEC-2026-0398
+  "RUSTSEC-2026-0403",  # https://rustsec.org/advisories/RUSTSEC-2026-0403
 ]
 git-fetch-with-cli = true
 
