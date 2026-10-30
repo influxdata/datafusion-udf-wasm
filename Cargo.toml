@@ -62,7 +62,7 @@ wasmtime = {
 }
 wasmtime-wasi = { version = "50.0.0", default-features = false }
 wasmtime-wasi-http = {
-  version = "50.0.0",
+  version = "50.0.1",
   default-features = false,
   features = [
     "p2",
