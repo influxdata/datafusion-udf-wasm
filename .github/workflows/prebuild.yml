@@ -41,12 +41,12 @@ jobs:
         uses: ./.github/actions/free-disk-space
 
       - name: Install `uv`
-        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e  # v10.3.2
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           version-file: "python-tooling/pyproject.toml"
 
       - name: Install `just` & `wasm-tools`
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91  # v2
+        uses: taiki-e/install-action@68a389c788b2cd04016ce8c80ee23b80d2ab3d68  # v2
         with:
           tool: just,wasm-tools
           # only allow tools that got pinned via `install-action` to prevent supply chain attacks and surprise-upgrades
