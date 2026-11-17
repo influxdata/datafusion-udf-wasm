@@ -115,10 +115,6 @@ impl Default for AddOne {
 }
 
 impl ScalarUDFImpl for AddOne {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "add_one"
     }
@@ -184,10 +180,6 @@ impl Default for SubStr {
 }
 
 impl ScalarUDFImpl for SubStr {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "sub_str"
     }

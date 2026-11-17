@@ -171,7 +171,7 @@ impl<'a> UdfQueryParser<'a> {
         let options = task_ctx.session_config().options();
 
         let dialect = dialect_from_str(options.sql_parser.dialect).expect("valid dialect");
-        let recursion_limit = options.sql_parser.recursion_limit;
+        let recursion_limit = options.sql_parser.recursion_limit.get();
 
         let statements = DFParserBuilder::new(query)
             .with_dialect(dialect.as_ref())

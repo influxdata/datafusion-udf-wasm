@@ -40,10 +40,6 @@ impl Default for TestUdf {
 }
 
 impl ScalarUDFImpl for TestUdf {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> &str {
         &self.name
     }

@@ -14,10 +14,6 @@ use crate::spin::spin;
 struct SpinUdf;
 
 impl ScalarUDFImpl for SpinUdf {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "spin"
     }

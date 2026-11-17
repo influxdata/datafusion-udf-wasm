@@ -37,10 +37,6 @@ impl String2Udf {
 }
 
 impl ScalarUDFImpl for String2Udf {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> &str {
         self.name
     }

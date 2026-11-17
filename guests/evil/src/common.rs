@@ -83,10 +83,6 @@ impl String1Udf {
 }
 
 impl ScalarUDFImpl for String1Udf {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> &str {
         self.name
     }

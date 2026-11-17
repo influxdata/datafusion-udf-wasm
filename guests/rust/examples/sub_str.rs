@@ -30,10 +30,6 @@ impl Default for SubStr {
 }
 
 impl ScalarUDFImpl for SubStr {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn name(&self) -> &str {
         "sub_str"
     }
