@@ -60,7 +60,7 @@ wasmtime = {
     "async",
   ]
 }
-wasmtime-wasi = { version = "50.0.1", default-features = false }
+wasmtime-wasi = { version = "51.0.0", default-features = false }
 wasmtime-wasi-http = {
   version = "50.0.1",
   default-features = false,
@@ -68,7 +68,7 @@ wasmtime-wasi-http = {
     "p2",
   ]
 }
-wasmtime-wasi-io = { version = "50.0.1", default-features = false }
+wasmtime-wasi-io = { version = "51.0.0", default-features = false }
 wit-bindgen = { version = "0.63", default-features = false, features = ["macros"] }
 
 [workspace.lints.clippy]
